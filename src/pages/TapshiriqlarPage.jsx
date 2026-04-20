@@ -107,7 +107,7 @@ export default function TapshiriqlarPage() {
   async function loadData() {
     setLoading(true)
     const [tRes, pRes, mRes] = await Promise.all([
-      supabase.from('tasks').select('*, projects(name), profiles(full_name)').order('created_at', { ascending: false }),
+      supabase.from('tasks').select('*, projects(name), assignee:profiles!tasks_assignee_id_fkey(full_name)').order('created_at', { ascending: false }),
       supabase.from('projects').select('id, name').order('name'),
       supabase.from('profiles').select('id, full_name').order('full_name'),
     ])
@@ -224,7 +224,7 @@ function TaskRow({ task, onEdit, onDelete, onToggle }) {
       <div className="flex-1 min-w-0">
         <div className={`text-xs font-medium ${task.status === 'done' ? 'line-through text-[#aaa]' : 'text-[#0f172a]'}`}>{task.title}</div>
         <div className="flex items-center gap-2 mt-0.5">
-          {task.profiles?.full_name && <span className="text-[10px] text-[#aaa]">{task.profiles.full_name}</span>}
+          {task.assignee?.full_name && <span className="text-[10px] text-[#aaa]">{task.profiles.full_name}</span>}
           {overdue && <span className="text-[10px] text-red-500 flex items-center gap-0.5"><IconAlertCircle size={10} />{Math.abs(days)}g keçmiş</span>}
         </div>
       </div>
