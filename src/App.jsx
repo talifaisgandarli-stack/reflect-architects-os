@@ -7,6 +7,11 @@ import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/DashboardPage'
 import LayihelerPage from './pages/LayihelerPage'
 import TapshiriqlarPage from './pages/TapshiriqlarPage'
+import PipelinePage from './pages/PipelinePage'
+import DaxilolmalarPage from './pages/DaxilolmalarPage'
+import XerclerPage from './pages/XerclerPage'
+import PodratIsleriPage from './pages/PodratIsleriPage'
+import DebitorBorclarPage from './pages/DebitorBorclarPage'
 import ComingSoonPage from './pages/ComingSoonPage'
 
 function CS({ t }) { return <ComingSoonPage title={t} /> }
@@ -29,15 +34,15 @@ export default function App() {
               <Route path="is-ucotu" element={<CS t="İş Uçotu" />} />
               <Route path="icazeler" element={<CS t="İcazə və Razılaşmalar" />} />
               <Route path="sifarisci-idareetme" element={<CS t="Sifarişçi İdarəetməsi" />} />
-              <Route path="pipeline" element={<CS t="Sifarişçi Pipeline" />} />
+              <Route path="pipeline" element={<PipelinePage />} />
               <Route path="kommersiya-teklifleri" element={<CS t="Kommersiya Təklifləri" />} />
               <Route path="muqavileler" element={<CS t="Müqavilələr" />} />
               <Route path="portfel" element={<CS t="Portfel" />} />
-              <Route path="daxilolmalar" element={<CS t="Daxilolmalar" />} />
+              <Route path="daxilolmalar" element={<DaxilolmalarPage />} />
               <Route path="hesab-fakturalar" element={<CS t="Hesab-fakturalar" />} />
-              <Route path="xercler" element={<CS t="Xərclər" />} />
-              <Route path="podrat-isleri" element={<CS t="Podrat İşləri" />} />
-              <Route path="debitor-borclar" element={<CS t="Debitor Borclar" />} />
+              <Route path="xercler" element={<XerclerPage />} />
+              <Route path="podrat-isleri" element={<PodratIsleriPage />} />
+              <Route path="debitor-borclar" element={<DebitorBorclarPage />} />
               <Route path="daxili-kocurmeler" element={<CS t="Daxili Köçürmələr" />} />
               <Route path="tesisci-borclari" element={<CS t="Təsisçi Borcları" />} />
               <Route path="hesabatlar" element={<CS t="Hesabatlar" />} />
