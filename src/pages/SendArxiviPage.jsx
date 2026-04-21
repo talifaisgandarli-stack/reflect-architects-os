@@ -5,10 +5,9 @@ import { IconPlus, IconEdit, IconTrash, IconFolder, IconFile, IconExternalLink, 
 
 const DOC_TYPES = [
   { key: 'contract', label: 'Müqavilə', color: 'info' },
-  { key: 'drawing', label: 'Çertyoj', color: 'default' },
-  { key: 'permit', label: 'İcazə', color: 'warning' },
-  { key: 'invoice', label: 'Faktura', color: 'success' },
-  { key: 'report', label: 'Hesabat', color: 'default' },
+  { key: 'project_task', label: 'Layihə tapşırığı', color: 'warning' },
+  { key: 'price_offer', label: 'Qiymət təklifi', color: 'success' },
+  { key: 'presentation', label: 'Təqdimat', color: 'default' },
   { key: 'other', label: 'Digər', color: 'default' },
 ]
 
