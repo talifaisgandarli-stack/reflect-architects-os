@@ -4,7 +4,10 @@ import { useToast } from '../contexts/ToastContext'
 import { PageHeader, Badge, Card, Button, EmptyState, Modal, ConfirmDialog, Skeleton, StatCard } from '../components/ui'
 import { IconPlus, IconEdit, IconTrash, IconMailDollar, IconCheck } from '@tabler/icons-react'
 
+const EDV = 0.18
 function fmt(n) { return '₼' + Number(n || 0).toLocaleString() }
+function edv(n) { return Math.round(Number(n || 0) * EDV) }
+function withEdv(n) { return Math.round(Number(n || 0) * (1 + EDV)) }
 
 function getAging(dateStr) {
   if (!dateStr) return null
@@ -20,17 +23,19 @@ function AgingBadge({ days }) {
 }
 
 function ReceivableForm({ open, onClose, onSave, receivable, projects, clients }) {
-  const [form, setForm] = useState({ name: '', project_id: '', client_id: '', expected_amount: '', paid_amount: '0', expected_date: '', reminder_date: '', contact_person: '', notes: '' })
+  const [form, setForm] = useState({ name: '', project_id: '', client_id: '', expected_amount: '', payment_method: 'transfer', paid_amount: '0', expected_date: '', reminder_date: '', contact_person: '', notes: '' })
 
   useEffect(() => {
     if (receivable) {
-      setForm({ name: receivable.name || '', project_id: receivable.project_id || '', client_id: receivable.client_id || '', expected_amount: receivable.expected_amount || '', paid_amount: receivable.paid_amount || '0', expected_date: receivable.expected_date || '', reminder_date: receivable.reminder_date || '', contact_person: receivable.contact_person || '', notes: receivable.notes || '' })
+      setForm({ name: receivable.name || '', project_id: receivable.project_id || '', client_id: receivable.client_id || '', expected_amount: receivable.expected_amount || '', payment_method: receivable.payment_method || 'transfer', paid_amount: receivable.paid_amount || '0', expected_date: receivable.expected_date || '', reminder_date: receivable.reminder_date || '', contact_person: receivable.contact_person || '', notes: receivable.notes || '' })
     } else {
-      setForm({ name: '', project_id: '', client_id: '', expected_amount: '', paid_amount: '0', expected_date: '', reminder_date: '', contact_person: '', notes: '' })
+      setForm({ name: '', project_id: '', client_id: '', expected_amount: '', payment_method: 'transfer', paid_amount: '0', expected_date: '', reminder_date: '', contact_person: '', notes: '' })
     }
   }, [receivable, open])
 
   function set(k, v) { setForm(f => ({ ...f, [k]: v })) }
+  const amt = Number(form.expected_amount) || 0
+  const isTransfer = form.payment_method === 'transfer'
 
   return (
     <Modal open={open} onClose={onClose} title={receivable ? 'Alacağı redaktə et' : 'Yeni alacaq'}>
@@ -38,19 +43,21 @@ function ReceivableForm({ open, onClose, onSave, receivable, projects, clients }
         <div>
           <label className="block text-xs font-medium text-[#555] mb-1">Açıqlama *</label>
           <input value={form.name} onChange={e => set('name', e.target.value)}
-            className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]"
-            placeholder="Hesab ödənişi, Avans..." />
+            className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]" placeholder="Hesab ödənişi, Avans..." />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs font-medium text-[#555] mb-1">Gözlənilən məbləğ (₼) *</label>
+            <label className="block text-xs font-medium text-[#555] mb-1">Gözlənilən məbləğ (₼, ƏDV xaric) *</label>
             <input type="number" value={form.expected_amount} onChange={e => set('expected_amount', e.target.value)}
               className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]" placeholder="0" />
           </div>
           <div>
-            <label className="block text-xs font-medium text-[#555] mb-1">Ödənilmiş (₼)</label>
-            <input type="number" value={form.paid_amount} onChange={e => set('paid_amount', e.target.value)}
-              className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]" placeholder="0" />
+            <label className="block text-xs font-medium text-[#555] mb-1">Ödəniş üsulu</label>
+            <select value={form.payment_method} onChange={e => set('payment_method', e.target.value)}
+              className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]">
+              <option value="transfer">Köçürmə</option>
+              <option value="cash">Nağd</option>
+            </select>
           </div>
           <div>
             <label className="block text-xs font-medium text-[#555] mb-1">Layihə</label>
@@ -69,27 +76,31 @@ function ReceivableForm({ open, onClose, onSave, receivable, projects, clients }
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-[#555] mb-1">Gözlənilən ödəniş tarixi</label>
+            <label className="block text-xs font-medium text-[#555] mb-1">Gözlənilən tarix</label>
             <input type="date" value={form.expected_date} onChange={e => set('expected_date', e.target.value)}
               className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]" />
           </div>
           <div>
-            <label className="block text-xs font-medium text-[#555] mb-1">Xatırlatma tarixi</label>
-            <input type="date" value={form.reminder_date} onChange={e => set('reminder_date', e.target.value)}
-              className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]" />
-          </div>
-          <div className="col-span-2">
-            <label className="block text-xs font-medium text-[#555] mb-1">Əlaqə şəxsi</label>
-            <input value={form.contact_person} onChange={e => set('contact_person', e.target.value)}
-              className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]"
-              placeholder="Ad Soyad" />
+            <label className="block text-xs font-medium text-[#555] mb-1">Ödənilmiş (₼)</label>
+            <input type="number" value={form.paid_amount} onChange={e => set('paid_amount', e.target.value)}
+              className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]" placeholder="0" />
           </div>
         </div>
-        <div>
-          <label className="block text-xs font-medium text-[#555] mb-1">Qeyd</label>
-          <textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={2}
-            className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a] resize-none" />
-        </div>
+
+        {amt > 0 && (
+          <div className={`rounded-lg p-3 text-xs ${isTransfer ? 'bg-amber-50 border border-amber-200' : 'bg-[#f5f5f0]'}`}>
+            {isTransfer ? (
+              <div className="grid grid-cols-3 gap-3 text-center">
+                <div><div className="text-[#888] mb-0.5">ƏDV xaric</div><div className="font-bold text-[#0f172a]">{fmt(amt)}</div></div>
+                <div><div className="text-[#888] mb-0.5">ƏDV (18%)</div><div className="font-bold text-amber-600">{fmt(edv(amt))}</div></div>
+                <div><div className="text-[#888] mb-0.5">ƏDV daxil</div><div className="font-bold text-green-600">{fmt(withEdv(amt))}</div></div>
+              </div>
+            ) : (
+              <div className="text-center text-[#555]">Nağd ödəniş — ƏDV tətbiq edilmir · Cəmi: <span className="font-bold text-[#0f172a]">{fmt(amt)}</span></div>
+            )}
+          </div>
+        )}
+
         <div className="flex gap-2 pt-2 border-t border-[#f0f0ec]">
           <Button variant="secondary" onClick={onClose}>Ləğv et</Button>
           <Button onClick={() => onSave(form)} className="ml-auto">{receivable ? 'Yadda saxla' : 'Əlavə et'}</Button>
@@ -129,7 +140,16 @@ export default function DebitorBorclarPage() {
     if (!form.name.trim() || !form.expected_amount) { addToast('Ad və məbləğ daxil edin', 'error'); return }
     const expected = Number(form.expected_amount)
     const paid = Number(form.paid_amount) || 0
-    const data = { name: form.name.trim(), project_id: form.project_id || null, client_id: form.client_id || null, expected_amount: expected, paid_amount: paid, expected_date: form.expected_date || null, reminder_date: form.reminder_date || null, contact_person: form.contact_person || null, notes: form.notes || null, paid: paid >= expected }
+    const isTransfer = form.payment_method === 'transfer'
+    const data = {
+      name: form.name.trim(), project_id: form.project_id || null, client_id: form.client_id || null,
+      expected_amount: expected, paid_amount: paid, payment_method: form.payment_method,
+      edv_amount: isTransfer ? edv(expected) : 0,
+      amount_with_edv: isTransfer ? withEdv(expected) : expected,
+      expected_date: form.expected_date || null, reminder_date: form.reminder_date || null,
+      contact_person: form.contact_person || null, notes: form.notes || null,
+      paid: paid >= expected
+    }
     if (editRec) {
       const { error } = await supabase.from('receivables').update(data).eq('id', editRec.id)
       if (error) { addToast('Xəta: ' + error.message, 'error'); return }
@@ -143,7 +163,7 @@ export default function DebitorBorclarPage() {
   }
 
   async function markPaid(rec) {
-    await supabase.from('receivables').update({ paid: true, paid_amount: rec.expected_amount, paid_date: new Date().toISOString().split('T')[0] }).eq('id', rec.id)
+    await supabase.from('receivables').update({ paid: true, paid_amount: rec.expected_amount }).eq('id', rec.id)
     addToast('Ödənildi olaraq işarələndi', 'success')
     await loadData()
   }
@@ -157,34 +177,27 @@ export default function DebitorBorclarPage() {
   const unpaid = receivables.filter(r => !r.paid)
   const paid = receivables.filter(r => r.paid)
   const totalExpected = unpaid.reduce((s, r) => s + Number(r.expected_amount || 0), 0)
-  const totalPaid = paid.reduce((s, r) => s + Number(r.paid_amount || 0), 0)
+  const totalEdv = unpaid.filter(r => r.payment_method === 'transfer').reduce((s, r) => s + Number(r.edv_amount || 0), 0)
   const overdue60 = unpaid.filter(r => getAging(r.expected_date) > 60).length
-
   const getProject = id => projects.find(p => p.id === id)
   const getClient = id => clients.find(c => c.id === id)
-
   const displayed = showPaid ? receivables : unpaid
 
   if (loading) return <div className="p-6"><Skeleton className="h-64" /></div>
 
   return (
     <div className="p-6 fade-in">
-      <PageHeader
-        title="Debitor Borclar"
-        subtitle="Gözlənilən alacaqlar · Yaşlandırma hesabatı"
+      <PageHeader title="Debitor Borclar" subtitle="Gözlənilən alacaqlar · Yaşlandırma hesabatı"
         action={
           <div className="flex gap-2">
-            <Button variant="secondary" size="sm" onClick={() => setShowPaid(!showPaid)}>
-              {showPaid ? 'Yalnız açıqlar' : 'Ödənilənlər də'}
-            </Button>
+            <Button variant="secondary" size="sm" onClick={() => setShowPaid(!showPaid)}>{showPaid ? 'Yalnız açıqlar' : 'Ödənilənlər də'}</Button>
             <Button onClick={() => { setEditRec(null); setModalOpen(true) }} size="sm"><IconPlus size={14} /> Yeni alacaq</Button>
           </div>
-        }
-      />
+        } />
 
       <div className="grid grid-cols-4 gap-4 mb-5">
-        <StatCard label="Gözlənilən alacaq" value={fmt(totalExpected)} variant="danger" />
-        <StatCard label="Tahsil edilmiş" value={fmt(totalPaid)} variant="success" />
+        <StatCard label="Gözlənilən (ƏDV xaric)" value={fmt(totalExpected)} variant="danger" />
+        <StatCard label="Gözlənilən (ƏDV daxil)" value={fmt(totalExpected + totalEdv)} />
         <StatCard label="Açıq alacaqlar" value={unpaid.length} />
         <StatCard label="60+ gün gecikmiş" value={overdue60} variant={overdue60 > 0 ? 'danger' : 'default'} />
       </div>
@@ -200,43 +213,32 @@ export default function DebitorBorclarPage() {
                 <tr className="border-b border-[#e8e8e4]">
                   <th className="text-left px-4 py-3 font-medium text-[#888]">Açıqlama</th>
                   <th className="text-left px-4 py-3 font-medium text-[#888]">Layihə / Sifarişçi</th>
-                  <th className="text-left px-4 py-3 font-medium text-[#888]">Gözlənilən tarix</th>
+                  <th className="text-left px-4 py-3 font-medium text-[#888]">Tarix</th>
                   <th className="text-left px-4 py-3 font-medium text-[#888]">Yaşlandırma</th>
-                  <th className="text-right px-4 py-3 font-medium text-[#888]">Gözlənilən</th>
-                  <th className="text-right px-4 py-3 font-medium text-[#888]">Ödənilmiş</th>
-                  <th className="text-right px-4 py-3 font-medium text-[#888]">Qalıq</th>
+                  <th className="text-left px-4 py-3 font-medium text-[#888]">Ödəniş</th>
+                  <th className="text-right px-4 py-3 font-medium text-[#888]">ƏDV xaric</th>
+                  <th className="text-right px-4 py-3 font-medium text-[#888]">ƏDV (18%)</th>
+                  <th className="text-right px-4 py-3 font-medium text-[#888]">ƏDV daxil</th>
                   <th className="px-4 py-3"></th>
                 </tr>
               </thead>
               <tbody>
                 {displayed.map(r => {
                   const aging = getAging(r.expected_date)
-                  const remaining = Number(r.expected_amount || 0) - Number(r.paid_amount || 0)
+                  const isTransfer = r.payment_method === 'transfer'
                   return (
                     <tr key={r.id} className={`border-b border-[#f5f5f0] hover:bg-[#fafaf8] ${r.paid ? 'opacity-50' : ''}`}>
-                      <td className="px-4 py-3">
-                        <div className="font-medium text-[#0f172a]">{r.name}</div>
-                        {r.contact_person && <div className="text-[10px] text-[#aaa]">{r.contact_person}</div>}
-                      </td>
-                      <td className="px-4 py-3 text-[#555]">
-                        {getProject(r.project_id)?.name || getClient(r.client_id)?.name || '—'}
-                      </td>
-                      <td className="px-4 py-3 text-[#555]">
-                        {r.expected_date ? new Date(r.expected_date).toLocaleDateString('az-AZ') : '—'}
-                      </td>
-                      <td className="px-4 py-3">
-                        {r.paid ? <Badge variant="success" size="sm">Ödənilib</Badge> : <AgingBadge days={aging} />}
-                      </td>
+                      <td className="px-4 py-3 font-medium text-[#0f172a]">{r.name}</td>
+                      <td className="px-4 py-3 text-[#555]">{getProject(r.project_id)?.name || getClient(r.client_id)?.name || '—'}</td>
+                      <td className="px-4 py-3 text-[#555]">{r.expected_date ? new Date(r.expected_date).toLocaleDateString('az-AZ') : '—'}</td>
+                      <td className="px-4 py-3">{r.paid ? <Badge variant="success" size="sm">Ödənilib</Badge> : <AgingBadge days={aging} />}</td>
+                      <td className="px-4 py-3"><Badge variant={isTransfer ? 'info' : 'default'} size="sm">{isTransfer ? 'Köçürmə' : 'Nağd'}</Badge></td>
                       <td className="px-4 py-3 text-right font-medium text-[#0f172a]">{fmt(r.expected_amount)}</td>
-                      <td className="px-4 py-3 text-right text-green-600">{fmt(r.paid_amount)}</td>
-                      <td className="px-4 py-3 text-right font-bold text-red-600">{fmt(remaining)}</td>
+                      <td className="px-4 py-3 text-right text-amber-600">{isTransfer ? fmt(r.edv_amount || edv(r.expected_amount)) : '—'}</td>
+                      <td className="px-4 py-3 text-right font-bold text-green-600">{fmt(r.amount_with_edv || r.expected_amount)}</td>
                       <td className="px-4 py-3">
                         <div className="flex gap-1">
-                          {!r.paid && (
-                            <button onClick={() => markPaid(r)} className="text-[#aaa] hover:text-green-600 p-1" title="Ödənildi">
-                              <IconCheck size={12} />
-                            </button>
-                          )}
+                          {!r.paid && <button onClick={() => markPaid(r)} className="text-[#aaa] hover:text-green-600 p-1" title="Ödənildi"><IconCheck size={12} /></button>}
                           <button onClick={() => { setEditRec(r); setModalOpen(true) }} className="text-[#aaa] hover:text-[#0f172a] p-1"><IconEdit size={12} /></button>
                           <button onClick={() => setDeleteRec(r)} className="text-[#aaa] hover:text-red-500 p-1"><IconTrash size={12} /></button>
                         </div>
@@ -247,10 +249,10 @@ export default function DebitorBorclarPage() {
               </tbody>
               <tfoot>
                 <tr className="bg-[#f5f5f0]">
-                  <td colSpan={4} className="px-4 py-2 text-xs font-medium text-[#555]">Cəmi qalıq</td>
-                  <td className="px-4 py-2 text-right text-xs font-bold text-[#0f172a]">{fmt(totalExpected)}</td>
-                  <td className="px-4 py-2 text-right text-xs font-bold text-green-700">{fmt(totalPaid)}</td>
-                  <td className="px-4 py-2 text-right text-xs font-bold text-red-700">{fmt(totalExpected - displayed.filter(r=>!r.paid).reduce((s,r)=>s+Number(r.paid_amount||0),0))}</td>
+                  <td colSpan={5} className="px-4 py-2 font-medium text-[#555]">Cəmi ({displayed.length})</td>
+                  <td className="px-4 py-2 text-right font-bold text-[#0f172a]">{fmt(displayed.reduce((s, r) => s + Number(r.expected_amount || 0), 0))}</td>
+                  <td className="px-4 py-2 text-right font-bold text-amber-600">{fmt(displayed.reduce((s, r) => s + Number(r.edv_amount || 0), 0))}</td>
+                  <td className="px-4 py-2 text-right font-bold text-green-600">{fmt(displayed.reduce((s, r) => s + Number(r.amount_with_edv || r.expected_amount || 0), 0))}</td>
                   <td />
                 </tr>
               </tfoot>
