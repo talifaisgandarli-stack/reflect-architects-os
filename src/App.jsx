@@ -8,12 +8,14 @@ import DashboardPage from './pages/DashboardPage'
 import LayihelerPage from './pages/LayihelerPage'
 import TapshiriqlarPage from './pages/TapshiriqlarPage'
 import PipelinePage from './pages/PipelinePage'
+import SifarisciIdareetmesiPage from './pages/SifarisciIdareetmesiPage'
 import DaxilolmalarPage from './pages/DaxilolmalarPage'
 import XerclerPage from './pages/XerclerPage'
 import PodratIsleriPage from './pages/PodratIsleriPage'
 import DebitorBorclarPage from './pages/DebitorBorclarPage'
 import IshciHeyetiPage from './pages/IshciHeyetiPage'
 import ParametrlerPage from './pages/ParametrlerPage'
+import HesabatlarPage from './pages/HesabatlarPage'
 import ComingSoonPage from './pages/ComingSoonPage'
 
 function CS({ t }) { return <ComingSoonPage title={t} /> }
@@ -35,7 +37,7 @@ export default function App() {
               <Route path="tapshiriqlar" element={<TapshiriqlarPage />} />
               <Route path="is-ucotu" element={<CS t="İş Uçotu" />} />
               <Route path="icazeler" element={<CS t="İcazə və Razılaşmalar" />} />
-              <Route path="sifarisci-idareetme" element={<CS t="Sifarişçi İdarəetməsi" />} />
+              <Route path="sifarisci-idareetme" element={<SifarisciIdareetmesiPage />} />
               <Route path="pipeline" element={<PipelinePage />} />
               <Route path="kommersiya-teklifleri" element={<CS t="Kommersiya Təklifləri" />} />
               <Route path="muqavileler" element={<CS t="Müqavilələr" />} />
@@ -47,7 +49,7 @@ export default function App() {
               <Route path="debitor-borclar" element={<DebitorBorclarPage />} />
               <Route path="daxili-kocurmeler" element={<CS t="Daxili Köçürmələr" />} />
               <Route path="tesisci-borclari" element={<CS t="Təsisçi Borcları" />} />
-              <Route path="hesabatlar" element={<CS t="Hesabatlar" />} />
+              <Route path="hesabatlar" element={<HesabatlarPage />} />
               <Route path="sabit-xercler" element={<CS t="Sabit Xərclər" />} />
               <Route path="isci-heyeti" element={<IshciHeyetiPage />} />
               <Route path="emek-haqqi" element={<CS t="Əmək haqqı" />} />
