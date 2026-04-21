@@ -23,6 +23,10 @@ import SabitXerclerPage from './pages/SabitXerclerPage'
 import IshciHeyetiPage from './pages/IshciHeyetiPage'
 import ParametrlerPage from './pages/ParametrlerPage'
 import HesabatlarPage from './pages/HesabatlarPage'
+import ElanlarLovhesiPage from './pages/ElanlarLovhesiPage'
+import HadiselerTeqvimiPage from './pages/HadiselerTeqvimiPage'
+import MezuniyyetCedveliPage from './pages/MezuniyyetCedveliPage'
+import AvadanliqPage from './pages/AvadanliqPage'
 import ComingSoonPage from './pages/ComingSoonPage'
 
 function CS({ t }) { return <ComingSoonPage title={t} /> }
@@ -60,10 +64,10 @@ export default function App() {
               <Route path="sabit-xercler" element={<SabitXerclerPage />} />
               <Route path="isci-heyeti" element={<IshciHeyetiPage />} />
               <Route path="emek-haqqi" element={<CS t="Əmək haqqı" />} />
-              <Route path="elanlar" element={<CS t="Elanlar Lövhəsi" />} />
-              <Route path="hadiseler" element={<CS t="Hadisələr Təqvimi" />} />
-              <Route path="mezuniyyet" element={<CS t="Məzuniyyət Cədvəli" />} />
-              <Route path="avadanliq" element={<CS t="Avadanlıq" />} />
+              <Route path="elanlar" element={<ElanlarLovhesiPage />} />
+              <Route path="hadiseler" element={<HadiselerTeqvimiPage />} />
+              <Route path="mezuniyyet" element={<MezuniyyetCedveliPage />} />
+              <Route path="avadanliq" element={<AvadanliqPage />} />
               <Route path="hedef-netice" element={<CS t="Hədəf və Nəticələr" />} />
               <Route path="mezmun-planlamasi" element={<CS t="Məzmun Planlaması" />} />
               <Route path="sened-arxivi" element={<CS t="Sənəd Arxivi" />} />
