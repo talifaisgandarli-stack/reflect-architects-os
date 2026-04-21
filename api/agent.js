@@ -22,17 +22,28 @@ export default async function handler(req, res) {
   }
 
   async function generateMessage(prompt) {
-    if (!GEMINI_API_KEY) return '[Gemini API key yoxdur]'
+    const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY
+    if (!OPENROUTER_KEY) return '[OpenRouter API key yoxdur]'
     try {
-      const r = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${GEMINI_API_KEY}`,
-        { method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 400, temperature: 0.7 } }) }
-      )
+      const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${OPENROUTER_KEY}`,
+          'HTTP-Referer': 'https://reflect-architects-os.vercel.app',
+          'X-Title': 'Reflect Architects OS'
+        },
+        body: JSON.stringify({
+          model: 'mistralai/mistral-7b-instruct:free',
+          messages: [{ role: 'user', content: prompt }],
+          max_tokens: 400,
+          temperature: 0.7
+        })
+      })
       const d = await r.json()
-      if (!d.candidates) return '[API cavabı: ' + JSON.stringify(d).slice(0, 200) + ']'
-      return d.candidates[0].content.parts[0].text
-    } catch (e) { return '[Gemini xətası: ' + e.message + ']' }
+      if (!d.choices) return '[API cavabı: ' + JSON.stringify(d).slice(0, 200) + ']'
+      return d.choices[0].message.content
+    } catch (e) { return '[OpenRouter xətası: ' + e.message + ']' }
   }
 
   async function sendWA(phone, message) {
