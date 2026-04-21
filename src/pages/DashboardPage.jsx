@@ -6,16 +6,19 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, LineChart, Line
 } from 'recharts'
-import { IconAlertTriangle, IconArrowUp, IconArrowDown } from '@tabler/icons-react'
 
 const MONTHS = ['Yan', 'Fev', 'Mar', 'Apr', 'May', 'İyn', 'İyl', 'Avq', 'Sen', 'Okt', 'Noy', 'Dek']
 const COLORS = ['#0f172a', '#3b82f6', '#16a34a', '#ca8a04', '#dc2626', '#7c3aed']
+const EDV_RATE = 0.18
 
 export default function DashboardPage() {
   const { profile } = useAuth()
   const [loading, setLoading] = useState(true)
   const [stats, setStats] = useState({
-    totalPortfolio: 0, totalIncome: 0, totalDebt: 0, balance: 0,
+    totalPortfolio: 0, totalIncome: 0, totalDebt: 0,
+    incomeCash: 0, incomeTransfer: 0,
+    expenseTotal: 0, expenseCash: 0, expenseTransfer: 0,
+    edvBalance: 0,
     activeProjects: 0, overdueTasksCount: 0,
     monthlyIncome: [], clientBreakdown: [], projectStatus: [], agingDebt: [],
     deadlines: [], overdueReceivables: []
@@ -25,22 +28,42 @@ export default function DashboardPage() {
 
   async function loadDashboard() {
     try {
-      const [projectsRes, incomesRes, debtsRes] = await Promise.all([
+      const [projectsRes, incomesRes, debtsRes, expensesRes, tasksRes] = await Promise.all([
         supabase.from('projects').select('id, name, contract_value, status, deadline, client_id, clients(name)'),
-        supabase.from('incomes').select('amount, payment_date, project_id'),
+        supabase.from('incomes').select('amount, payment_date, payment_method'),
         supabase.from('receivables').select('expected_amount, paid_amount, expected_date, paid'),
+        supabase.from('expenses').select('amount, payment_method'),
+        supabase.from('tasks').select('status, due_date'),
       ])
 
       const projects = projectsRes.data || []
       const incomes = incomesRes.data || []
       const debts = debtsRes.data || []
+      const expenses = expensesRes.data || []
+      const tasks = tasksRes.data || []
 
+      // Balans hesablamaları
       const totalPortfolio = projects.reduce((s, p) => s + (p.contract_value || 0), 0)
-      const totalIncome = incomes.reduce((s, i) => s + (i.amount || 0), 0)
+      const totalIncome = incomes.reduce((s, i) => s + Number(i.amount || 0), 0)
+      const incomeCash = incomes.filter(i => i.payment_method === 'cash').reduce((s, i) => s + Number(i.amount || 0), 0)
+      const incomeTransfer = incomes.filter(i => i.payment_method === 'transfer').reduce((s, i) => s + Number(i.amount || 0), 0)
+
+      const expenseTotal = expenses.reduce((s, e) => s + Number(e.amount || 0), 0)
+      const expenseCash = expenses.filter(e => e.payment_method === 'cash').reduce((s, e) => s + Number(e.amount || 0), 0)
+      const expenseTransfer = expenses.filter(e => e.payment_method === 'transfer').reduce((s, e) => s + Number(e.amount || 0), 0)
+
+      // ƏDV balansı: köçürmə ilə alınan gəlirin ƏDV-si
+      const edvBalance = Math.round(incomeTransfer * EDV_RATE)
+
       const totalDebt = debts.filter(d => !d.paid).reduce((s, d) => s + ((d.expected_amount || 0) - (d.paid_amount || 0)), 0)
       const activeProjects = projects.filter(p => p.status === 'active').length
 
-      // Monthly income for current year
+      const today = new Date()
+      const overdueTasksCount = tasks.filter(t =>
+        t.due_date && t.due_date < today.toISOString().split('T')[0] && t.status !== 'done'
+      ).length
+
+      // Aylıq daxilolmalar
       const currentYear = new Date().getFullYear()
       const monthlyIncome = MONTHS.map((month, idx) => {
         const total = incomes
@@ -48,11 +71,11 @@ export default function DashboardPage() {
             const d = new Date(i.payment_date)
             return d.getFullYear() === currentYear && d.getMonth() === idx
           })
-          .reduce((s, i) => s + (i.amount || 0), 0)
+          .reduce((s, i) => s + Number(i.amount || 0), 0)
         return { month, amount: total }
       })
 
-      // Client breakdown
+      // Sifarişçi bölgüsü
       const clientMap = {}
       projects.forEach(p => {
         const name = p.clients?.name || 'Digər'
@@ -63,7 +86,7 @@ export default function DashboardPage() {
         .sort((a, b) => b.value - a.value)
         .slice(0, 5)
 
-      // Project status
+      // Layihə statusu
       const statusMap = { active: 'İcrada', waiting: 'Gözləyir', completed: 'Tamamlandı' }
       const statusCount = {}
       projects.forEach(p => {
@@ -72,8 +95,7 @@ export default function DashboardPage() {
       })
       const projectStatus = Object.entries(statusCount).map(([name, count]) => ({ name, count }))
 
-      // Aging receivables
-      const today = new Date()
+      // Yaşlandırma
       const aging = { '0–30 gün': 0, '31–60 gün': 0, '60+ gün': 0 }
       const overdueReceivables = []
       debts.filter(d => !d.paid).forEach(d => {
@@ -87,7 +109,7 @@ export default function DashboardPage() {
       })
       const agingDebt = Object.entries(aging).map(([name, amount]) => ({ name, amount }))
 
-      // Upcoming deadlines
+      // Yaxınlaşan deadlinlər
       const deadlines = projects
         .filter(p => p.deadline && p.status !== 'completed')
         .map(p => ({ ...p, daysLeft: Math.floor((new Date(p.deadline) - today) / 86400000) }))
@@ -95,8 +117,11 @@ export default function DashboardPage() {
         .slice(0, 5)
 
       setStats({
-        totalPortfolio, totalIncome, totalDebt, balance: 51543,
-        activeProjects, overdueTasksCount: 5,
+        totalPortfolio, totalIncome, totalDebt,
+        incomeCash, incomeTransfer,
+        expenseTotal, expenseCash, expenseTransfer,
+        edvBalance,
+        activeProjects, overdueTasksCount,
         monthlyIncome, clientBreakdown, projectStatus, agingDebt,
         deadlines, overdueReceivables
       })
@@ -121,15 +146,14 @@ export default function DashboardPage() {
   )
 
   const today = new Date()
-  const greeting = today.getHours() < 12 ? 'Sabahınız xeyir' : today.getHours() < 17 ? 'Günortanız xeyir' : 'Axşamınız xeyir'
 
   return (
     <div className="p-6 space-y-5 fade-in">
 
-      {/* Greeting */}
+      {/* Welcome */}
       <div>
         <h1 className="text-lg font-bold text-[#0f172a]">
-          {greeting}, {profile?.full_name?.split(' ')[0] || 'Nicat'}
+          Welcome, {profile?.full_name?.split(' ')[0] || 'Nicat'} 👋
         </h1>
         <p className="text-xs text-[#888] mt-0.5">
           {today.toLocaleDateString('az-AZ', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
@@ -140,31 +164,107 @@ export default function DashboardPage() {
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label="Layihə portfeli" value={fmt(stats.totalPortfolio)} sub={`${stats.activeProjects} aktiv layihə`} />
-        <StatCard label="Daxilolmalar" value={fmt(stats.totalIncome)} sub="Ödənilmiş" variant="success" />
+        <StatCard label="Daxilolmalar" value={fmt(stats.totalIncome)} sub="Ümumi ödənilmiş" variant="success" />
         <StatCard label="Debitor borclar" value={fmt(stats.totalDebt)} sub="Gözlənilən alacaqlar" variant="danger" />
-        <StatCard label="Şirkət balansı" value={fmt(stats.balance)} sub="Bank + nağd" />
+        <StatCard label="Xərclər" value={fmt(stats.expenseTotal)} sub="Ümumi xərc" variant="danger" />
+      </div>
+
+      {/* Balans bölməsi */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+        {/* Gəlir — nağd vs köçürmə */}
+        <Card className="p-4">
+          <div className="text-xs font-bold text-[#0f172a] mb-3">Daxilolma balansı</div>
+          <div className="space-y-2.5">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-xs text-[#888]">Nağd</div>
+                <div className="text-sm font-bold text-[#0f172a]">{fmt(stats.incomeCash)}</div>
+              </div>
+              <div className="text-right">
+                <div className="text-xs text-[#888]">Köçürmə</div>
+                <div className="text-sm font-bold text-[#0f172a]">{fmt(stats.incomeTransfer)}</div>
+              </div>
+            </div>
+            <div className="h-1.5 bg-[#f0f0ec] rounded-full overflow-hidden">
+              {stats.totalIncome > 0 && (
+                <div className="h-full bg-[#0f172a] rounded-full"
+                  style={{ width: `${Math.round(stats.incomeCash / stats.totalIncome * 100)}%` }} />
+              )}
+            </div>
+            <div className="flex justify-between text-[10px] text-[#aaa]">
+              <span>Nağd {stats.totalIncome > 0 ? Math.round(stats.incomeCash / stats.totalIncome * 100) : 0}%</span>
+              <span>Köçürmə {stats.totalIncome > 0 ? Math.round(stats.incomeTransfer / stats.totalIncome * 100) : 0}%</span>
+            </div>
+          </div>
+        </Card>
+
+        {/* Xərc — nağd vs köçürmə */}
+        <Card className="p-4">
+          <div className="text-xs font-bold text-[#0f172a] mb-3">Xərc balansı</div>
+          <div className="space-y-2.5">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-xs text-[#888]">Nağd</div>
+                <div className="text-sm font-bold text-red-600">{fmt(stats.expenseCash)}</div>
+              </div>
+              <div className="text-right">
+                <div className="text-xs text-[#888]">Köçürmə</div>
+                <div className="text-sm font-bold text-red-600">{fmt(stats.expenseTransfer)}</div>
+              </div>
+            </div>
+            <div className="h-1.5 bg-[#f0f0ec] rounded-full overflow-hidden">
+              {stats.expenseTotal > 0 && (
+                <div className="h-full bg-red-500 rounded-full"
+                  style={{ width: `${Math.round(stats.expenseCash / stats.expenseTotal * 100)}%` }} />
+              )}
+            </div>
+            <div className="flex justify-between text-[10px] text-[#aaa]">
+              <span>Nağd {stats.expenseTotal > 0 ? Math.round(stats.expenseCash / stats.expenseTotal * 100) : 0}%</span>
+              <span>Köçürmə {stats.expenseTotal > 0 ? Math.round(stats.expenseTransfer / stats.expenseTotal * 100) : 0}%</span>
+            </div>
+          </div>
+        </Card>
+
+        {/* ƏDV balansı */}
+        <Card className="p-4">
+          <div className="text-xs font-bold text-[#0f172a] mb-3">ƏDV balansı (18%)</div>
+          <div className="space-y-2.5">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-xs text-[#888]">Köçürmə gəliri</div>
+                <div className="text-sm font-bold text-[#0f172a]">{fmt(stats.incomeTransfer)}</div>
+              </div>
+              <div className="text-right">
+                <div className="text-xs text-[#888]">ƏDV məbləği</div>
+                <div className="text-sm font-bold text-amber-600">{fmt(stats.edvBalance)}</div>
+              </div>
+            </div>
+            <div className="h-1.5 bg-[#f0f0ec] rounded-full overflow-hidden">
+              <div className="h-full bg-amber-500 rounded-full" style={{ width: '18%' }} />
+            </div>
+            <div className="text-[10px] text-[#aaa]">
+              Köçürmə daxilolmalarının 18%-i ƏDV öhdəliyi
+            </div>
+          </div>
+        </Card>
       </div>
 
       {/* Charts row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
-        {/* Monthly income bar chart */}
         <Card className="p-4">
           <div className="text-xs font-bold text-[#0f172a] mb-3">Aylıq daxilolmalar — {new Date().getFullYear()}</div>
           <ResponsiveContainer width="100%" height={160}>
             <BarChart data={stats.monthlyIncome} barSize={20}>
               <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#aaa' }} axisLine={false} tickLine={false} />
               <YAxis hide />
-              <Tooltip
-                formatter={(v) => [fmt(v), 'Daxilolma']}
-                contentStyle={{ fontSize: 11, border: '1px solid #e8e8e4', borderRadius: 6 }}
-              />
+              <Tooltip formatter={(v) => [fmt(v), 'Daxilolma']} contentStyle={{ fontSize: 11, border: '1px solid #e8e8e4', borderRadius: 6 }} />
               <Bar dataKey="amount" fill="#0f172a" radius={[3, 3, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </Card>
 
-        {/* Client breakdown donut */}
         <Card className="p-4">
           <div className="text-xs font-bold text-[#0f172a] mb-3">Sifarişçi üzrə bölgü</div>
           {stats.clientBreakdown.length > 0 ? (
@@ -172,9 +272,7 @@ export default function DashboardPage() {
               <ResponsiveContainer width={120} height={120}>
                 <PieChart>
                   <Pie data={stats.clientBreakdown} dataKey="value" cx="50%" cy="50%" innerRadius={35} outerRadius={55}>
-                    {stats.clientBreakdown.map((_, i) => (
-                      <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                    ))}
+                    {stats.clientBreakdown.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                   </Pie>
                 </PieChart>
               </ResponsiveContainer>
@@ -200,8 +298,6 @@ export default function DashboardPage() {
 
       {/* Aging + Project status */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-
-        {/* Aging debt chart */}
         <Card className="p-4">
           <div className="text-xs font-bold text-[#0f172a] mb-3">Debitor yaşlandırma</div>
           <ResponsiveContainer width="100%" height={120}>
@@ -218,7 +314,6 @@ export default function DashboardPage() {
           </ResponsiveContainer>
         </Card>
 
-        {/* Project status */}
         <Card className="p-4">
           <div className="text-xs font-bold text-[#0f172a] mb-3">Layihə statusu</div>
           {stats.projectStatus.length > 0 ? (
@@ -240,8 +335,6 @@ export default function DashboardPage() {
 
       {/* Bottom tables */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-
-        {/* Upcoming deadlines */}
         <Card className="p-4">
           <div className="flex items-center justify-between mb-3">
             <div className="text-xs font-bold text-[#0f172a]">Yaxınlaşan deadlinlər</div>
@@ -266,7 +359,6 @@ export default function DashboardPage() {
           )}
         </Card>
 
-        {/* Overdue receivables */}
         <Card className="p-4">
           <div className="flex items-center justify-between mb-3">
             <div className="text-xs font-bold text-[#0f172a]">Gecikmiş alacaqlar</div>
