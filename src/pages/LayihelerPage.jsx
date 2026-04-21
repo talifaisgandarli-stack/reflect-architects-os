@@ -99,10 +99,10 @@ function ProjectForm({ open, onClose, onSave, project, clients }) {
   function set(k, v) { setForm(f => ({ ...f, [k]: v })) }
 
   return (
-    <Modal open={open} onClose={onClose} title={project ? 'Layihəni redaktə et' : 'Yeni layihə'} size="lg">
-      <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <div className="col-span-2">
+    <Modal open={open} onClose={onClose} title={project ? 'Layihəni redaktə et' : 'Yeni layihə'} size="xl">
+      <div className="space-y-3">
+        <div className="grid grid-cols-3 gap-3">
+          <div className="col-span-3">
             <label className="block text-xs font-medium text-[#555] mb-1">Layihə adı *</label>
             <input value={form.name} onChange={e => set('name', e.target.value)}
               className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]"
@@ -112,7 +112,7 @@ function ProjectForm({ open, onClose, onSave, project, clients }) {
             <label className="block text-xs font-medium text-[#555] mb-1">Sifarişçi</label>
             <select value={form.client_id} onChange={e => set('client_id', e.target.value)}
               className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]">
-              <option value="">Sifarişçi seçin</option>
+              <option value="">Seçin</option>
               {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
@@ -124,7 +124,14 @@ function ProjectForm({ open, onClose, onSave, project, clients }) {
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-[#555] mb-1">Müqavilə dəyəri (₼)</label>
+            <label className="block text-xs font-medium text-[#555] mb-1">Mərhələ</label>
+            <select value={form.phase} onChange={e => set('phase', e.target.value)}
+              className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]">
+              {PHASES.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-[#555] mb-1">Müqavilə (₼, ƏDV xaric)</label>
             <input type="number" value={form.contract_value} onChange={e => set('contract_value', e.target.value)}
               className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]"
               placeholder="0" />
@@ -137,112 +144,8 @@ function ProjectForm({ open, onClose, onSave, project, clients }) {
               <option value="cash">Nağd</option>
             </select>
           </div>
-        </div>
-
-        {/* ƏDV preview */}
-        {Number(form.contract_value) > 0 && (
-          <div className={`rounded-lg p-3 text-xs ${form.payment_method === 'transfer' ? 'bg-amber-50 border border-amber-200' : 'bg-[#f5f5f0]'}`}>
-            {form.payment_method === 'transfer' ? (
-              <div className="grid grid-cols-3 gap-3 text-center">
-                <div><div className="text-[#888] mb-0.5">ƏDV xaric</div><div className="font-bold text-[#0f172a]">{fmt(Number(form.contract_value))}</div></div>
-                <div><div className="text-[#888] mb-0.5">ƏDV (18%)</div><div className="font-bold text-amber-600">{fmt(edvCalc(Number(form.contract_value)))}</div></div>
-                <div><div className="text-[#888] mb-0.5">ƏDV daxil</div><div className="font-bold text-green-600">{fmt(withEdvCalc(Number(form.contract_value)))}</div></div>
-              </div>
-            ) : (
-              <div className="text-center text-[#555]">Nağd ödəniş · ƏDV yoxdur · Cəmi: <span className="font-bold">{fmt(Number(form.contract_value))}</span></div>
-            )}
-          </div>
-        )}
-
-        {/* Ödəniş mərhələləri */}
-        <div className="border border-[#e8e8e4] rounded-lg p-3">
-          <div className="text-xs font-bold text-[#0f172a] mb-3">Ödəniş mərhələləri</div>
-          <div className="grid grid-cols-2 gap-3 mb-3">
-            <div>
-              <label className="block text-xs font-medium text-[#555] mb-1">Avans ödənişi (₼)</label>
-              <input type="number" value={form.advance_paid} onChange={e => set('advance_paid', e.target.value)}
-                className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]" placeholder="0" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-[#555] mb-1">Avans üsulu</label>
-              <select value={form.advance_method} onChange={e => set('advance_method', e.target.value)}
-                className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]">
-                <option value="transfer">Köçürmə</option>
-                <option value="cash">Nağd</option>
-              </select>
-            </div>
-          </div>
-          {Number(form.advance_paid) > 0 && (
-            <div className={`rounded p-2 text-xs mb-3 ${form.advance_method === 'transfer' ? 'bg-amber-50 border border-amber-200' : 'bg-[#f5f5f0]'}`}>
-              {form.advance_method === 'transfer' ? (
-                <div className="grid grid-cols-3 gap-2 text-center">
-                  <div><div className="text-[10px] text-[#888]">ƏDV xaric</div><div className="font-bold text-[10px]">{fmt(Number(form.advance_paid))}</div></div>
-                  <div><div className="text-[10px] text-[#888]">ƏDV</div><div className="font-bold text-[10px] text-amber-600">{fmt(edvCalc(Number(form.advance_paid)))}</div></div>
-                  <div><div className="text-[10px] text-[#888]">ƏDV daxil</div><div className="font-bold text-[10px] text-green-600">{fmt(withEdvCalc(Number(form.advance_paid)))}</div></div>
-                </div>
-              ) : <div className="text-center text-[10px]">Nağd · {fmt(Number(form.advance_paid))}</div>}
-            </div>
-          )}
-
-          {/* Aralıq ödənişlər */}
-          <div className="mb-2">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-medium text-[#555]">Aralıq ödənişlər</span>
-              <button onClick={() => set('interim_payments', [...(Array.isArray(form.interim_payments) ? form.interim_payments : []), { amount: '', method: 'transfer', date: '', note: '' }])}
-                className="text-xs text-blue-500 hover:text-blue-700 font-medium">+ Əlavə et</button>
-            </div>
-            {(Array.isArray(form.interim_payments) ? form.interim_payments : []).map((ip, i) => (
-              <div key={i} className="bg-[#fafaf8] border border-[#e8e8e4] rounded-lg p-2.5 mb-2">
-                <div className="flex justify-between items-center mb-1.5">
-                  <span className="text-xs font-medium text-[#555]">Aralıq {i + 1}</span>
-                  <button onClick={() => set('interim_payments', form.interim_payments.filter((_, idx) => idx !== i))} className="text-[10px] text-red-400 hover:text-red-600">Sil</button>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <input type="number" placeholder="Məbləğ" value={ip.amount}
-                    onChange={e => { const arr = [...form.interim_payments]; arr[i] = {...arr[i], amount: e.target.value}; set('interim_payments', arr) }}
-                    className="px-2 py-1.5 border border-[#e8e8e4] rounded text-xs focus:outline-none focus:border-[#0f172a]" />
-                  <select value={ip.method}
-                    onChange={e => { const arr = [...form.interim_payments]; arr[i] = {...arr[i], method: e.target.value}; set('interim_payments', arr) }}
-                    className="px-2 py-1.5 border border-[#e8e8e4] rounded text-xs focus:outline-none focus:border-[#0f172a]">
-                    <option value="transfer">Köçürmə</option>
-                    <option value="cash">Nağd</option>
-                  </select>
-                  <input type="date" value={ip.date}
-                    onChange={e => { const arr = [...form.interim_payments]; arr[i] = {...arr[i], date: e.target.value}; set('interim_payments', arr) }}
-                    className="px-2 py-1.5 border border-[#e8e8e4] rounded text-xs focus:outline-none focus:border-[#0f172a]" />
-                  <input placeholder="Qeyd" value={ip.note || ''}
-                    onChange={e => { const arr = [...form.interim_payments]; arr[i] = {...arr[i], note: e.target.value}; set('interim_payments', arr) }}
-                    className="px-2 py-1.5 border border-[#e8e8e4] rounded text-xs focus:outline-none focus:border-[#0f172a]" />
-                  {Number(ip.amount) > 0 && (
-                    <div className={`col-span-2 rounded p-1.5 text-[10px] ${ip.method === 'transfer' ? 'bg-amber-50' : 'bg-[#f5f5f0]'}`}>
-                      {ip.method === 'transfer'
-                        ? <span>ƏDV xaric: {fmt(Number(ip.amount))} · ƏDV: {fmt(edvCalc(Number(ip.amount)))} · ƏDV daxil: <strong>{fmt(withEdvCalc(Number(ip.amount)))}</strong></span>
-                        : <span>Nağd · Cəmi: {fmt(Number(ip.amount))}</span>}
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs font-medium text-[#555] mb-1">Mərhələ</label>
-            <select value={form.phase} onChange={e => set('phase', e.target.value)}
-              className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]">
-              {PHASES.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-[#555] mb-1">Risk səviyyəsi</label>
-            <select value={form.risk_level} onChange={e => set('risk_level', e.target.value)}
-              className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]">
-              {RISK_LEVELS.map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-[#555] mb-1">Başlama tarixi</label>
+            <label className="block text-xs font-medium text-[#555] mb-1">Başlama</label>
             <input type="date" value={form.start_date} onChange={e => set('start_date', e.target.value)}
               className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]" />
           </div>
@@ -254,27 +157,84 @@ function ProjectForm({ open, onClose, onSave, project, clients }) {
           <div>
             <label className="block text-xs font-medium text-[#555] mb-1">Tamamlanma (%)</label>
             <input type="number" min="0" max="100" value={form.completion_percent} onChange={e => set('completion_percent', e.target.value)}
-              className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]"
-              placeholder="0" />
+              className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]" placeholder="0" />
           </div>
-          <div className="col-span-2">
+          <div>
+            <label className="block text-xs font-medium text-[#555] mb-1">Risk</label>
+            <select value={form.risk_level} onChange={e => set('risk_level', e.target.value)}
+              className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]">
+              {RISK_LEVELS.map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
+            </select>
+          </div>
+          <div>
             <label className="block text-xs font-medium text-[#555] mb-1">Növbəti addım</label>
             <input value={form.next_action} onChange={e => set('next_action', e.target.value)}
               className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]"
               placeholder="Növbəti nə edilməlidir?" />
           </div>
-          <div className="col-span-2">
+          <div>
             <label className="block text-xs font-medium text-[#555] mb-1">Bloker</label>
             <input value={form.blocker} onChange={e => set('blocker', e.target.value)}
               className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]"
-              placeholder="Layihəni gecikdirən amil varsa yazın" />
+              placeholder="Gecikdirən amil" />
           </div>
-          <div className="col-span-2">
-            <label className="block text-xs font-medium text-[#555] mb-1">Qeyd</label>
-            <textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={2}
-              className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a] resize-none"
-              placeholder="Əlavə qeydlər..." />
+        </div>
+
+        {/* ƏDV + Ödəniş mərhələləri — compact */}
+        <div className="bg-[#fafaf8] border border-[#e8e8e4] rounded-lg p-3">
+          <div className="text-xs font-bold text-[#0f172a] mb-2">Ödəniş mərhələləri</div>
+          <div className="grid grid-cols-4 gap-2 mb-2">
+            <div className="col-span-2">
+              <label className="block text-[10px] text-[#888] mb-1">Avans (₼)</label>
+              <input type="number" value={form.advance_paid} onChange={e => set('advance_paid', e.target.value)}
+                className="w-full px-2 py-1.5 border border-[#e8e8e4] rounded text-xs focus:outline-none focus:border-[#0f172a]" placeholder="0" />
+            </div>
+            <div className="col-span-2">
+              <label className="block text-[10px] text-[#888] mb-1">Avans üsulu</label>
+              <select value={form.advance_method} onChange={e => set('advance_method', e.target.value)}
+                className="w-full px-2 py-1.5 border border-[#e8e8e4] rounded text-xs focus:outline-none focus:border-[#0f172a]">
+                <option value="transfer">Köçürmə</option>
+                <option value="cash">Nağd</option>
+              </select>
+            </div>
           </div>
+          {(Number(form.contract_value) > 0 || Number(form.advance_paid) > 0) && form.payment_method === 'transfer' && (
+            <div className="bg-amber-50 border border-amber-100 rounded p-2 text-[10px] mb-2">
+              <span className="text-[#888]">Müq: </span><strong>{fmt(Number(form.contract_value))}</strong>
+              <span className="text-[#888] ml-2">ƏDV: </span><strong className="text-amber-600">{fmt(edvCalc(Number(form.contract_value)))}</strong>
+              <span className="text-[#888] ml-2">Cəmi: </span><strong className="text-green-600">{fmt(withEdvCalc(Number(form.contract_value)))}</strong>
+            </div>
+          )}
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[10px] text-[#888]">Aralıq ödənişlər</span>
+            <button onClick={() => set('interim_payments', [...(Array.isArray(form.interim_payments) ? form.interim_payments : []), { amount: '', method: 'transfer', date: '', note: '' }])}
+              className="text-[10px] text-blue-500 hover:text-blue-700 font-medium">+ Əlavə et</button>
+          </div>
+          {(Array.isArray(form.interim_payments) ? form.interim_payments : []).map((ip, i) => (
+            <div key={i} className="flex gap-2 mb-1 items-center">
+              <span className="text-[10px] text-[#aaa] w-4">{i+1}.</span>
+              <input type="number" placeholder="₼" value={ip.amount}
+                onChange={e => { const arr = [...form.interim_payments]; arr[i] = {...arr[i], amount: e.target.value}; set('interim_payments', arr) }}
+                className="flex-1 px-2 py-1 border border-[#e8e8e4] rounded text-xs focus:outline-none focus:border-[#0f172a]" />
+              <select value={ip.method}
+                onChange={e => { const arr = [...form.interim_payments]; arr[i] = {...arr[i], method: e.target.value}; set('interim_payments', arr) }}
+                className="flex-1 px-2 py-1 border border-[#e8e8e4] rounded text-xs focus:outline-none focus:border-[#0f172a]">
+                <option value="transfer">Köçürmə</option>
+                <option value="cash">Nağd</option>
+              </select>
+              <input type="date" value={ip.date}
+                onChange={e => { const arr = [...form.interim_payments]; arr[i] = {...arr[i], date: e.target.value}; set('interim_payments', arr) }}
+                className="flex-1 px-2 py-1 border border-[#e8e8e4] rounded text-xs focus:outline-none focus:border-[#0f172a]" />
+              <button onClick={() => set('interim_payments', form.interim_payments.filter((_, idx) => idx !== i))} className="text-[#aaa] hover:text-red-500 text-xs">✕</button>
+            </div>
+          ))}
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-[#555] mb-1">Qeyd</label>
+          <textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={2}
+            className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a] resize-none"
+            placeholder="Əlavə qeydlər..." />
         </div>
         <div className="flex gap-2 pt-2 border-t border-[#f0f0ec]">
           <Button variant="secondary" onClick={onClose}>Ləğv et</Button>
