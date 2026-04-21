@@ -4,7 +4,10 @@ import { useToast } from '../contexts/ToastContext'
 import { PageHeader, Badge, Card, Button, EmptyState, Modal, ConfirmDialog, Skeleton, StatCard } from '../components/ui'
 import { IconPlus, IconEdit, IconTrash, IconArrowUp } from '@tabler/icons-react'
 
+const EDV = 0.18
 function fmt(n) { return '₼' + Number(n || 0).toLocaleString() }
+function edv(n) { return Math.round(Number(n || 0) * EDV) }
+function withEdv(n) { return Math.round(Number(n || 0) * (1 + EDV)) }
 
 function IncomeForm({ open, onClose, onSave, income, projects, clients }) {
   const [form, setForm] = useState({ name: '', project_id: '', client_id: '', amount: '', payment_date: '', payment_method: 'transfer', notes: '' })
@@ -18,6 +21,8 @@ function IncomeForm({ open, onClose, onSave, income, projects, clients }) {
   }, [income, open])
 
   function set(k, v) { setForm(f => ({ ...f, [k]: v })) }
+  const amt = Number(form.amount) || 0
+  const isTransfer = form.payment_method === 'transfer'
 
   return (
     <Modal open={open} onClose={onClose} title={income ? 'Daxilolmanı redaktə et' : 'Yeni daxilolma'}>
@@ -30,10 +35,17 @@ function IncomeForm({ open, onClose, onSave, income, projects, clients }) {
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs font-medium text-[#555] mb-1">Məbləğ (₼) *</label>
+            <label className="block text-xs font-medium text-[#555] mb-1">Məbləğ (₼, ƏDV xaric) *</label>
             <input type="number" value={form.amount} onChange={e => set('amount', e.target.value)}
-              className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]"
-              placeholder="0" />
+              className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]" placeholder="0" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-[#555] mb-1">Ödəniş üsulu</label>
+            <select value={form.payment_method} onChange={e => set('payment_method', e.target.value)}
+              className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]">
+              <option value="transfer">Köçürmə</option>
+              <option value="cash">Nağd</option>
+            </select>
           </div>
           <div>
             <label className="block text-xs font-medium text-[#555] mb-1">Ödəniş tarixi</label>
@@ -56,15 +68,22 @@ function IncomeForm({ open, onClose, onSave, income, projects, clients }) {
               {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
-          <div>
-            <label className="block text-xs font-medium text-[#555] mb-1">Ödəniş metodu</label>
-            <select value={form.payment_method} onChange={e => set('payment_method', e.target.value)}
-              className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]">
-              <option value="transfer">Köçürmə</option>
-              <option value="cash">Nağd</option>
-            </select>
-          </div>
         </div>
+
+        {amt > 0 && (
+          <div className={`rounded-lg p-3 text-xs ${isTransfer ? 'bg-amber-50 border border-amber-200' : 'bg-[#f5f5f0]'}`}>
+            {isTransfer ? (
+              <div className="grid grid-cols-3 gap-3 text-center">
+                <div><div className="text-[#888] mb-0.5">ƏDV xaric</div><div className="font-bold text-[#0f172a]">{fmt(amt)}</div></div>
+                <div><div className="text-[#888] mb-0.5">ƏDV (18%)</div><div className="font-bold text-amber-600">{fmt(edv(amt))}</div></div>
+                <div><div className="text-[#888] mb-0.5">ƏDV daxil</div><div className="font-bold text-green-600">{fmt(withEdv(amt))}</div></div>
+              </div>
+            ) : (
+              <div className="text-center text-[#555]">Nağd ödəniş — ƏDV tətbiq edilmir · Cəmi: <span className="font-bold text-[#0f172a]">{fmt(amt)}</span></div>
+            )}
+          </div>
+        )}
+
         <div>
           <label className="block text-xs font-medium text-[#555] mb-1">Qeyd</label>
           <textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={2}
@@ -106,7 +125,16 @@ export default function DaxilolmalarPage() {
 
   async function handleSave(form) {
     if (!form.name.trim() || !form.amount) { addToast('Ad və məbləğ daxil edin', 'error'); return }
-    const data = { name: form.name.trim(), amount: Number(form.amount), project_id: form.project_id || null, client_id: form.client_id || null, payment_date: form.payment_date || null, payment_method: form.payment_method, notes: form.notes || null }
+    const amt = Number(form.amount)
+    const isTransfer = form.payment_method === 'transfer'
+    const data = {
+      name: form.name.trim(), amount: amt,
+      payment_method: form.payment_method,
+      edv_amount: isTransfer ? edv(amt) : 0,
+      amount_with_edv: isTransfer ? withEdv(amt) : amt,
+      project_id: form.project_id || null, client_id: form.client_id || null,
+      payment_date: form.payment_date || null, notes: form.notes || null
+    }
     if (editIncome) {
       const { error } = await supabase.from('incomes').update(data).eq('id', editIncome.id)
       if (error) { addToast('Xəta: ' + error.message, 'error'); return }
@@ -125,13 +153,11 @@ export default function DaxilolmalarPage() {
     setDeleteIncome(null); await loadData()
   }
 
+  const totalCash = incomes.filter(i => i.payment_method === 'cash').reduce((s, i) => s + Number(i.amount || 0), 0)
+  const totalTransfer = incomes.filter(i => i.payment_method === 'transfer').reduce((s, i) => s + Number(i.amount || 0), 0)
+  const totalEdv = incomes.filter(i => i.payment_method === 'transfer').reduce((s, i) => s + Number(i.edv_amount || edv(i.amount) || 0), 0)
   const total = incomes.reduce((s, i) => s + Number(i.amount || 0), 0)
-  const thisMonth = incomes.filter(i => {
-    if (!i.payment_date) return false
-    const d = new Date(i.payment_date)
-    const now = new Date()
-    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()
-  }).reduce((s, i) => s + Number(i.amount || 0), 0)
+  const totalWithEdv = incomes.reduce((s, i) => s + Number(i.amount_with_edv || i.amount || 0), 0)
 
   const getProject = id => projects.find(p => p.id === id)
   const getClient = id => clients.find(c => c.id === id)
@@ -146,10 +172,11 @@ export default function DaxilolmalarPage() {
         action={<Button onClick={() => { setEditIncome(null); setModalOpen(true) }} size="sm"><IconPlus size={14} /> Yeni daxilolma</Button>}
       />
 
-      <div className="grid grid-cols-3 gap-4 mb-5">
-        <StatCard label="Ümumi daxilolma" value={fmt(total)} variant="success" />
-        <StatCard label="Bu ay" value={fmt(thisMonth)} />
-        <StatCard label="Qeyd sayı" value={incomes.length} />
+      <div className="grid grid-cols-4 gap-4 mb-5">
+        <StatCard label="Nağd" value={fmt(totalCash)} variant="success" />
+        <StatCard label="Köçürmə (ƏDV xaric)" value={fmt(totalTransfer)} variant="success" />
+        <StatCard label="ƏDV məbləği" value={fmt(totalEdv)} />
+        <StatCard label="Ümumi (ƏDV daxil)" value={fmt(totalWithEdv)} variant="success" />
       </div>
 
       {incomes.length === 0 ? (
@@ -164,38 +191,41 @@ export default function DaxilolmalarPage() {
                   <th className="text-left px-4 py-3 font-medium text-[#888]">Açıqlama</th>
                   <th className="text-left px-4 py-3 font-medium text-[#888]">Layihə / Sifarişçi</th>
                   <th className="text-left px-4 py-3 font-medium text-[#888]">Tarix</th>
-                  <th className="text-left px-4 py-3 font-medium text-[#888]">Metod</th>
-                  <th className="text-right px-4 py-3 font-medium text-[#888]">Məbləğ</th>
+                  <th className="text-left px-4 py-3 font-medium text-[#888]">Ödəniş</th>
+                  <th className="text-right px-4 py-3 font-medium text-[#888]">ƏDV xaric</th>
+                  <th className="text-right px-4 py-3 font-medium text-[#888]">ƏDV (18%)</th>
+                  <th className="text-right px-4 py-3 font-medium text-[#888]">ƏDV daxil</th>
                   <th className="px-4 py-3"></th>
                 </tr>
               </thead>
               <tbody>
-                {incomes.map(inc => (
-                  <tr key={inc.id} className="border-b border-[#f5f5f0] hover:bg-[#fafaf8]">
-                    <td className="px-4 py-3 font-medium text-[#0f172a]">{inc.name}</td>
-                    <td className="px-4 py-3 text-[#555]">
-                      {getProject(inc.project_id)?.name || getClient(inc.client_id)?.name || '—'}
-                    </td>
-                    <td className="px-4 py-3 text-[#555]">
-                      {inc.payment_date ? new Date(inc.payment_date).toLocaleDateString('az-AZ') : '—'}
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge variant="default" size="sm">{inc.payment_method === 'cash' ? 'Nağd' : 'Köçürmə'}</Badge>
-                    </td>
-                    <td className="px-4 py-3 text-right font-bold text-green-600">{fmt(inc.amount)}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex gap-1">
-                        <button onClick={() => { setEditIncome(inc); setModalOpen(true) }} className="text-[#aaa] hover:text-[#0f172a] p-1"><IconEdit size={12} /></button>
-                        <button onClick={() => setDeleteIncome(inc)} className="text-[#aaa] hover:text-red-500 p-1"><IconTrash size={12} /></button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {incomes.map(inc => {
+                  const isTransfer = inc.payment_method === 'transfer'
+                  return (
+                    <tr key={inc.id} className="border-b border-[#f5f5f0] hover:bg-[#fafaf8]">
+                      <td className="px-4 py-3 font-medium text-[#0f172a]">{inc.name}</td>
+                      <td className="px-4 py-3 text-[#555]">{getProject(inc.project_id)?.name || getClient(inc.client_id)?.name || '—'}</td>
+                      <td className="px-4 py-3 text-[#555]">{inc.payment_date ? new Date(inc.payment_date).toLocaleDateString('az-AZ') : '—'}</td>
+                      <td className="px-4 py-3"><Badge variant={isTransfer ? 'info' : 'default'} size="sm">{isTransfer ? 'Köçürmə' : 'Nağd'}</Badge></td>
+                      <td className="px-4 py-3 text-right font-medium text-[#0f172a]">{fmt(inc.amount)}</td>
+                      <td className="px-4 py-3 text-right text-amber-600">{isTransfer ? fmt(inc.edv_amount || edv(inc.amount)) : '—'}</td>
+                      <td className="px-4 py-3 text-right font-bold text-green-600">{fmt(inc.amount_with_edv || inc.amount)}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex gap-1">
+                          <button onClick={() => { setEditIncome(inc); setModalOpen(true) }} className="text-[#aaa] hover:text-[#0f172a] p-1"><IconEdit size={12} /></button>
+                          <button onClick={() => setDeleteIncome(inc)} className="text-[#aaa] hover:text-red-500 p-1"><IconTrash size={12} /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
               <tfoot>
                 <tr className="bg-[#f5f5f0]">
-                  <td colSpan={4} className="px-4 py-2 text-xs font-medium text-[#555]">Cəmi</td>
-                  <td className="px-4 py-2 text-right text-xs font-bold text-green-700">{fmt(total)}</td>
+                  <td colSpan={4} className="px-4 py-2 text-xs font-medium text-[#555]">Cəmi ({incomes.length})</td>
+                  <td className="px-4 py-2 text-right text-xs font-bold text-[#0f172a]">{fmt(total)}</td>
+                  <td className="px-4 py-2 text-right text-xs font-bold text-amber-600">{fmt(totalEdv)}</td>
+                  <td className="px-4 py-2 text-right text-xs font-bold text-green-600">{fmt(totalWithEdv)}</td>
                   <td />
                 </tr>
               </tfoot>
