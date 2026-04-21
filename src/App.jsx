@@ -13,6 +13,9 @@ import DaxilolmalarPage from './pages/DaxilolmalarPage'
 import XerclerPage from './pages/XerclerPage'
 import PodratIsleriPage from './pages/PodratIsleriPage'
 import DebitorBorclarPage from './pages/DebitorBorclarPage'
+import DaxiliKocurmelePage from './pages/DaxiliKocurmelePage'
+import TesisciBorclarPage from './pages/TesisciBorclarPage'
+import SabitXerclerPage from './pages/SabitXerclerPage'
 import IshciHeyetiPage from './pages/IshciHeyetiPage'
 import ParametrlerPage from './pages/ParametrlerPage'
 import HesabatlarPage from './pages/HesabatlarPage'
@@ -47,10 +50,10 @@ export default function App() {
               <Route path="xercler" element={<XerclerPage />} />
               <Route path="podrat-isleri" element={<PodratIsleriPage />} />
               <Route path="debitor-borclar" element={<DebitorBorclarPage />} />
-              <Route path="daxili-kocurmeler" element={<CS t="Daxili Köçürmələr" />} />
-              <Route path="tesisci-borclari" element={<CS t="Təsisçi Borcları" />} />
+              <Route path="daxili-kocurmeler" element={<DaxiliKocurmelePage />} />
+              <Route path="tesisci-borclari" element={<TesisciBorclarPage />} />
               <Route path="hesabatlar" element={<HesabatlarPage />} />
-              <Route path="sabit-xercler" element={<CS t="Sabit Xərclər" />} />
+              <Route path="sabit-xercler" element={<SabitXerclerPage />} />
               <Route path="isci-heyeti" element={<IshciHeyetiPage />} />
               <Route path="emek-haqqi" element={<CS t="Əmək haqqı" />} />
               <Route path="elanlar" element={<CS t="Elanlar Lövhəsi" />} />
