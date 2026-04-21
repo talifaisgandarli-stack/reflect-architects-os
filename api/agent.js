@@ -30,8 +30,9 @@ export default async function handler(req, res) {
           body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 400, temperature: 0.7 } }) }
       )
       const d = await r.json()
-      return d.candidates?.[0]?.content?.parts?.[0]?.text || '[Mesaj yaradılmadı]'
-    } catch (e) { return '[Gemini xətası]' }
+      if (!d.candidates) return '[API cavabı: ' + JSON.stringify(d).slice(0, 200) + ']'
+      return d.candidates[0].content.parts[0].text
+    } catch (e) { return '[Gemini xətası: ' + e.message + ']' }
   }
 
   async function sendWA(phone, message) {
