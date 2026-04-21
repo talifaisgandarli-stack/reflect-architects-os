@@ -15,19 +15,11 @@ const STATUSES = [
 ]
 
 function ProposalForm({ open, onClose, onSave, proposal, clients, projects }) {
-  const [form, setForm] = useState({
-    name: '', client_id: '', project_id: '', amount: '',
-    sent_date: '', valid_until: '', status: 'draft', notes: ''
-  })
+  const [form, setForm] = useState({ name: '', client_id: '', project_id: '', amount: '', sent_date: '', valid_until: '', status: 'draft', notes: '' })
 
   useEffect(() => {
     if (proposal) {
-      setForm({
-        name: proposal.name || '', client_id: proposal.client_id || '',
-        project_id: proposal.project_id || '', amount: proposal.amount || '',
-        sent_date: proposal.sent_date || '', valid_until: proposal.valid_until || '',
-        status: proposal.status || 'draft', notes: proposal.notes || ''
-      })
+      setForm({ name: proposal.name || '', client_id: proposal.client_id || '', project_id: proposal.project_id || '', amount: proposal.amount || '', sent_date: proposal.sent_date || '', valid_until: proposal.valid_until || '', status: proposal.status || 'draft', notes: proposal.notes || '' })
     } else {
       setForm({ name: '', client_id: '', project_id: '', amount: '', sent_date: '', valid_until: '', status: 'draft', notes: '' })
     }
@@ -114,68 +106,57 @@ export default function KommersiyaTeklifleriPage() {
   async function loadData() {
     setLoading(true)
     const [pRes, cRes, prRes] = await Promise.all([
-      supabase.from('invoices').select('*').eq('notes', 'proposal').order('created_at', { ascending: false }),
+      supabase.from('proposals').select('*').order('created_at', { ascending: false }),
       supabase.from('clients').select('id, name'),
       supabase.from('projects').select('id, name'),
     ])
-    // Use a dedicated proposals approach via invoices table with type marker
-    // Actually let's use a simpler approach - store proposals in invoices with a type field
-    // For now load all and show
+    setProposals(pRes.data || [])
     setClients(cRes.data || [])
     setProjects(prRes.data || [])
     setLoading(false)
   }
 
-  // Use local state since we don't have a dedicated proposals table
-  const [localProposals, setLocalProposals] = useState([
-    // Empty - user will add their own
-  ])
-
   async function handleSave(form) {
     if (!form.name.trim()) { addToast('Ad daxil edin', 'error'); return }
-    const newP = {
-      id: Date.now().toString(),
-      name: form.name, client_id: form.client_id, project_id: form.project_id,
-      amount: Number(form.amount) || 0, sent_date: form.sent_date,
-      valid_until: form.valid_until, status: form.status, notes: form.notes,
-      created_at: new Date().toISOString()
-    }
-
+    const data = { name: form.name.trim(), client_id: form.client_id || null, project_id: form.project_id || null, amount: Number(form.amount) || 0, sent_date: form.sent_date || null, valid_until: form.valid_until || null, status: form.status, notes: form.notes || null }
     if (editProposal) {
-      setLocalProposals(prev => prev.map(p => p.id === editProposal.id ? { ...newP, id: editProposal.id } : p))
+      const { error } = await supabase.from('proposals').update(data).eq('id', editProposal.id)
+      if (error) { addToast('Xəta: ' + error.message, 'error'); return }
       addToast('Yeniləndi', 'success')
     } else {
-      setLocalProposals(prev => [newP, ...prev])
+      const { error } = await supabase.from('proposals').insert(data)
+      if (error) { addToast('Xəta: ' + error.message, 'error'); return }
       addToast('Kommersiya təklifi əlavə edildi', 'success')
     }
-    setModalOpen(false); setEditProposal(null)
+    setModalOpen(false); setEditProposal(null); await loadData()
   }
 
-  function handleDelete() {
-    setLocalProposals(prev => prev.filter(p => p.id !== deleteProposal.id))
+  async function handleDelete() {
+    await supabase.from('proposals').delete().eq('id', deleteProposal.id)
     addToast('Silindi', 'success')
-    setDeleteProposal(null)
+    setDeleteProposal(null); await loadData()
   }
 
   const getClient = id => clients.find(c => c.id === id)
   const getProject = id => projects.find(p => p.id === id)
-  const filtered = filter === 'all' ? localProposals : localProposals.filter(p => p.status === filter)
+  const filtered = filter === 'all' ? proposals : proposals.filter(p => p.status === filter)
+  const totalAccepted = proposals.filter(p => p.status === 'accepted').reduce((s, p) => s + Number(p.amount || 0), 0)
 
-  if (loading) return <div className="p-6"><Skeleton className="h-32" /></div>
+  if (loading) return <div className="p-6"><Skeleton className="h-64" /></div>
 
   return (
     <div className="p-6 fade-in">
       <PageHeader
         title="Kommersiya Təklifləri"
-        subtitle={`${localProposals.length} təklif`}
+        subtitle={`${proposals.length} təklif`}
         action={<Button onClick={() => { setEditProposal(null); setModalOpen(true) }} size="sm"><IconPlus size={14} /> Yeni təklif</Button>}
       />
 
       <div className="grid grid-cols-4 gap-4 mb-5">
-        <StatCard label="Ümumi" value={localProposals.length} />
-        <StatCard label="Göndərildi" value={localProposals.filter(p => p.status === 'sent').length} variant="info" />
-        <StatCard label="Qəbul edildi" value={localProposals.filter(p => p.status === 'accepted').length} variant="success" />
-        <StatCard label="Rədd edildi" value={localProposals.filter(p => p.status === 'rejected').length} variant="danger" />
+        <StatCard label="Ümumi" value={proposals.length} />
+        <StatCard label="Göndərildi" value={proposals.filter(p => p.status === 'sent').length} variant="info" />
+        <StatCard label="Qəbul edildi" value={proposals.filter(p => p.status === 'accepted').length} variant="success" />
+        <StatCard label="Qəbul dəyəri" value={fmt(totalAccepted)} variant="success" />
       </div>
 
       <div className="flex gap-1 mb-4 border-b border-[#e8e8e4]">
@@ -183,11 +164,12 @@ export default function KommersiyaTeklifleriPage() {
           <button key={s.key} onClick={() => setFilter(s.key)}
             className={`px-3 py-2 text-xs font-medium border-b-2 transition-colors ${filter === s.key ? 'border-[#0f172a] text-[#0f172a]' : 'border-transparent text-[#888] hover:text-[#555]'}`}>
             {s.label}
+            <span className="ml-1 text-[10px] text-[#aaa]">{s.key === 'all' ? proposals.length : proposals.filter(p => p.status === s.key).length}</span>
           </button>
         ))}
       </div>
 
-      {localProposals.length === 0 ? (
+      {proposals.length === 0 ? (
         <EmptyState icon={IconFileText} title="Hələ kommersiya təklifi yoxdur"
           action={<Button onClick={() => setModalOpen(true)} size="sm"><IconPlus size={14} /> Əlavə et</Button>} />
       ) : (
