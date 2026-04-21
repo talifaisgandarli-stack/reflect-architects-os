@@ -34,7 +34,7 @@ export default async function handler(req, res) {
           'X-Title': 'Reflect Architects OS'
         },
         body: JSON.stringify({
-          model: 'meta-llama/llama-3.2-3b-instruct:free',
+          model: 'google/gemma-3-4b-it:free',
           messages: [{ role: 'user', content: prompt }],
           max_tokens: 400,
           temperature: 0.7
