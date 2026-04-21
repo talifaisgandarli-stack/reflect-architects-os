@@ -54,7 +54,7 @@ function daysLeft(deadline) {
 function ProjectForm({ open, onClose, onSave, project, clients }) {
   const [form, setForm] = useState({
     name: '', client_id: '', contract_value: '',
-    advance_paid: '', status: 'waiting', risk_level: 'normal',
+    advance_paid: '', advance_method: 'transfer', interim_payments: [], status: 'waiting', risk_level: 'normal',
     phase: 'concept', completion_percent: '0',
     deadline: '', start_date: '', payment_method: 'transfer',
     vat_included: false, notes: '', next_action: '', blocker: ''
@@ -67,6 +67,8 @@ function ProjectForm({ open, onClose, onSave, project, clients }) {
         client_id: project.client_id || '',
         contract_value: project.contract_value || '',
         advance_paid: project.advance_paid || '',
+        advance_method: project.advance_method || 'transfer',
+        interim_payments: project.interim_payments || [],
         status: project.status || 'waiting',
         risk_level: project.risk_level || 'normal',
         phase: project.phase || 'concept',
@@ -124,11 +126,103 @@ function ProjectForm({ open, onClose, onSave, project, clients }) {
               placeholder="0" />
           </div>
           <div>
-            <label className="block text-xs font-medium text-[#555] mb-1">Alınan avans (₼)</label>
-            <input type="number" value={form.advance_paid} onChange={e => set('advance_paid', e.target.value)}
-              className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]"
-              placeholder="0" />
+            <label className="block text-xs font-medium text-[#555] mb-1">Ödəniş üsulu</label>
+            <select value={form.payment_method} onChange={e => set('payment_method', e.target.value)}
+              className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]">
+              <option value="transfer">Köçürmə</option>
+              <option value="cash">Nağd</option>
+            </select>
           </div>
+        </div>
+
+        {/* ƏDV preview */}
+        {Number(form.contract_value) > 0 && (
+          <div className={`rounded-lg p-3 text-xs ${form.payment_method === 'transfer' ? 'bg-amber-50 border border-amber-200' : 'bg-[#f5f5f0]'}`}>
+            {form.payment_method === 'transfer' ? (
+              <div className="grid grid-cols-3 gap-3 text-center">
+                <div><div className="text-[#888] mb-0.5">ƏDV xaric</div><div className="font-bold text-[#0f172a]">{fmt(Number(form.contract_value))}</div></div>
+                <div><div className="text-[#888] mb-0.5">ƏDV (18%)</div><div className="font-bold text-amber-600">{fmt(edvCalc(Number(form.contract_value)))}</div></div>
+                <div><div className="text-[#888] mb-0.5">ƏDV daxil</div><div className="font-bold text-green-600">{fmt(withEdvCalc(Number(form.contract_value)))}</div></div>
+              </div>
+            ) : (
+              <div className="text-center text-[#555]">Nağd ödəniş · ƏDV yoxdur · Cəmi: <span className="font-bold">{fmt(Number(form.contract_value))}</span></div>
+            )}
+          </div>
+        )}
+
+        {/* Ödəniş mərhələləri */}
+        <div className="border border-[#e8e8e4] rounded-lg p-3">
+          <div className="text-xs font-bold text-[#0f172a] mb-3">Ödəniş mərhələləri</div>
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div>
+              <label className="block text-xs font-medium text-[#555] mb-1">Avans ödənişi (₼)</label>
+              <input type="number" value={form.advance_paid} onChange={e => set('advance_paid', e.target.value)}
+                className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]" placeholder="0" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-[#555] mb-1">Avans üsulu</label>
+              <select value={form.advance_method} onChange={e => set('advance_method', e.target.value)}
+                className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]">
+                <option value="transfer">Köçürmə</option>
+                <option value="cash">Nağd</option>
+              </select>
+            </div>
+          </div>
+          {Number(form.advance_paid) > 0 && (
+            <div className={`rounded p-2 text-xs mb-3 ${form.advance_method === 'transfer' ? 'bg-amber-50 border border-amber-200' : 'bg-[#f5f5f0]'}`}>
+              {form.advance_method === 'transfer' ? (
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  <div><div className="text-[10px] text-[#888]">ƏDV xaric</div><div className="font-bold text-[10px]">{fmt(Number(form.advance_paid))}</div></div>
+                  <div><div className="text-[10px] text-[#888]">ƏDV</div><div className="font-bold text-[10px] text-amber-600">{fmt(edvCalc(Number(form.advance_paid)))}</div></div>
+                  <div><div className="text-[10px] text-[#888]">ƏDV daxil</div><div className="font-bold text-[10px] text-green-600">{fmt(withEdvCalc(Number(form.advance_paid)))}</div></div>
+                </div>
+              ) : <div className="text-center text-[10px]">Nağd · {fmt(Number(form.advance_paid))}</div>}
+            </div>
+          )}
+
+          {/* Aralıq ödənişlər */}
+          <div className="mb-2">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-medium text-[#555]">Aralıq ödənişlər</span>
+              <button onClick={() => set('interim_payments', [...(form.interim_payments || []), { amount: '', method: 'transfer', date: '', note: '' }])}
+                className="text-xs text-blue-500 hover:text-blue-700 font-medium">+ Əlavə et</button>
+            </div>
+            {(form.interim_payments || []).map((ip, i) => (
+              <div key={i} className="bg-[#fafaf8] border border-[#e8e8e4] rounded-lg p-2.5 mb-2">
+                <div className="flex justify-between items-center mb-1.5">
+                  <span className="text-xs font-medium text-[#555]">Aralıq {i + 1}</span>
+                  <button onClick={() => set('interim_payments', form.interim_payments.filter((_, idx) => idx !== i))} className="text-[10px] text-red-400 hover:text-red-600">Sil</button>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <input type="number" placeholder="Məbləğ" value={ip.amount}
+                    onChange={e => { const arr = [...form.interim_payments]; arr[i] = {...arr[i], amount: e.target.value}; set('interim_payments', arr) }}
+                    className="px-2 py-1.5 border border-[#e8e8e4] rounded text-xs focus:outline-none focus:border-[#0f172a]" />
+                  <select value={ip.method}
+                    onChange={e => { const arr = [...form.interim_payments]; arr[i] = {...arr[i], method: e.target.value}; set('interim_payments', arr) }}
+                    className="px-2 py-1.5 border border-[#e8e8e4] rounded text-xs focus:outline-none focus:border-[#0f172a]">
+                    <option value="transfer">Köçürmə</option>
+                    <option value="cash">Nağd</option>
+                  </select>
+                  <input type="date" value={ip.date}
+                    onChange={e => { const arr = [...form.interim_payments]; arr[i] = {...arr[i], date: e.target.value}; set('interim_payments', arr) }}
+                    className="px-2 py-1.5 border border-[#e8e8e4] rounded text-xs focus:outline-none focus:border-[#0f172a]" />
+                  <input placeholder="Qeyd" value={ip.note || ''}
+                    onChange={e => { const arr = [...form.interim_payments]; arr[i] = {...arr[i], note: e.target.value}; set('interim_payments', arr) }}
+                    className="px-2 py-1.5 border border-[#e8e8e4] rounded text-xs focus:outline-none focus:border-[#0f172a]" />
+                  {Number(ip.amount) > 0 && (
+                    <div className={`col-span-2 rounded p-1.5 text-[10px] ${ip.method === 'transfer' ? 'bg-amber-50' : 'bg-[#f5f5f0]'}`}>
+                      {ip.method === 'transfer'
+                        ? <span>ƏDV xaric: {fmt(Number(ip.amount))} · ƏDV: {fmt(edvCalc(Number(ip.amount)))} · ƏDV daxil: <strong>{fmt(withEdvCalc(Number(ip.amount)))}</strong></span>
+                        : <span>Nağd · Cəmi: {fmt(Number(ip.amount))}</span>}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-xs font-medium text-[#555] mb-1">Mərhələ</label>
             <select value={form.phase} onChange={e => set('phase', e.target.value)}
@@ -158,14 +252,6 @@ function ProjectForm({ open, onClose, onSave, project, clients }) {
             <input type="number" min="0" max="100" value={form.completion_percent} onChange={e => set('completion_percent', e.target.value)}
               className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]"
               placeholder="0" />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-[#555] mb-1">Ödəniş metodu</label>
-            <select value={form.payment_method} onChange={e => set('payment_method', e.target.value)}
-              className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]">
-              <option value="transfer">Köçürmə</option>
-              <option value="cash">Nağd</option>
-            </select>
           </div>
           <div className="col-span-2">
             <label className="block text-xs font-medium text-[#555] mb-1">Növbəti addım</label>
@@ -280,6 +366,10 @@ export default function LayihelerPage() {
       client_id: form.client_id || null,
       contract_value: Number(form.contract_value) || 0,
       advance_paid: Number(form.advance_paid) || 0,
+      advance_method: form.advance_method || 'transfer',
+      interim_payments: form.interim_payments || [],
+      edv_amount: form.payment_method === 'transfer' ? edvCalc(Number(form.contract_value) || 0) : 0,
+      amount_with_edv: form.payment_method === 'transfer' ? withEdvCalc(Number(form.contract_value) || 0) : (Number(form.contract_value) || 0),
       status: form.status,
       risk_level: form.risk_level,
       phase: form.phase,
