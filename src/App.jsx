@@ -9,7 +9,11 @@ import LayihelerPage from './pages/LayihelerPage'
 import TapshiriqlarPage from './pages/TapshiriqlarPage'
 import PipelinePage from './pages/PipelinePage'
 import SifarisciIdareetmesiPage from './pages/SifarisciIdareetmesiPage'
+import KommersiyaTeklifleriPage from './pages/KommersiyaTeklifleriPage'
+import MuqavilelerPage from './pages/MuqavilelerPage'
+import PortfelPage from './pages/PortfelPage'
 import DaxilolmalarPage from './pages/DaxilolmalarPage'
+import HesabFakturalarPage from './pages/HesabFakturalarPage'
 import XerclerPage from './pages/XerclerPage'
 import PodratIsleriPage from './pages/PodratIsleriPage'
 import DebitorBorclarPage from './pages/DebitorBorclarPage'
@@ -42,11 +46,11 @@ export default function App() {
               <Route path="icazeler" element={<CS t="İcazə və Razılaşmalar" />} />
               <Route path="sifarisci-idareetme" element={<SifarisciIdareetmesiPage />} />
               <Route path="pipeline" element={<PipelinePage />} />
-              <Route path="kommersiya-teklifleri" element={<CS t="Kommersiya Təklifləri" />} />
-              <Route path="muqavileler" element={<CS t="Müqavilələr" />} />
-              <Route path="portfel" element={<CS t="Portfel" />} />
+              <Route path="kommersiya-teklifleri" element={<KommersiyaTeklifleriPage />} />
+              <Route path="muqavileler" element={<MuqavilelerPage />} />
+              <Route path="portfel" element={<PortfelPage />} />
               <Route path="daxilolmalar" element={<DaxilolmalarPage />} />
-              <Route path="hesab-fakturalar" element={<CS t="Hesab-fakturalar" />} />
+              <Route path="hesab-fakturalar" element={<HesabFakturalarPage />} />
               <Route path="xercler" element={<XerclerPage />} />
               <Route path="podrat-isleri" element={<PodratIsleriPage />} />
               <Route path="debitor-borclar" element={<DebitorBorclarPage />} />
