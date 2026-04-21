@@ -21,12 +21,16 @@ import DaxiliKocurmelePage from './pages/DaxiliKocurmelePage'
 import TesisciBorclarPage from './pages/TesisciBorclarPage'
 import SabitXerclerPage from './pages/SabitXerclerPage'
 import IshciHeyetiPage from './pages/IshciHeyetiPage'
+import EmekHaqqiPage from './pages/EmekHaqqiPage'
 import ParametrlerPage from './pages/ParametrlerPage'
 import HesabatlarPage from './pages/HesabatlarPage'
 import ElanlarLovhesiPage from './pages/ElanlarLovhesiPage'
 import HadiselerTeqvimiPage from './pages/HadiselerTeqvimiPage'
 import MezuniyyetCedveliPage from './pages/MezuniyyetCedveliPage'
 import AvadanliqPage from './pages/AvadanliqPage'
+import HedefNeticeOKRPage from './pages/HedefNeticeOKRPage'
+import MezmunPlanlamasiPage from './pages/MezmunPlanlamasiPage'
+import SendArxiviPage from './pages/SendArxiviPage'
 import ComingSoonPage from './pages/ComingSoonPage'
 
 function CS({ t }) { return <ComingSoonPage title={t} /> }
@@ -63,14 +67,14 @@ export default function App() {
               <Route path="hesabatlar" element={<HesabatlarPage />} />
               <Route path="sabit-xercler" element={<SabitXerclerPage />} />
               <Route path="isci-heyeti" element={<IshciHeyetiPage />} />
-              <Route path="emek-haqqi" element={<CS t="Əmək haqqı" />} />
+              <Route path="emek-haqqi" element={<EmekHaqqiPage />} />
               <Route path="elanlar" element={<ElanlarLovhesiPage />} />
               <Route path="hadiseler" element={<HadiselerTeqvimiPage />} />
               <Route path="mezuniyyet" element={<MezuniyyetCedveliPage />} />
               <Route path="avadanliq" element={<AvadanliqPage />} />
-              <Route path="hedef-netice" element={<CS t="Hədəf və Nəticələr" />} />
-              <Route path="mezmun-planlamasi" element={<CS t="Məzmun Planlaması" />} />
-              <Route path="sened-arxivi" element={<CS t="Sənəd Arxivi" />} />
+              <Route path="hedef-netice" element={<HedefNeticeOKRPage />} />
+              <Route path="mezmun-planlamasi" element={<MezmunPlanlamasiPage />} />
+              <Route path="sened-arxivi" element={<SendArxiviPage />} />
               <Route path="qaynaqlar" element={<CS t="Qaynaqlar" />} />
               <Route path="parametrler" element={<ParametrlerPage />} />
               <Route path="sistem-arxivi" element={<CS t="Sistem Arxivi" />} />
