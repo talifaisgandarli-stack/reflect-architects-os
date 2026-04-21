@@ -2,18 +2,14 @@ const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN
 const WHATSAPP_PHONE_ID = process.env.WHATSAPP_PHONE_ID
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY
 
-export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' })
-  }
+module.exports = async function handler(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'POST lazımdır' })
 
   const { phone, message, useAI, prompt } = req.body || {}
-
-  if (!phone) return res.status(400).json({ error: 'phone tələb olunur' })
+  if (!phone) return res.status(400).json({ error: 'phone lazımdır' })
 
   let finalMessage = message
 
-  // Gemini ilə mesaj yaz
   if (useAI && prompt && GEMINI_API_KEY) {
     try {
       const aiRes = await fetch(
@@ -29,21 +25,13 @@ export default async function handler(req, res) {
       )
       const aiData = await aiRes.json()
       finalMessage = aiData.candidates?.[0]?.content?.parts?.[0]?.text || message
-    } catch (err) {
-      console.error('Gemini error:', err)
-    }
+    } catch (err) { console.error('Gemini error:', err) }
   }
 
-  if (!finalMessage) return res.status(400).json({ error: 'message tələb olunur' })
+  if (!finalMessage) return res.status(400).json({ error: 'message lazımdır' })
 
-  // WhatsApp token yoxdursa — test rejimi
   if (!WHATSAPP_TOKEN || !WHATSAPP_PHONE_ID) {
-    return res.status(200).json({
-      success: true,
-      mode: 'test',
-      message: 'WhatsApp token hələ konfiqurasiya edilməyib.',
-      would_send: { phone, message: finalMessage }
-    })
+    return res.status(200).json({ success: true, mode: 'test', would_send: { phone, message: finalMessage } })
   }
 
   try {
@@ -51,16 +39,8 @@ export default async function handler(req, res) {
       `https://graph.facebook.com/v18.0/${WHATSAPP_PHONE_ID}/messages`,
       {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${WHATSAPP_TOKEN}`
-        },
-        body: JSON.stringify({
-          messaging_product: 'whatsapp',
-          to: phone.replace(/\D/g, ''),
-          type: 'text',
-          text: { body: finalMessage }
-        })
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${WHATSAPP_TOKEN}` },
+        body: JSON.stringify({ messaging_product: 'whatsapp', to: phone.replace(/\D/g, ''), type: 'text', text: { body: finalMessage } })
       }
     )
     const waData = await waRes.json()
