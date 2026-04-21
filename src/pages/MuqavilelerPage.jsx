@@ -14,20 +14,11 @@ const STATUSES = [
 ]
 
 function ContractForm({ open, onClose, onSave, contract, clients, projects }) {
-  const [form, setForm] = useState({
-    name: '', contract_number: '', client_id: '', project_id: '',
-    amount: '', sign_date: '', end_date: '', status: 'draft', notes: ''
-  })
+  const [form, setForm] = useState({ name: '', contract_number: '', client_id: '', project_id: '', amount: '', sign_date: '', end_date: '', status: 'draft', notes: '' })
 
   useEffect(() => {
     if (contract) {
-      setForm({
-        name: contract.name || '', contract_number: contract.contract_number || '',
-        client_id: contract.client_id || '', project_id: contract.project_id || '',
-        amount: contract.amount || '', sign_date: contract.sign_date || '',
-        end_date: contract.end_date || '', status: contract.status || 'draft',
-        notes: contract.notes || ''
-      })
+      setForm({ name: contract.name || '', contract_number: contract.contract_number || '', client_id: contract.client_id || '', project_id: contract.project_id || '', amount: contract.amount || '', sign_date: contract.sign_date || '', end_date: contract.end_date || '', status: contract.status || 'draft', notes: contract.notes || '' })
     } else {
       setForm({ name: '', contract_number: '', client_id: '', project_id: '', amount: '', sign_date: '', end_date: '', status: 'draft', notes: '' })
     }
@@ -120,62 +111,56 @@ export default function MuqavilelerPage() {
   async function loadData() {
     setLoading(true)
     const [cRes, clRes, prRes] = await Promise.all([
-      supabase.from('invoices').select('*').order('created_at', { ascending: false }),
+      supabase.from('contracts').select('*').order('created_at', { ascending: false }),
       supabase.from('clients').select('id, name'),
       supabase.from('projects').select('id, name'),
     ])
+    setContracts(cRes.data || [])
     setClients(clRes.data || [])
     setProjects(prRes.data || [])
     setLoading(false)
   }
 
-  const [localContracts, setLocalContracts] = useState([])
-
   async function handleSave(form) {
     if (!form.name.trim()) { addToast('Ad daxil edin', 'error'); return }
-    const newC = {
-      id: Date.now().toString(),
-      name: form.name, contract_number: form.contract_number,
-      client_id: form.client_id, project_id: form.project_id,
-      amount: Number(form.amount) || 0, sign_date: form.sign_date,
-      end_date: form.end_date, status: form.status, notes: form.notes,
-      created_at: new Date().toISOString()
-    }
+    const data = { name: form.name.trim(), contract_number: form.contract_number || null, client_id: form.client_id || null, project_id: form.project_id || null, amount: Number(form.amount) || 0, sign_date: form.sign_date || null, end_date: form.end_date || null, status: form.status, notes: form.notes || null }
     if (editContract) {
-      setLocalContracts(prev => prev.map(c => c.id === editContract.id ? { ...newC, id: editContract.id } : c))
+      const { error } = await supabase.from('contracts').update(data).eq('id', editContract.id)
+      if (error) { addToast('Xəta: ' + error.message, 'error'); return }
       addToast('Yeniləndi', 'success')
     } else {
-      setLocalContracts(prev => [newC, ...prev])
+      const { error } = await supabase.from('contracts').insert(data)
+      if (error) { addToast('Xəta: ' + error.message, 'error'); return }
       addToast('Müqavilə əlavə edildi', 'success')
     }
-    setModalOpen(false); setEditContract(null)
+    setModalOpen(false); setEditContract(null); await loadData()
   }
 
-  function handleDelete() {
-    setLocalContracts(prev => prev.filter(c => c.id !== deleteContract.id))
+  async function handleDelete() {
+    await supabase.from('contracts').delete().eq('id', deleteContract.id)
     addToast('Silindi', 'success')
-    setDeleteContract(null)
+    setDeleteContract(null); await loadData()
   }
 
   const getClient = id => clients.find(c => c.id === id)
   const getProject = id => projects.find(p => p.id === id)
-  const filtered = filter === 'all' ? localContracts : localContracts.filter(c => c.status === filter)
-  const totalActive = localContracts.filter(c => c.status === 'active').reduce((s, c) => s + Number(c.amount || 0), 0)
+  const filtered = filter === 'all' ? contracts : contracts.filter(c => c.status === filter)
+  const totalActive = contracts.filter(c => c.status === 'active').reduce((s, c) => s + Number(c.amount || 0), 0)
 
-  if (loading) return <div className="p-6"><Skeleton className="h-32" /></div>
+  if (loading) return <div className="p-6"><Skeleton className="h-64" /></div>
 
   return (
     <div className="p-6 fade-in">
       <PageHeader
         title="Müqavilələr"
-        subtitle={`${localContracts.length} müqavilə`}
+        subtitle={`${contracts.length} müqavilə`}
         action={<Button onClick={() => { setEditContract(null); setModalOpen(true) }} size="sm"><IconPlus size={14} /> Yeni müqavilə</Button>}
       />
 
       <div className="grid grid-cols-4 gap-4 mb-5">
-        <StatCard label="Ümumi" value={localContracts.length} />
-        <StatCard label="Aktiv" value={localContracts.filter(c => c.status === 'active').length} variant="success" />
-        <StatCard label="Tamamlandı" value={localContracts.filter(c => c.status === 'completed').length} />
+        <StatCard label="Ümumi" value={contracts.length} />
+        <StatCard label="Aktiv" value={contracts.filter(c => c.status === 'active').length} variant="success" />
+        <StatCard label="Tamamlandı" value={contracts.filter(c => c.status === 'completed').length} />
         <StatCard label="Aktiv dəyər" value={fmt(totalActive)} variant="success" />
       </div>
 
@@ -184,11 +169,12 @@ export default function MuqavilelerPage() {
           <button key={s.key} onClick={() => setFilter(s.key)}
             className={`px-3 py-2 text-xs font-medium border-b-2 transition-colors ${filter === s.key ? 'border-[#0f172a] text-[#0f172a]' : 'border-transparent text-[#888] hover:text-[#555]'}`}>
             {s.label}
+            <span className="ml-1 text-[10px] text-[#aaa]">{s.key === 'all' ? contracts.length : contracts.filter(c => c.status === s.key).length}</span>
           </button>
         ))}
       </div>
 
-      {localContracts.length === 0 ? (
+      {contracts.length === 0 ? (
         <EmptyState icon={IconContract} title="Hələ müqavilə yoxdur"
           action={<Button onClick={() => setModalOpen(true)} size="sm"><IconPlus size={14} /> Əlavə et</Button>} />
       ) : (
