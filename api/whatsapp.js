@@ -1,6 +1,6 @@
 const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN
 const WHATSAPP_PHONE_ID = process.env.WHATSAPP_PHONE_ID
-const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -9,46 +9,39 @@ export default async function handler(req, res) {
 
   const { phone, message, useAI, prompt } = req.body || {}
 
-  if (!phone) {
-    return res.status(400).json({ error: 'phone tələb olunur' })
-  }
+  if (!phone) return res.status(400).json({ error: 'phone tələb olunur' })
 
   let finalMessage = message
 
-  // AI ilə mesaj yaz
-  if (useAI && prompt && ANTHROPIC_API_KEY) {
+  // Gemini ilə mesaj yaz
+  if (useAI && prompt && GEMINI_API_KEY) {
     try {
-      const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': ANTHROPIC_API_KEY,
-          'anthropic-version': '2023-06-01'
-        },
-        body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 300,
-          messages: [{ role: 'user', content: `Azərbaycan dilində qısa professional WhatsApp mesajı yaz: ${prompt}` }]
-        })
-      })
+      const aiRes = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: `Azərbaycan dilində qısa professional WhatsApp mesajı yaz: ${prompt}` }] }],
+            generationConfig: { maxOutputTokens: 300, temperature: 0.7 }
+          })
+        }
+      )
       const aiData = await aiRes.json()
-      finalMessage = aiData.content?.[0]?.text || message
+      finalMessage = aiData.candidates?.[0]?.content?.parts?.[0]?.text || message
     } catch (err) {
-      console.error('AI error:', err)
+      console.error('Gemini error:', err)
     }
   }
 
-  if (!finalMessage) {
-    return res.status(400).json({ error: 'message tələb olunur' })
-  }
+  if (!finalMessage) return res.status(400).json({ error: 'message tələb olunur' })
 
-  // WhatsApp göndər
+  // WhatsApp token yoxdursa — test rejimi
   if (!WHATSAPP_TOKEN || !WHATSAPP_PHONE_ID) {
-    // Test rejimi - token olmadan
     return res.status(200).json({
       success: true,
       mode: 'test',
-      message: 'WhatsApp token konfiqurasiya edilməyib. Test rejimindədir.',
+      message: 'WhatsApp token hələ konfiqurasiya edilməyib.',
       would_send: { phone, message: finalMessage }
     })
   }
