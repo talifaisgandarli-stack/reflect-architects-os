@@ -287,12 +287,43 @@ function KanbanCard({ project, onEdit, onDelete }) {
         </div>
       )}
 
-      <div className="flex items-center justify-between">
-        <span className="text-[10px] font-medium text-[#0f172a]">{fmt(project.contract_value)}</span>
-        {project.deadline && (
-          <span className={`text-[9px] font-medium ${days < 0 ? 'text-red-500' : days <= 7 ? 'text-yellow-600' : 'text-[#aaa]'}`}>
-            {days < 0 ? `${Math.abs(days)}g keçmiş` : days === 0 ? 'Bu gün' : `${days} gün`}
-          </span>
+      <div className="border-t border-[#f5f5f0] pt-2 mt-1">
+        {project.payment_method === 'transfer' ? (
+          <div className="flex items-center justify-between gap-1">
+            <div className="text-center">
+              <div className="text-[9px] text-[#aaa]">ƏDV xaric</div>
+              <div className="text-[10px] font-bold text-[#0f172a]">{fmt(project.contract_value)}</div>
+            </div>
+            <div className="text-[9px] text-[#aaa]">+</div>
+            <div className="text-center">
+              <div className="text-[9px] text-[#aaa]">ƏDV 18%</div>
+              <div className="text-[10px] font-bold text-amber-600">{fmt(edvCalc(project.contract_value))}</div>
+            </div>
+            <div className="text-[9px] text-[#aaa]">=</div>
+            <div className="text-center">
+              <div className="text-[9px] text-[#aaa]">Cəmi</div>
+              <div className="text-[10px] font-bold text-green-600">{fmt(withEdvCalc(project.contract_value))}</div>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-[9px] text-[#aaa]">Nağd · ƏDV yoxdur</div>
+              <div className="text-[10px] font-bold text-[#0f172a]">{fmt(project.contract_value)}</div>
+            </div>
+            {project.deadline && (
+              <span className={`text-[9px] font-medium ${days < 0 ? 'text-red-500' : days <= 7 ? 'text-yellow-600' : 'text-[#aaa]'}`}>
+                {days < 0 ? `${Math.abs(days)}g keçmiş` : days === 0 ? 'Bu gün' : `${days} gün`}
+              </span>
+            )}
+          </div>
+        )}
+        {project.payment_method === 'transfer' && project.deadline && (
+          <div className="text-right mt-0.5">
+            <span className={`text-[9px] font-medium ${days < 0 ? 'text-red-500' : days <= 7 ? 'text-yellow-600' : 'text-[#aaa]'}`}>
+              {days < 0 ? `${Math.abs(days)}g keçmiş` : days === 0 ? 'Bu gün' : `${days} gün`}
+            </span>
+          </div>
         )}
       </div>
     </div>
@@ -488,7 +519,12 @@ export default function LayihelerPage() {
                       <td className="px-4 py-3 text-[#555]">{p.clients?.name || '—'}</td>
                       <td className="px-4 py-3">{statusBadge(p.status)}</td>
                       <td className="px-4 py-3">{phaseBadge(p.phase)}</td>
-                      <td className="px-4 py-3 text-right font-medium text-[#0f172a]">{fmt(p.contract_value)}</td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="font-medium text-[#0f172a]">{fmt(p.contract_value)}</div>
+                        {p.payment_method === 'transfer' && (
+                          <div className="text-[10px] text-green-600">{fmt(withEdvCalc(p.contract_value))} (ƏDV daxil)</div>
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-right text-[#555]">{fmt(p.advance_paid)}</td>
                       <td className="px-4 py-3">
                         {p.deadline ? (
@@ -516,8 +552,9 @@ export default function LayihelerPage() {
               <tfoot>
                 <tr className="bg-[#f5f5f0]">
                   <td colSpan={4} className="px-4 py-2 text-xs font-medium text-[#555]">Cəmi ({filtered.length} layihə)</td>
-                  <td className="px-4 py-2 text-right text-xs font-bold text-[#0f172a]">
-                    {fmt(filtered.reduce((s, p) => s + Number(p.contract_value || 0), 0))}
+                  <td className="px-4 py-2 text-right text-xs">
+                    <div className="font-bold text-[#0f172a]">{fmt(filtered.reduce((s, p) => s + Number(p.contract_value || 0), 0))}</div>
+                    <div className="text-green-600">{fmt(filtered.reduce((s, p) => s + Number(p.amount_with_edv || p.contract_value || 0), 0))} (ƏDV daxil)</div>
                   </td>
                   <td className="px-4 py-2 text-right text-xs font-bold text-[#0f172a]">
                     {fmt(filtered.reduce((s, p) => s + Number(p.advance_paid || 0), 0))}
