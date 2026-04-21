@@ -68,7 +68,7 @@ function ProjectForm({ open, onClose, onSave, project, clients }) {
         contract_value: project.contract_value || '',
         advance_paid: project.advance_paid || '',
         advance_method: project.advance_method || 'transfer',
-        interim_payments: project.interim_payments || [],
+        interim_payments: Array.isArray(project.interim_payments) ? project.interim_payments : [],
         status: project.status || 'waiting',
         risk_level: project.risk_level || 'normal',
         phase: project.phase || 'concept',
@@ -184,10 +184,10 @@ function ProjectForm({ open, onClose, onSave, project, clients }) {
           <div className="mb-2">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-medium text-[#555]">Aralıq ödənişlər</span>
-              <button onClick={() => set('interim_payments', [...(form.interim_payments || []), { amount: '', method: 'transfer', date: '', note: '' }])}
+              <button onClick={() => set('interim_payments', [...(Array.isArray(form.interim_payments) ? form.interim_payments : []), { amount: '', method: 'transfer', date: '', note: '' }])}
                 className="text-xs text-blue-500 hover:text-blue-700 font-medium">+ Əlavə et</button>
             </div>
-            {(form.interim_payments || []).map((ip, i) => (
+            {(Array.isArray(form.interim_payments) ? form.interim_payments : []).map((ip, i) => (
               <div key={i} className="bg-[#fafaf8] border border-[#e8e8e4] rounded-lg p-2.5 mb-2">
                 <div className="flex justify-between items-center mb-1.5">
                   <span className="text-xs font-medium text-[#555]">Aralıq {i + 1}</span>
