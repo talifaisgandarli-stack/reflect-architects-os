@@ -12,6 +12,8 @@ import DaxilolmalarPage from './pages/DaxilolmalarPage'
 import XerclerPage from './pages/XerclerPage'
 import PodratIsleriPage from './pages/PodratIsleriPage'
 import DebitorBorclarPage from './pages/DebitorBorclarPage'
+import IshciHeyetiPage from './pages/IshciHeyetiPage'
+import ParametrlerPage from './pages/ParametrlerPage'
 import ComingSoonPage from './pages/ComingSoonPage'
 
 function CS({ t }) { return <ComingSoonPage title={t} /> }
@@ -47,7 +49,7 @@ export default function App() {
               <Route path="tesisci-borclari" element={<CS t="Təsisçi Borcları" />} />
               <Route path="hesabatlar" element={<CS t="Hesabatlar" />} />
               <Route path="sabit-xercler" element={<CS t="Sabit Xərclər" />} />
-              <Route path="isci-heyeti" element={<CS t="İşçi Heyəti" />} />
+              <Route path="isci-heyeti" element={<IshciHeyetiPage />} />
               <Route path="emek-haqqi" element={<CS t="Əmək haqqı" />} />
               <Route path="elanlar" element={<CS t="Elanlar Lövhəsi" />} />
               <Route path="hadiseler" element={<CS t="Hadisələr Təqvimi" />} />
@@ -57,7 +59,7 @@ export default function App() {
               <Route path="mezmun-planlamasi" element={<CS t="Məzmun Planlaması" />} />
               <Route path="sened-arxivi" element={<CS t="Sənəd Arxivi" />} />
               <Route path="qaynaqlar" element={<CS t="Qaynaqlar" />} />
-              <Route path="parametrler" element={<CS t="Parametrlər" />} />
+              <Route path="parametrler" element={<ParametrlerPage />} />
               <Route path="sistem-arxivi" element={<CS t="Sistem Arxivi" />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
