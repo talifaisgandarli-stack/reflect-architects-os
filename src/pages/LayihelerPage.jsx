@@ -44,6 +44,10 @@ function fmt(n) {
   return '₼' + Number(n).toLocaleString()
 }
 
+const EDV_RATE = 0.18
+function edvCalc(n) { return Math.round(Number(n || 0) * EDV_RATE) }
+function withEdvCalc(n) { return Math.round(Number(n || 0) * (1 + EDV_RATE)) }
+
 function daysLeft(deadline) {
   if (!deadline) return null
   const days = Math.floor((new Date(deadline) - new Date()) / 86400000)
