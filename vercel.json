@@ -1,3 +1,13 @@
 {
-  "rewrites": [{ "source": "/(.*)", "destination": "/" }]
+  "rewrites": [{ "source": "/(.*)", "destination": "/" }],
+  "crons": [
+    {
+      "path": "/api/agent",
+      "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/agent",
+      "schedule": "0 13 * * 5"
+    }
+  ]
 }

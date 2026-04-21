@@ -31,6 +31,7 @@ import AvadanliqPage from './pages/AvadanliqPage'
 import HedefNeticeOKRPage from './pages/HedefNeticeOKRPage'
 import MezmunPlanlamasiPage from './pages/MezmunPlanlamasiPage'
 import SendArxiviPage from './pages/SendArxiviPage'
+import WhatsAppPage from './pages/WhatsAppPage'
 import ComingSoonPage from './pages/ComingSoonPage'
 
 function CS({ t }) { return <ComingSoonPage title={t} /> }
@@ -75,6 +76,7 @@ export default function App() {
               <Route path="hedef-netice" element={<HedefNeticeOKRPage />} />
               <Route path="mezmun-planlamasi" element={<MezmunPlanlamasiPage />} />
               <Route path="sened-arxivi" element={<SendArxiviPage />} />
+              <Route path="whatsapp" element={<WhatsAppPage />} />
               <Route path="qaynaqlar" element={<CS t="Qaynaqlar" />} />
               <Route path="parametrler" element={<ParametrlerPage />} />
               <Route path="sistem-arxivi" element={<CS t="Sistem Arxivi" />} />
