@@ -10,11 +10,11 @@ function edv(n) { return Math.round(Number(n || 0) * EDV) }
 function withEdv(n) { return Math.round(Number(n || 0) * (1 + EDV)) }
 
 function LoanForm({ open, onClose, onSave, loan }) {
-  const [form, setForm] = useState({ name: '', amount: '', payment_method: 'cash', payment_date: new Date().toISOString().split('T')[0], notes: '' })
+  const [form, setForm] = useState({ name: '', amount: '', payment_method: 'cash', transaction_type: 'loan', payment_date: new Date().toISOString().split('T')[0], notes: '' })
 
   useEffect(() => {
     if (loan) {
-      setForm({ name: loan.name || '', amount: loan.amount || '', payment_method: loan.payment_method || 'cash', payment_date: loan.payment_date || '', notes: loan.notes || '' })
+      setForm({ name: loan.name || '', amount: loan.amount || '', payment_method: loan.payment_method || 'cash', transaction_type: loan.transaction_type || 'loan', payment_date: loan.payment_date || '', notes: loan.notes || '' })
     } else {
       setForm({ name: '', amount: '', payment_method: 'cash', payment_date: new Date().toISOString().split('T')[0], notes: '' })
     }
@@ -46,6 +46,15 @@ function LoanForm({ open, onClose, onSave, loan }) {
               className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]">
               <option value="cash">Nağd</option>
               <option value="transfer">Köçürmə</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-[#555] mb-1">Əməliyyat növü</label>
+            <select value={form.transaction_type} onChange={e => set('transaction_type', e.target.value)}
+              className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]">
+              <option value="loan">Borc</option>
+              <option value="profit">Mənfəət</option>
+              <option value="repayment">Borc qaytarılması</option>
             </select>
           </div>
           <div>
@@ -111,6 +120,7 @@ export default function TesisciBorclarPage() {
       edv_amount: isTransfer ? edv(amt) : 0,
       amount_with_edv: isTransfer ? withEdv(amt) : amt,
       payment_date: form.payment_date || null,
+      transaction_type: form.transaction_type || 'loan',
       notes: form.notes || null
     }
     if (editLoan) {
@@ -165,6 +175,7 @@ export default function TesisciBorclarPage() {
                 <tr className="border-b border-[#e8e8e4]">
                   <th className="text-left px-4 py-3 font-medium text-[#888]">Açıqlama</th>
                   <th className="text-left px-4 py-3 font-medium text-[#888]">Tarix</th>
+                  <th className="text-left px-4 py-3 font-medium text-[#888]">Növ</th>
                   <th className="text-left px-4 py-3 font-medium text-[#888]">Ödəniş üsulu</th>
                   <th className="text-right px-4 py-3 font-medium text-[#888]">ƏDV xaric</th>
                   <th className="text-right px-4 py-3 font-medium text-[#888]">ƏDV (18%)</th>
@@ -180,6 +191,11 @@ export default function TesisciBorclarPage() {
                       <td className="px-4 py-3 font-medium text-[#0f172a]">{l.name}</td>
                       <td className="px-4 py-3 text-[#555]">
                         {l.payment_date ? new Date(l.payment_date).toLocaleDateString('az-AZ') : '—'}
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge variant={l.transaction_type === 'profit' ? 'success' : l.transaction_type === 'repayment' ? 'info' : 'warning'} size="sm">
+                          {l.transaction_type === 'profit' ? 'Mənfəət' : l.transaction_type === 'repayment' ? 'Qaytarılma' : 'Borc'}
+                        </Badge>
                       </td>
                       <td className="px-4 py-3">
                         <Badge variant={isTransfer ? 'info' : 'default'} size="sm">
@@ -205,7 +221,7 @@ export default function TesisciBorclarPage() {
               </tbody>
               <tfoot>
                 <tr className="bg-[#f5f5f0]">
-                  <td colSpan={3} className="px-4 py-2 text-xs font-medium text-[#555]">Cəmi ({loans.length})</td>
+                  <td colSpan={4} className="px-4 py-2 text-xs font-medium text-[#555]">Cəmi ({loans.length})</td>
                   <td className="px-4 py-2 text-right text-xs font-bold text-[#0f172a]">{fmt(total)}</td>
                   <td className="px-4 py-2 text-right text-xs font-bold text-amber-600">{fmt(totalEdv)}</td>
                   <td className="px-4 py-2 text-right text-xs font-bold text-[#0f172a]">{fmt(totalWithEdv)}</td>
