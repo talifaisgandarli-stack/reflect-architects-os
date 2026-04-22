@@ -51,6 +51,8 @@ export default async function handler(req, res) {
     ])
 
     const profiles = profilesRes.data || []
+    console.log('DEBUG profiles:', JSON.stringify(profiles))
+    console.log('DEBUG profilesRes error:', profilesRes.error)
     let count = 0
 
     for (const profile of profiles) {
