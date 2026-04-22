@@ -497,7 +497,7 @@ export default function LayihelerPage() {
       ) : view === 'kanban' ? (
         // KANBAN VIEW
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {STATUSES.map(status => (
+          {STATUSES.filter(status => filter === 'all' || filter === status.key).map(status => (
             <div key={status.key}>
               <div className="flex items-center gap-2 mb-3">
                 <span className="text-xs font-medium text-[#555]">{status.label}</span>
