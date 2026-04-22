@@ -301,14 +301,14 @@ function KanbanCard({ project, onEdit, onDelete, isAdmin = true }) {
             <div className="text-[10px] text-[#aaa] mt-0.5">{project.clients.name}</div>
           )}
         </div>
-        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity ml-2">
+        {isAdmin && <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity ml-2">
           <button onClick={() => onEdit(project)} className="text-[#aaa] hover:text-[#0f172a] p-0.5">
             <IconEdit size={12} />
           </button>
           <button onClick={() => onDelete(project)} className="text-[#aaa] hover:text-red-500 p-0.5">
             <IconTrash size={12} />
           </button>
-        </div>
+        </div>}
       </div>
 
       <div className="flex items-center gap-1.5 flex-wrap mb-2">
@@ -573,14 +573,14 @@ export default function LayihelerPage() {
                       </td>
                       <td className="px-4 py-3">{riskBadge(p.risk_level)}</td>
                       <td className="px-4 py-3">
-                        <div className="flex gap-1">
+                        {isAdmin && <div className="flex gap-1">
                           <button onClick={() => openEdit(p)} className="text-[#aaa] hover:text-[#0f172a] p-1 transition-colors">
                             <IconEdit size={13} />
                           </button>
                           <button onClick={() => setDeleteProject(p)} className="text-[#aaa] hover:text-red-500 p-1 transition-colors">
                             <IconTrash size={13} />
                           </button>
-                        </div>
+                        </div>}
                       </td>
                     </tr>
                   )

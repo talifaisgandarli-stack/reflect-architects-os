@@ -94,7 +94,9 @@ export default function SendArxiviPage() {
     setDeleteDoc(null)
   }
 
+  const EMPLOYEE_TYPES = ['project_task', 'presentation']
   const filtered = docs.filter(d => {
+    if (!isAdmin && !EMPLOYEE_TYPES.includes(d.doc_type)) return false
     const matchSearch = !search || d.title.toLowerCase().includes(search.toLowerCase()) || d.project?.toLowerCase().includes(search.toLowerCase())
     const matchType = filter === 'all' || d.doc_type === filter
     return matchSearch && matchType

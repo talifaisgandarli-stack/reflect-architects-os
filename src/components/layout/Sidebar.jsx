@@ -22,6 +22,7 @@ const NAV_GROUPS = [
       { to: '/tapshiriqlar', icon: IconCheckbox, label: 'Tapşırıqlar' },
       { to: '/is-ucotu', icon: IconClock, label: 'İş Uçotu', adminOnly: true },
       { to: '/icazeler', icon: IconFileText, label: 'İcazə və Razılaşmalar' },
+      { to: '/podrat-isleri', icon: IconHeartHandshake, label: 'Podrat İşləri' },
     ]
   },
   {
@@ -42,7 +43,6 @@ const NAV_GROUPS = [
       { to: '/daxilolmalar', icon: IconArrowUp, label: 'Daxilolmalar' },
       { to: '/hesab-fakturalar', icon: IconFileText, label: 'Hesab-fakturalar' },
       { to: '/xercler', icon: IconArrowDown, label: 'Xərclər' },
-      { to: '/podrat-isleri', icon: IconHeartHandshake, label: 'Podrat İşləri' },
       { to: '/debitor-borclar', icon: IconMailDollar, label: 'Debitor Borclar' },
       { to: '/daxili-kocurmeler', icon: IconArrowsExchange, label: 'Daxili Köçürmələr' },
       { to: '/tesisci-borclari', icon: IconUserCircle, label: 'Təsisçi Borcları' },
@@ -68,7 +68,6 @@ const NAV_GROUPS = [
       { to: '/mezmun-planlamasi', icon: IconBrandInstagram, label: 'Məzmun Planlaması' },
       { to: '/sened-arxivi', icon: IconFolder, label: 'Sənəd Arxivi' },
       { to: '/qaynaqlar', icon: IconBook, label: 'Qaynaqlar' },
-      { to: '/whatsapp', icon: IconBrandWhatsapp, label: 'WhatsApp' },
     ]
   },
   {

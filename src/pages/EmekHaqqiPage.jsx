@@ -19,7 +19,9 @@ export default function EmekHaqqiPage() {
 
   async function loadData() {
     setLoading(true)
-    const { data } = await supabase.from('profiles').select('*, roles(title_az)').eq('is_active', true).order('full_name')
+    let query = supabase.from('profiles').select('*, roles(title_az)').eq('is_active', true).order('full_name')
+    if (!isAdmin && user?.id) query = query.eq('id', user.id)
+    const { data } = await query
     setMembers(data || [])
     setLoading(false)
   }

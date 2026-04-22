@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
+import { useAuth } from '../contexts/AuthContext'
 import { PageHeader, Badge, Card, Button, EmptyState, Skeleton, StatCard } from '../components/ui'
 import { IconPhoto, IconBuildings, IconExternalLink } from '@tabler/icons-react'
 
 export default function PortfelPage() {
+  const { isAdmin } = useAuth()
   const [projects, setProjects] = useState([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('all')
@@ -27,16 +29,16 @@ export default function PortfelPage() {
   const TYPES = [...new Set(projects.map(p => p.clients?.name).filter(Boolean))]
   const fmt = n => '₼' + Number(n || 0).toLocaleString()
 
-  if (loading) return <div className="p-6"><Skeleton className="h-64" /></div>
+  if (loading) return <div className="p-4 lg:p-6"><Skeleton className="h-64" /></div>
 
   return (
-    <div className="p-6 fade-in">
+    <div className="p-4 lg:p-6 fade-in">
       <PageHeader
         title="Portfel"
         subtitle="Tamamlanmış və aktiv layihələr kataloqu"
       />
 
-      <div className="grid grid-cols-4 gap-4 mb-5">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
         <StatCard label="Ümumi layihə" value={projects.length} />
         <StatCard label="Tamamlananlar" value={completed.length} variant="success" />
         <StatCard label="Aktiv" value={active.length} variant="info" />
