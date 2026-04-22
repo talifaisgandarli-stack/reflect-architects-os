@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
+import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
 import { PageHeader, Card, Button, StatCard, Skeleton, Badge } from '../components/ui'
 import { IconWallet, IconDownload } from '@tabler/icons-react'
@@ -7,6 +8,7 @@ import { IconWallet, IconDownload } from '@tabler/icons-react'
 function fmt(n) { return '₼' + Number(n || 0).toLocaleString() }
 
 export default function EmekHaqqiPage() {
+  const { isAdmin, user } = useAuth()
   const { addToast } = useToast()
   const [members, setMembers] = useState([])
   const [loading, setLoading] = useState(true)
@@ -42,10 +44,10 @@ export default function EmekHaqqiPage() {
     a.href = url; a.download = `maas-${month}.csv`; a.click()
   }
 
-  if (loading) return <div className="p-6"><Skeleton className="h-64" /></div>
+  if (loading) return <div className="p-4 lg:p-6"><Skeleton className="h-64" /></div>
 
   return (
-    <div className="p-6 fade-in">
+    <div className="p-4 lg:p-6 fade-in">
       <PageHeader
         title="Əmək haqqı"
         subtitle="Aylıq maaş hesablaması · Yalnız Founding Architect görür"
@@ -60,7 +62,7 @@ export default function EmekHaqqiPage() {
         }
       />
 
-      <div className="grid grid-cols-3 gap-4 mb-5">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 mb-5">
         <StatCard label="Ümumi maaş fondu" value={fmt(totalSalary)} variant="danger" />
         <StatCard label="Overhead (22%)" value={fmt(Math.round(totalOverhead))} variant="warning" sub="DSMF + işsizlik + s.s" />
         <StatCard label="Ümumi xərc" value={fmt(Math.round(totalPayroll))} variant="danger" />

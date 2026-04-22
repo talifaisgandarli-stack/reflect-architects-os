@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
+import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
 import { PageHeader, Badge, Card, Button, EmptyState, Modal, ConfirmDialog, Skeleton, StatCard } from '../components/ui'
 import { IconPlus, IconEdit, IconTrash, IconHeartHandshake } from '@tabler/icons-react'
@@ -281,6 +282,7 @@ function PodratForm({ open, onClose, onSave, work, projects }) {
 
 export default function PodratIsleriPage() {
   const { addToast } = useToast()
+  const { isAdmin } = useAuth()
   const [works, setWorks] = useState([])
   const [projects, setProjects] = useState([])
   const [loading, setLoading] = useState(true)
@@ -356,17 +358,17 @@ export default function PodratIsleriPage() {
   const totalWithEdv = works.reduce((s, w) => s + Number(w.amount_with_edv || w.contract_amount || 0), 0)
   const totalEdvAmt = works.filter(w => w.payment_method === 'transfer').reduce((s, w) => s + Number(w.edv_amount || 0), 0)
 
-  if (loading) return <div className="p-6"><Skeleton className="h-64" /></div>
+  if (loading) return <div className="p-4 lg:p-6"><Skeleton className="h-64" /></div>
 
   return (
-    <div className="p-6 fade-in">
+    <div className="p-4 lg:p-6 fade-in">
       <PageHeader
         title="Podrat İşləri"
         subtitle={`${works.length} podrat · 30%/Aralıq/10% sistemi`}
         action={<Button onClick={() => { setEditWork(null); setModalOpen(true) }} size="sm"><IconPlus size={14} /> Yeni podrat</Button>}
       />
 
-      <div className="grid grid-cols-4 gap-4 mb-5">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
         <StatCard label="Müqavilə (ƏDV xaric)" value={fmt(totalContract)} />
         <StatCard label="ƏDV məbləği" value={fmt(totalEdvAmt)} />
         <StatCard label="Müqavilə (ƏDV daxil)" value={fmt(totalWithEdv)} />
@@ -387,10 +389,10 @@ export default function PodratIsleriPage() {
                   <th className="text-left px-4 py-3 font-medium text-[#888]">İş statusu</th>
                   <th className="text-left px-4 py-3 font-medium text-[#888]">Ödəniş</th>
                   <th className="text-left px-4 py-3 font-medium text-[#888]">Mərhələlər</th>
-                  <th className="text-right px-4 py-3 font-medium text-[#888]">ƏDV xaric</th>
-                  <th className="text-right px-4 py-3 font-medium text-[#888]">ƏDV (18%)</th>
-                  <th className="text-right px-4 py-3 font-medium text-[#888]">ƏDV daxil</th>
-                  <th className="text-right px-4 py-3 font-medium text-[#888]">Qalıq</th>
+                  {isAdmin && <th className="text-right px-4 py-3 font-medium text-[#888]">ƏDV xaric</th>}
+                  {isAdmin && <th className="text-right px-4 py-3 font-medium text-[#888]">ƏDV (18%)</th>}
+                  {isAdmin && <th className="text-right px-4 py-3 font-medium text-[#888]">ƏDV daxil</th>}
+                  {isAdmin && <th className="text-right px-4 py-3 font-medium text-[#888]">Qalıq</th>}
                   <th className="px-4 py-3"></th>
                 </tr>
               </thead>
@@ -427,19 +429,19 @@ export default function PodratIsleriPage() {
                           <span className={`text-[9px] px-1.5 py-0.5 rounded ${w.paid_final_10 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>10%</span>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-right font-medium text-[#0f172a]">{fmt(w.contract_amount)}</td>
-                      <td className="px-4 py-3 text-right text-amber-600">{isTransfer ? fmt(w.edv_amount || edv(w.contract_amount)) : '—'}</td>
-                      <td className="px-4 py-3 text-right font-bold text-[#0f172a]">{fmt(w.amount_with_edv || w.contract_amount)}</td>
-                      <td className="px-4 py-3 text-right">
+                      {isAdmin && <td className="px-4 py-3 text-right font-medium text-[#0f172a]">{fmt(w.contract_amount)}</td>}
+                      {isAdmin && <td className="px-4 py-3 text-right text-amber-600">{isTransfer ? fmt(w.edv_amount || edv(w.contract_amount)) : '—'}</td>}
+                      {isAdmin && <td className="px-4 py-3 text-right font-bold text-[#0f172a]">{fmt(w.amount_with_edv || w.contract_amount)}</td>}
+                      {isAdmin && <td className="px-4 py-3 text-right">
                         {Number(w.remaining) > 0
                           ? <span className="font-bold text-red-500">{fmt(w.remaining)}</span>
                           : <span className="text-green-600 font-bold">Bağlandı</span>}
-                      </td>
+                      </td>}
                       <td className="px-4 py-3">
-                        <div className="flex gap-1">
+                        {isAdmin && <div className="flex gap-1">
                           <button onClick={() => { setEditWork(w); setModalOpen(true) }} className="text-[#aaa] hover:text-[#0f172a] p-1"><IconEdit size={12} /></button>
                           <button onClick={() => setDeleteWork(w)} className="text-[#aaa] hover:text-red-500 p-1"><IconTrash size={12} /></button>
-                        </div>
+                        </div>}
                       </td>
                     </tr>
                   )

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
+import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
 import { PageHeader, Badge, Card, Button, EmptyState, Modal, ConfirmDialog, Skeleton } from '../components/ui'
 import { IconPlus, IconEdit, IconTrash, IconUsersGroup, IconMail, IconPhone, IconKey, IconPower } from '@tabler/icons-react'
@@ -128,7 +129,7 @@ function ResetPasswordModal({ open, onClose, onSave, member }) {
   )
 }
 
-function MemberCard({ member, role, onEdit, onDelete, onResetPassword, onToggleActive }) {
+function MemberCard({ member, role, onEdit, onDelete, onResetPassword, onToggleActive, isAdmin = true }) {
   const initials = member.full_name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || '??'
   return (
     <div className={`bg-white border rounded-lg p-4 transition-colors group ${member.is_active ? 'border-[#e8e8e4] hover:border-[#0f172a]' : 'border-[#f0f0ec] opacity-60'}`}>
@@ -176,6 +177,7 @@ function MemberCard({ member, role, onEdit, onDelete, onResetPassword, onToggleA
 
 export default function IshciHeyetiPage() {
   const { addToast } = useToast()
+  const { isAdmin } = useAuth()
   const [members, setMembers] = useState([])
   const [roles, setRoles] = useState([])
   const [loading, setLoading] = useState(true)
@@ -288,18 +290,18 @@ export default function IshciHeyetiPage() {
   const getRole = id => roles.find(r => r.id === id)
   const filtered = filter === 'all' ? members : filter === 'active' ? members.filter(m => m.is_active) : members.filter(m => !m.is_active)
 
-  if (loading) return <div className="p-6"><Skeleton className="h-64" /></div>
+  if (loading) return <div className="p-4 lg:p-6"><Skeleton className="h-64" /></div>
 
   return (
-    <div className="p-6 fade-in">
+    <div className="p-4 lg:p-6 fade-in">
       <PageHeader
         title="İşçi Heyəti"
         subtitle={`${members.length} üzv · ${members.filter(m => m.is_active).length} aktiv`}
-        action={
+        action={isAdmin ? (
           <Button onClick={() => { setIsNew(true); setEditMember(null); setModalOpen(true) }} size="sm">
             <IconPlus size={14} /> Yeni işçi
           </Button>
-        }
+        ) : null}
       />
 
       <div className="flex gap-1 mb-5 border-b border-[#e8e8e4]">
@@ -325,6 +327,7 @@ export default function IshciHeyetiPage() {
               onDelete={() => {}}
               onResetPassword={setResetMember}
               onToggleActive={setConfirmToggle}
+              isAdmin={isAdmin}
             />
           ))}
         </div>

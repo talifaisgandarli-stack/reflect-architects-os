@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
+import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
 import { PageHeader, Badge, Card, Button, EmptyState, Modal, ConfirmDialog, Skeleton } from '../components/ui'
 import { IconBuildings, IconPlus, IconLayoutKanban, IconList, IconEdit, IconTrash, IconAlertTriangle, IconChevronRight } from '@tabler/icons-react'
@@ -286,7 +287,7 @@ function ProjectForm({ open, onClose, onSave, project, clients }) {
 }
 
 // ── Kanban Card ──────────────────────────────────────────────
-function KanbanCard({ project, onEdit, onDelete }) {
+function KanbanCard({ project, onEdit, onDelete, isAdmin = true }) {
   const days = daysLeft(project.deadline)
   const dl = deadlineLabel(days, project.status)
   const pct = Math.min(100, Math.max(0, Number(project.completion_percent) || 0))
@@ -327,35 +328,34 @@ function KanbanCard({ project, onEdit, onDelete }) {
       )}
 
       <div className="border-t border-[#f5f5f0] pt-2 mt-1">
-        {project.payment_method === 'transfer' ? (
-          <div className="flex items-center justify-between gap-1">
-            <div className="text-center">
-              <div className="text-[9px] text-[#aaa]">ƏDV xaric</div>
-              <div className="text-[10px] font-bold text-[#0f172a]">{fmt(project.contract_value)}</div>
+        {isAdmin && (
+          project.payment_method === 'transfer' ? (
+            <div className="flex items-center justify-between gap-1">
+              <div className="text-center">
+                <div className="text-[9px] text-[#aaa]">ƏDV xaric</div>
+                <div className="text-[10px] font-bold text-[#0f172a]">{fmt(project.contract_value)}</div>
+              </div>
+              <div className="text-[9px] text-[#aaa]">+</div>
+              <div className="text-center">
+                <div className="text-[9px] text-[#aaa]">ƏDV 18%</div>
+                <div className="text-[10px] font-bold text-amber-600">{fmt(edvCalc(project.contract_value))}</div>
+              </div>
+              <div className="text-[9px] text-[#aaa]">=</div>
+              <div className="text-center">
+                <div className="text-[9px] text-[#aaa]">Cəmi</div>
+                <div className="text-[10px] font-bold text-green-600">{fmt(withEdvCalc(project.contract_value))}</div>
+              </div>
             </div>
-            <div className="text-[9px] text-[#aaa]">+</div>
-            <div className="text-center">
-              <div className="text-[9px] text-[#aaa]">ƏDV 18%</div>
-              <div className="text-[10px] font-bold text-amber-600">{fmt(edvCalc(project.contract_value))}</div>
+          ) : (
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-[9px] text-[#aaa]">Nağd · ƏDV yoxdur</div>
+                <div className="text-[10px] font-bold text-[#0f172a]">{fmt(project.contract_value)}</div>
+              </div>
             </div>
-            <div className="text-[9px] text-[#aaa]">=</div>
-            <div className="text-center">
-              <div className="text-[9px] text-[#aaa]">Cəmi</div>
-              <div className="text-[10px] font-bold text-green-600">{fmt(withEdvCalc(project.contract_value))}</div>
-            </div>
-          </div>
-        ) : (
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-[9px] text-[#aaa]">Nağd · ƏDV yoxdur</div>
-              <div className="text-[10px] font-bold text-[#0f172a]">{fmt(project.contract_value)}</div>
-            </div>
-            {dl && (
-              <span className={`text-[9px] font-medium ${dl.color}`}>{dl.text}</span>
-            )}
-          </div>
+          )
         )}
-        {project.payment_method === 'transfer' && dl && (
+        {dl && (
           <div className="text-right mt-0.5">
             <span className={`text-[9px] font-medium ${dl.color}`}>{dl.text}</span>
           </div>
@@ -368,6 +368,7 @@ function KanbanCard({ project, onEdit, onDelete }) {
 // ── Main Page ────────────────────────────────────────────────
 export default function LayihelerPage() {
   const { addToast } = useToast()
+  const { isAdmin } = useAuth()
   const [projects, setProjects] = useState([])
   const [clients, setClients] = useState([])
   const [loading, setLoading] = useState(true)
@@ -450,14 +451,14 @@ export default function LayihelerPage() {
   if (loading) return (
     <div className="p-6 space-y-3">
       <Skeleton className="h-8 w-48" />
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-64" />)}
       </div>
     </div>
   )
 
   return (
-    <div className="p-6 fade-in">
+    <div className="p-4 lg:p-6 fade-in">
       <PageHeader
         title="Layihələr"
         subtitle={`${projects.length} layihə · ${projects.filter(p => p.status === 'active').length} icrada`}
@@ -515,7 +516,7 @@ export default function LayihelerPage() {
               </div>
               <div className="min-h-24">
                 {(grouped[status.key] || []).map(p => (
-                  <KanbanCard key={p.id} project={p} onEdit={openEdit} onDelete={setDeleteProject} />
+                  <KanbanCard key={p.id} project={p} onEdit={openEdit} onDelete={setDeleteProject} isAdmin={isAdmin} />
                 ))}
                 <button onClick={openNew}
                   className="w-full py-2 text-[11px] text-[#bbb] hover:text-[#555] border border-dashed border-[#e8e8e4] hover:border-[#bbb] rounded-lg transition-colors">

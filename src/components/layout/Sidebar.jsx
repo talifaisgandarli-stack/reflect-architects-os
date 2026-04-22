@@ -9,7 +9,7 @@ import {
   IconChartBar, IconRefresh, IconWallet,
   IconSpeakerphone, IconCalendar, IconUmbrella, IconDeviceLaptop,
   IconTarget, IconBrandInstagram, IconFolder, IconBook,
-  IconSettings, IconDatabase, IconChevronDown, IconChevronRight,
+  IconSettings, IconDatabase, IconChevronDown, IconChevronRight, IconBrandWhatsapp,
   IconLogout, IconSearch, IconBell, IconHeartHandshake
 } from '@tabler/icons-react'
 
@@ -17,15 +17,16 @@ const NAV_GROUPS = [
   {
     label: 'Layihə İdarəetməsi',
     items: [
-      { to: '/', icon: IconLayoutDashboard, label: 'Dashboard', exact: true },
+      { to: '/', icon: IconLayoutDashboard, label: 'Dashboard', exact: true, adminOnly: true },
       { to: '/layiheler', icon: IconBuildings, label: 'Layihələr' },
-      { to: '/tapshiriqlar', icon: IconCheckbox, label: 'Tapşırıqlar', badge: '5' },
-      { to: '/is-ucotu', icon: IconClock, label: 'İş Uçotu' },
+      { to: '/tapshiriqlar', icon: IconCheckbox, label: 'Tapşırıqlar' },
+      { to: '/is-ucotu', icon: IconClock, label: 'İş Uçotu', adminOnly: true },
       { to: '/icazeler', icon: IconFileText, label: 'İcazə və Razılaşmalar' },
     ]
   },
   {
     label: 'Sifarişçilər',
+    adminOnly: true,
     items: [
       { to: '/sifarisci-idareetme', icon: IconUsers, label: 'Sifarişçi İdarəetməsi' },
       { to: '/pipeline', icon: IconArrowRight, label: 'Sifarişçi Pipeline' },
@@ -36,12 +37,13 @@ const NAV_GROUPS = [
   },
   {
     label: 'Maliyyə',
+    adminOnly: true,
     items: [
       { to: '/daxilolmalar', icon: IconArrowUp, label: 'Daxilolmalar' },
       { to: '/hesab-fakturalar', icon: IconFileText, label: 'Hesab-fakturalar' },
       { to: '/xercler', icon: IconArrowDown, label: 'Xərclər' },
-      { to: '/podrat-isleri', icon: IconHeartHandshake, label: 'Podrat İşləri', badge: '3' },
-      { to: '/debitor-borclar', icon: IconMailDollar, label: 'Debitor Borclar', badge: '2' },
+      { to: '/podrat-isleri', icon: IconHeartHandshake, label: 'Podrat İşləri' },
+      { to: '/debitor-borclar', icon: IconMailDollar, label: 'Debitor Borclar' },
       { to: '/daxili-kocurmeler', icon: IconArrowsExchange, label: 'Daxili Köçürmələr' },
       { to: '/tesisci-borclari', icon: IconUserCircle, label: 'Təsisçi Borcları' },
       { to: '/hesabatlar', icon: IconChartBar, label: 'Hesabatlar' },
@@ -66,6 +68,7 @@ const NAV_GROUPS = [
       { to: '/mezmun-planlamasi', icon: IconBrandInstagram, label: 'Məzmun Planlaması' },
       { to: '/sened-arxivi', icon: IconFolder, label: 'Sənəd Arxivi' },
       { to: '/qaynaqlar', icon: IconBook, label: 'Qaynaqlar' },
+      { to: '/whatsapp', icon: IconBrandWhatsapp, label: 'WhatsApp' },
     ]
   },
   {
@@ -126,7 +129,7 @@ function NavGroup({ group }) {
 }
 
 export default function Sidebar({ onSearch, onClose }) {
-  const { profile, signOut } = useAuth()
+  const { profile, signOut, isAdmin } = useAuth()
   const navigate = useNavigate()
 
   async function handleSignOut() {
@@ -169,7 +172,18 @@ export default function Sidebar({ onSearch, onClose }) {
 
       {/* Navigation */}
       <div className="flex-1 overflow-y-auto px-2 py-3">
-        {NAV_GROUPS.map(group => <NavGroup key={group.label} group={group} />)}
+        {NAV_GROUPS
+          .filter(group => isAdmin || !group.adminOnly)
+          .map(group => (
+            <NavGroup
+              key={group.label}
+              group={{
+                ...group,
+                items: group.items.filter(item => isAdmin || !item.adminOnly)
+              }}
+            />
+          ))
+        }
       </div>
 
       {/* User footer */}

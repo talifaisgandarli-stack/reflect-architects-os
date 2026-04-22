@@ -1,6 +1,12 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 
+const ADMIN_EMAILS = [
+  'talifa.isgandarli@gmail.com',
+  'nusalov.n@reflect.az',
+  'turkan.a@reflect.az'
+]
+
 const AuthContext = createContext({})
 
 export function AuthProvider({ children }) {
@@ -11,20 +17,20 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null)
-      if (session?.user) fetchProfile(session.user.id)
+      if (session?.user) fetchProfile(session.user.id, session.user.email)
       else setLoading(false)
     })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null)
-      if (session?.user) fetchProfile(session.user.id)
+      if (session?.user) fetchProfile(session.user.id, session.user.email)
       else { setProfile(null); setLoading(false) }
     })
 
     return () => subscription.unsubscribe()
   }, [])
 
-  async function fetchProfile(userId) {
+  async function fetchProfile(userId, email) {
     const { data } = await supabase
       .from('profiles')
       .select('*, roles(*)')
@@ -43,7 +49,9 @@ export function AuthProvider({ children }) {
     await supabase.auth.signOut()
   }
 
-  const value = { user, profile, loading, signIn, signOut }
+  const isAdmin = ADMIN_EMAILS.includes(user?.email?.toLowerCase())
+
+  const value = { user, profile, loading, isAdmin, signIn, signOut }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

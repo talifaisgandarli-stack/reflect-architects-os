@@ -67,6 +67,7 @@ function DocForm({ open, onClose, onSave, doc }) {
 
 export default function SendArxiviPage() {
   const { addToast } = useToast()
+  const { isAdmin } = useAuth()
   const [docs, setDocs] = useState([])
   const [modalOpen, setModalOpen] = useState(false)
   const [editDoc, setEditDoc] = useState(null)
@@ -100,11 +101,11 @@ export default function SendArxiviPage() {
   })
 
   return (
-    <div className="p-6 fade-in">
+    <div className="p-4 lg:p-6 fade-in">
       <PageHeader
         title="Sənəd Arxivi"
         subtitle={`${docs.length} sənəd · Google Drive inteqrasiyası`}
-        action={<Button onClick={() => { setEditDoc(null); setModalOpen(true) }} size="sm"><IconPlus size={14} /> Sənəd əlavə et</Button>}
+        action={isAdmin ? <Button onClick={() => { setEditDoc(null); setModalOpen(true) }} size="sm"><IconPlus size={14} /> Sənəd əlavə et</Button> : null}
       />
 
       {/* Search */}
@@ -117,8 +118,8 @@ export default function SendArxiviPage() {
         </div>
       </div>
 
-      <div className="flex gap-1 mb-4 border-b border-[#e8e8e4]">
-        {[{ key: 'all', label: 'Hamısı' }, ...DOC_TYPES].map(t => (
+      <div className="flex gap-1 mb-4 border-b border-[#e8e8e4] flex-wrap">
+        {[{ key: 'all', label: 'Hamısı' }, ...DOC_TYPES.filter(t => isAdmin || ['project_task','presentation'].includes(t.key))].map(t => (
           <button key={t.key} onClick={() => setFilter(t.key)}
             className={`px-3 py-2 text-xs font-medium border-b-2 transition-colors ${filter === t.key ? 'border-[#0f172a] text-[#0f172a]' : 'border-transparent text-[#888] hover:text-[#555]'}`}>
             {t.label}
