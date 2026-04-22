@@ -60,8 +60,6 @@ export default async function handler(req, res) {
       const todayEvents = eventsRes.data || []
       const urgentProjects = projectsRes.data || []
 
-      if (myTasks.length === 0 && todayEvents.length === 0 && urgentProjects.length === 0) continue
-
       const prompt = `Sən Reflect Architects şirkətinin AI köməkçisisən. 
 ${profile.full_name} üçün qısa səhər xülasəsi hazırla (Azərbaycan dilində, dostcasına, emoji ilə).
 
