@@ -1,13 +1,12 @@
 {
-  "rewrites": [{ "source": "/(.*)", "destination": "/" }],
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "/api/:path*" },
+    { "source": "/(.*)", "destination": "/" }
+  ],
   "crons": [
-    {
-      "path": "/api/agent",
-      "schedule": "0 4 * * *"
-    },
-    {
-      "path": "/api/agent",
-      "schedule": "0 13 * * 5"
-    }
+    { "path": "/api/agent?type=daily_summary", "schedule": "0 4 * * *" },
+    { "path": "/api/agent?type=deadline_warning", "schedule": "0 4 * * *" },
+    { "path": "/api/agent?type=meeting_reminder", "schedule": "0 4 * * *" },
+    { "path": "/api/agent?type=weekly_report", "schedule": "0 13 * * 5" }
   ]
 }
