@@ -100,10 +100,14 @@ function TaskForm({ open, onClose, onSave, task, projects, members }) {
 }
 
 function TaskRow({ task, members, onEdit, onDelete, onToggle }) {
-  const days = task.due_date ? Math.floor((new Date(task.due_date) - new Date()) / 86400000) : null
+  const today = new Date(); today.setHours(0,0,0,0)
+  const dueDate = task.due_date ? new Date(task.due_date) : null
+  if (dueDate) dueDate.setHours(0,0,0,0)
+  const days = dueDate ? Math.floor((dueDate - today) / 86400000) : null
   const st = STATUSES.find(s => s.key === task.status)
   const pr = PRIORITIES.find(p => p.key === task.priority)
-  const overdue = days !== null && days < 0 && task.status !== 'done'
+  const isDone = task.status === 'done' || task.status === 'cancelled'
+  const overdue = !isDone && days !== null && days < 0
   const assignee = members.find(m => m.id === task.assignee_id)
 
   return (
@@ -117,14 +121,15 @@ function TaskRow({ task, members, onEdit, onDelete, onToggle }) {
         <div className={`text-xs font-medium ${task.status === 'done' ? 'line-through text-[#aaa]' : 'text-[#0f172a]'}`}>{task.title}</div>
         <div className="flex items-center gap-2 mt-0.5">
           {assignee && <span className="text-[10px] text-[#aaa]">{assignee.full_name}</span>}
-          {overdue && <span className="text-[10px] text-red-500 flex items-center gap-0.5"><IconAlertCircle size={10} />{Math.abs(days)}g keçmiş</span>}
+          {!isDone && days === 0 && <span className="text-[10px] text-yellow-600 font-medium">Bu gün</span>}
+      {overdue && <span className="text-[10px] text-red-500 flex items-center gap-0.5"><IconAlertCircle size={10} />{Math.abs(days)}g keçmiş</span>}
         </div>
       </div>
       <Badge variant={st?.color} size="sm">{st?.label}</Badge>
       <Badge variant={pr?.color} size="sm">{pr?.label}</Badge>
-      {task.due_date && !overdue && (
-        <span className={`text-[10px] ${days <= 3 ? 'text-yellow-600 font-medium' : 'text-[#aaa]'}`}>
-          {days === 0 ? 'Bu gün' : `${days}g`}
+      {task.due_date && !overdue && !isDone && days !== 0 && (
+        <span className={`text-[10px] ${days !== null && days <= 3 ? 'text-yellow-600 font-medium' : 'text-[#aaa]'}`}>
+          {`${days}g`}
         </span>
       )}
       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">

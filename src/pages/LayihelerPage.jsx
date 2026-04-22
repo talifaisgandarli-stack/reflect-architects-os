@@ -63,8 +63,19 @@ function withEdvCalc(n) { return Math.round(Number(n || 0) * (1 + EDV_RATE)) }
 
 function daysLeft(deadline) {
   if (!deadline) return null
-  const days = Math.floor((new Date(deadline) - new Date()) / 86400000)
-  return days
+  const today = new Date(); today.setHours(0,0,0,0)
+  const d = new Date(deadline); d.setHours(0,0,0,0)
+  return Math.floor((d - today) / 86400000)
+}
+
+function deadlineLabel(days, status) {
+  const doneStatuses = ['completed']
+  if (doneStatuses.includes(status)) return null
+  if (days === null) return null
+  if (days < 0) return { text: `${Math.abs(days)}g keçmiş`, color: 'text-red-500' }
+  if (days === 0) return { text: 'Bu gün', color: 'text-yellow-600' }
+  if (days <= 7) return { text: `${days} gün`, color: 'text-yellow-600' }
+  return { text: `${days} gün`, color: 'text-[#aaa]' }
 }
 
 // ── Project Form Modal ──────────────────────────────────────
@@ -277,6 +288,7 @@ function ProjectForm({ open, onClose, onSave, project, clients }) {
 // ── Kanban Card ──────────────────────────────────────────────
 function KanbanCard({ project, onEdit, onDelete }) {
   const days = daysLeft(project.deadline)
+  const dl = deadlineLabel(days, project.status)
   const pct = Math.min(100, Math.max(0, Number(project.completion_percent) || 0))
 
   return (
@@ -338,18 +350,14 @@ function KanbanCard({ project, onEdit, onDelete }) {
               <div className="text-[9px] text-[#aaa]">Nağd · ƏDV yoxdur</div>
               <div className="text-[10px] font-bold text-[#0f172a]">{fmt(project.contract_value)}</div>
             </div>
-            {project.deadline && (
-              <span className={`text-[9px] font-medium ${days < 0 ? 'text-red-500' : days <= 7 ? 'text-yellow-600' : 'text-[#aaa]'}`}>
-                {days < 0 ? `${Math.abs(days)}g keçmiş` : days === 0 ? 'Bu gün' : `${days} gün`}
-              </span>
+            {dl && (
+              <span className={`text-[9px] font-medium ${dl.color}`}>{dl.text}</span>
             )}
           </div>
         )}
-        {project.payment_method === 'transfer' && project.deadline && (
+        {project.payment_method === 'transfer' && dl && (
           <div className="text-right mt-0.5">
-            <span className={`text-[9px] font-medium ${days < 0 ? 'text-red-500' : days <= 7 ? 'text-yellow-600' : 'text-[#aaa]'}`}>
-              {days < 0 ? `${Math.abs(days)}g keçmiş` : days === 0 ? 'Bu gün' : `${days} gün`}
-            </span>
+            <span className={`text-[9px] font-medium ${dl.color}`}>{dl.text}</span>
           </div>
         )}
       </div>
@@ -556,10 +564,10 @@ export default function LayihelerPage() {
                       <td className="px-4 py-3 text-right text-[#555]">{fmt(p.advance_paid)}</td>
                       <td className="px-4 py-3">
                         {p.deadline ? (
-                          <span className={`font-medium ${days < 0 ? 'text-red-500' : days <= 7 ? 'text-yellow-600' : 'text-[#555]'}`}>
-                            {new Date(p.deadline).toLocaleDateString('az-AZ')}
-                            {days < 0 && <span className="ml-1 text-[10px]">({Math.abs(days)}g keçmiş)</span>}
-                          </span>
+                          <div>
+                            <span className="font-medium text-[#555]">{new Date(p.deadline).toLocaleDateString('az-AZ')}</span>
+                            {(() => { const dl2 = deadlineLabel(days, p.status); return dl2 ? <span className={`ml-1 text-[10px] ${dl2.color}`}>({dl2.text})</span> : null })()}
+                          </div>
                         ) : '—'}
                       </td>
                       <td className="px-4 py-3">{riskBadge(p.risk_level)}</td>
