@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useToast } from '../contexts/ToastContext'
 import { PageHeader, Card, Button } from '../components/ui'
-import { IconBrandTelegram, IconRobot, IconDownload, IconRefresh } from '@tabler/icons-react'
+import { IconBrandTelegram, IconRobot, IconDownload, IconRefresh, IconSend } from '@tabler/icons-react'
 
 function Toggle({ checked, onChange }) {
   return (
@@ -32,6 +32,9 @@ export default function ParametrlerPage() {
   })
   const [loading, setLoading] = useState(true)
   const [testing, setTesting] = useState(null)
+  const [manualMessage, setManualMessage] = useState('')
+  const [manualTarget, setManualTarget] = useState('all')
+  const [sendingManual, setSendingManual] = useState(false)
   const [registeredUsers, setRegisteredUsers] = useState([])
 
   useEffect(() => { loadData() }, [])
@@ -100,6 +103,28 @@ export default function ParametrlerPage() {
     await supabase.from('profiles').update({ telegram_chat_id: null }).eq('id', id)
     addToast('Telegram əlaqəsi silindi', 'success')
     await loadData()
+  }
+
+  async function sendManual() {
+    if (!manualMessage.trim()) return
+    setSendingManual(true)
+    try {
+      const res = await fetch('/api/agent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'send_manual', message: manualMessage, target: manualTarget })
+      })
+      const data = await res.json()
+      if (data.success) {
+        addToast(`Mesaj göndərildi — ${data.count} nəfərə`, 'success')
+        setManualMessage('')
+      } else {
+        addToast('Xəta: ' + (data.error || 'Bilinməyən'), 'error')
+      }
+    } catch (err) {
+      addToast('Xəta: ' + err.message, 'error')
+    }
+    setSendingManual(false)
   }
 
   return (
@@ -189,6 +214,33 @@ export default function ParametrlerPage() {
               Hələ qeydiyyatlı istifadəçi yoxdur
             </div>
           )}
+        </Card>
+
+        {/* Manual Telegram mesajı */}
+        <Card className="p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <IconBrandTelegram size={18} className="text-blue-500" />
+            <div className="text-sm font-bold text-[#0f172a]">Manual mesaj göndər</div>
+          </div>
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs font-medium text-[#555] mb-1">Kimə</label>
+              <select value={manualTarget} onChange={e => setManualTarget(e.target.value)}
+                className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]">
+                <option value="all">Hamısına</option>
+                {registeredUsers.map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-[#555] mb-1">Mesaj</label>
+              <textarea value={manualMessage} onChange={e => setManualMessage(e.target.value)} rows={3}
+                className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a] resize-none"
+                placeholder="Mesajınızı yazın..." />
+            </div>
+            <Button onClick={sendManual} disabled={!manualMessage.trim() || sendingManual} className="w-full">
+              <IconSend size={14} /> {sendingManual ? 'Göndərilir...' : 'Göndər'}
+            </Button>
+          </div>
         </Card>
 
         {/* Məlumat ehtiyatı */}
