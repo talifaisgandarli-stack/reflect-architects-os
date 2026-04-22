@@ -408,11 +408,11 @@ export default function LayihelerPage() {
 
     if (editProject) {
       const { error } = await supabase.from('projects').update(data).eq('id', editProject.id)
-      if (error) { addToast('Xəta baş verdi', 'error'); return }
+      if (error) { addToast('Xəta: ' + error.message, 'error'); console.error('UPDATE ERROR:', error); return }
       addToast('Layihə yeniləndi', 'success')
     } else {
       const { error } = await supabase.from('projects').insert(data)
-      if (error) { addToast('Xəta baş verdi', 'error'); return }
+      if (error) { addToast('Xəta: ' + error.message, 'error'); console.error('INSERT ERROR:', error); return }
       addToast('Layihə əlavə edildi', 'success')
     }
 
