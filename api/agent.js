@@ -79,11 +79,11 @@ Yaxınlaşan deadlinelər: ${urgentProjects.map(p => `${p.name} - ${p.deadline}`
 
 Maksimum 5-6 cümlə, konkret və motivasiyaverici ol.`
 
-      const text = await gemini(prompt)
-      if (text) {
-        await sendTelegram(profile.telegram_chat_id, `☀️ <b>Sabahın xeyir, ${profile.full_name.split(' ')[0]}!</b>\n\n${text}`)
-        count++
-      }
+      let text = await gemini(prompt)
+      console.log('GEMINI response:', text?.slice(0, 100))
+      if (!text) text = `Bugün yaxşı iş günü olsun! Tapşırıqlarınızı vaxtında tamamlayın. 💪`
+      await sendTelegram(profile.telegram_chat_id, `☀️ <b>Sabahın xeyir, ${profile.full_name.split(' ')[0]}!</b>\n\n${text}`)
+      count++
     }
     return res.status(200).json({ success: true, count })
   }
