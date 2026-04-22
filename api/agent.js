@@ -5,6 +5,12 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY
 )
 
+async function testConnection() {
+  const { data, error } = await supabase.from('profiles').select('id, full_name, telegram_chat_id').limit(5)
+  console.log('CONNECTION TEST - data:', JSON.stringify(data), 'error:', JSON.stringify(error))
+  return data
+}
+
 const GEMINI_KEY = process.env.GEMINI_API_KEY
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN
 const API = `https://api.telegram.org/bot${BOT_TOKEN}`
@@ -39,6 +45,8 @@ export default async function handler(req, res) {
 
   // ── Günlük xülasə (hər işçiyə şəxsi) ─────────────────────
   if (type === 'daily_summary') {
+    const testData = await testConnection()
+    console.log('TEST DATA:', JSON.stringify(testData))
     const today = new Date().toISOString().split('T')[0]
     const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0]
     const in3days = new Date(Date.now() + 3 * 86400000).toISOString().split('T')[0]
