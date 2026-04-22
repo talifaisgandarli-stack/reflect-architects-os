@@ -1,55 +1,69 @@
+import { createClient } from '@supabase/supabase-js'
+
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_KEY
+)
+
+const VERIFY_TOKEN = 'reflect_architects_2026'
+
 export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'POST lazımdır' })
 
-  const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN
-  const WHATSAPP_PHONE_ID = process.env.WHATSAPP_PHONE_ID
-  const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY
+  // GET — Webhook doğrulama (Meta tərəfindən)
+  if (req.method === 'GET') {
+    const mode = req.query['hub.mode']
+    const token = req.query['hub.verify_token']
+    const challenge = req.query['hub.challenge']
 
-  const { phone, message, useAI, prompt } = req.body || {}
-  if (!phone) return res.status(400).json({ error: 'phone lazımdır' })
+    if (mode === 'subscribe' && token === VERIFY_TOKEN) {
+      console.log('Webhook verified')
+      return res.status(200).send(challenge)
+    }
+    return res.status(403).json({ error: 'Forbidden' })
+  }
 
-  let finalMessage = message
-
-  if (useAI && prompt && OPENROUTER_API_KEY) {
+  // POST — Gələn mesajlar
+  if (req.method === 'POST') {
     try {
-      const aiRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-          'HTTP-Referer': 'https://reflect-architects-os.vercel.app',
-          'X-Title': 'Reflect Architects OS'
-        },
-        body: JSON.stringify({
-          model: 'google/gemma-3-4b-it:free',
-          messages: [{ role: 'user', content: `Azərbaycan dilində qısa professional WhatsApp mesajı yaz: ${prompt}` }],
-          max_tokens: 300,
-          temperature: 0.7
-        })
-      })
-      const aiData = await aiRes.json()
-      finalMessage = aiData.choices?.[0]?.message?.content || message
-    } catch (err) { console.error('OpenRouter error:', err) }
-  }
+      const body = req.body
+      const entry = body?.entry?.[0]
+      const changes = entry?.changes?.[0]
+      const value = changes?.value
 
-  if (!finalMessage) return res.status(400).json({ error: 'message lazımdır' })
+      if (value?.messages) {
+        for (const msg of value.messages) {
+          const contact = value.contacts?.find(c => c.wa_id === msg.from)
+          const fromName = contact?.profile?.name || msg.from
 
-  if (!WHATSAPP_TOKEN || !WHATSAPP_PHONE_ID) {
-    return res.status(200).json({ success: true, mode: 'test', would_send: { phone, message: finalMessage } })
-  }
-
-  try {
-    const waRes = await fetch(
-      `https://graph.facebook.com/v18.0/${WHATSAPP_PHONE_ID}/messages`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${WHATSAPP_TOKEN}` },
-        body: JSON.stringify({ messaging_product: 'whatsapp', to: phone.replace(/\D/g, ''), type: 'text', text: { body: finalMessage } })
+          await supabase.from('whatsapp_messages').insert({
+            wa_id: msg.id,
+            from_number: msg.from,
+            from_name: fromName,
+            message_type: msg.type,
+            message_text: msg.text?.body || msg.caption || null,
+            timestamp: new Date(parseInt(msg.timestamp) * 1000).toISOString(),
+            direction: 'inbound',
+            status: 'received',
+            raw_data: msg
+          })
+        }
       }
-    )
-    const waData = await waRes.json()
-    return res.status(200).json({ success: true, result: waData, message: finalMessage })
-  } catch (error) {
-    return res.status(500).json({ error: error.message })
+
+      // Status yeniləmələri
+      if (value?.statuses) {
+        for (const status of value.statuses) {
+          await supabase.from('whatsapp_messages')
+            .update({ status: status.status })
+            .eq('wa_id', status.id)
+        }
+      }
+
+      return res.status(200).json({ success: true })
+    } catch (err) {
+      console.error('Webhook error:', err)
+      return res.status(200).json({ success: true }) // Meta 200 gözləyir
+    }
   }
+
+  return res.status(405).json({ error: 'Method not allowed' })
 }
