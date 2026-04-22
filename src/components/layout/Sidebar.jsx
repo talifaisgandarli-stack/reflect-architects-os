@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { NavLink, useNavigate } from 'react-router-dom'
+import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import {
   IconLayoutDashboard, IconBuildings, IconCheckbox, IconClock,
@@ -125,7 +125,7 @@ function NavGroup({ group }) {
   )
 }
 
-export default function Sidebar({ onSearch }) {
+export default function Sidebar({ onSearch, onClose }) {
   const { profile, signOut } = useAuth()
   const navigate = useNavigate()
 
@@ -143,10 +143,15 @@ export default function Sidebar({ onSearch }) {
           <div className="w-8 h-8 bg-[#0f172a] rounded-lg flex items-center justify-center flex-shrink-0">
             <span className="text-white text-xs font-bold">RA</span>
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <div className="text-xs font-bold text-[#0f172a] truncate">Reflect Architects</div>
             <div className="text-[10px] text-[#aaa]">Bakı, Azərbaycan</div>
           </div>
+          {onClose && (
+            <button onClick={onClose} className="lg:hidden text-[#aaa] hover:text-[#555] p-1">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            </button>
+          )}
         </div>
       </div>
 
