@@ -12,7 +12,10 @@ const STATUSES = [
 ]
 
 const PHASES = [
+  { key: 'urban_justification', label: 'Şəhərsalma əsaslandırması' },
   { key: 'concept', label: 'Konsept' },
+  { key: 'sketch', label: 'Eskiz layihəsi' },
+  { key: 'interior', label: 'İnteryer layihəsi' },
   { key: 'working_drawings', label: 'İşçi layihə' },
   { key: 'expertise', label: 'Ekspertiza' },
   { key: 'author_supervision', label: 'Müəllif nəzarəti' },
@@ -35,6 +38,16 @@ function riskBadge(risk) {
 }
 
 function phaseBadge(phase) {
+  if (Array.isArray(phase)) {
+    return (
+      <div className="flex flex-wrap gap-1">
+        {phase.map(ph => {
+          const p = PHASES.find(x => x.key === ph)
+          return <Badge key={ph} variant="default" size="sm">{p?.label || ph}</Badge>
+        })}
+      </div>
+    )
+  }
   const p = PHASES.find(x => x.key === phase)
   return <Badge variant="default" size="sm">{p?.label || phase}</Badge>
 }
@@ -59,7 +72,7 @@ function ProjectForm({ open, onClose, onSave, project, clients }) {
   const [form, setForm] = useState({
     name: '', client_id: '', contract_value: '',
     advance_paid: '', advance_method: 'transfer', interim_payments: [], status: 'waiting', risk_level: 'normal',
-    phase: 'concept', completion_percent: '0',
+    phases: ['concept'], completion_percent: '0',
     deadline: '', start_date: '', payment_method: 'transfer',
     vat_included: false, notes: '', next_action: '', blocker: ''
   })
@@ -75,7 +88,7 @@ function ProjectForm({ open, onClose, onSave, project, clients }) {
         interim_payments: Array.isArray(project.interim_payments) ? project.interim_payments : [],
         status: project.status || 'waiting',
         risk_level: project.risk_level || 'normal',
-        phase: project.phase || 'concept',
+        phases: Array.isArray(project.phases) ? project.phases : (project.phase ? [project.phase] : ['concept']),
         completion_percent: project.completion_percent || '0',
         deadline: project.deadline || '',
         start_date: project.start_date || '',
@@ -123,12 +136,26 @@ function ProjectForm({ open, onClose, onSave, project, clients }) {
               {STATUSES.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
             </select>
           </div>
-          <div>
-            <label className="block text-xs font-medium text-[#555] mb-1">Mərhələ</label>
-            <select value={form.phase} onChange={e => set('phase', e.target.value)}
-              className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]">
-              {PHASES.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}
-            </select>
+          <div className="col-span-3">
+            <label className="block text-xs font-medium text-[#555] mb-1">Mərhələlər (çoxlu seçim)</label>
+            <div className="flex flex-wrap gap-2 p-2 border border-[#e8e8e4] rounded-lg bg-white">
+              {PHASES.map(p => (
+                <label key={p.key} className={`flex items-center gap-1.5 px-2 py-1 rounded-full border cursor-pointer text-xs transition-colors ${
+                  (form.phases || []).includes(p.key)
+                    ? 'bg-[#0f172a] text-white border-[#0f172a]'
+                    : 'border-[#e8e8e4] text-[#555] hover:border-[#0f172a]'
+                }`}>
+                  <input type="checkbox" className="hidden"
+                    checked={(form.phases || []).includes(p.key)}
+                    onChange={e => {
+                      const cur = form.phases || []
+                      if (e.target.checked) set('phases', [...cur, p.key])
+                      else set('phases', cur.filter(x => x !== p.key))
+                    }} />
+                  {p.label}
+                </label>
+              ))}
+            </div>
           </div>
           <div>
             <label className="block text-xs font-medium text-[#555] mb-1">Müqavilə (₼, ƏDV xaric)</label>
@@ -273,7 +300,7 @@ function KanbanCard({ project, onEdit, onDelete }) {
 
       <div className="flex items-center gap-1.5 flex-wrap mb-2">
         {riskBadge(project.risk_level)}
-        {phaseBadge(project.phase)}
+        {phaseBadge(project.phases && project.phases.length > 0 ? project.phases : project.phase)}
       </div>
 
       {pct > 0 && (
@@ -367,7 +394,8 @@ export default function LayihelerPage() {
       amount_with_edv: form.payment_method === 'transfer' ? withEdvCalc(Number(form.contract_value) || 0) : (Number(form.contract_value) || 0),
       status: form.status,
       risk_level: form.risk_level,
-      phase: form.phase,
+      phases: form.phases || [],
+      phase: (form.phases || [])[0] || 'concept',
       completion_percent: Number(form.completion_percent) || 0,
       deadline: form.deadline || null,
       start_date: form.start_date || null,
@@ -518,7 +546,7 @@ export default function LayihelerPage() {
                       </td>
                       <td className="px-4 py-3 text-[#555]">{p.clients?.name || '—'}</td>
                       <td className="px-4 py-3">{statusBadge(p.status)}</td>
-                      <td className="px-4 py-3">{phaseBadge(p.phase)}</td>
+                      <td className="px-4 py-3">{phaseBadge(p.phases && p.phases.length > 0 ? p.phases : p.phase)}</td>
                       <td className="px-4 py-3 text-right">
                         <div className="font-medium text-[#0f172a]">{fmt(p.contract_value)}</div>
                         {p.payment_method === 'transfer' && (
