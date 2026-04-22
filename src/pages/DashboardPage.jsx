@@ -16,9 +16,10 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [stats, setStats] = useState({
     totalPortfolio: 0, totalIncome: 0, totalDebt: 0,
-    incomeCash: 0, incomeTransfer: 0,
-    expenseTotal: 0, expenseCash: 0, expenseTransfer: 0,
-    edvBalance: 0,
+    incomeCash: 0, incomeTransfer: 0, totalIncomeWithEdv: 0, incomeTransferWithEdv: 0,
+    expenseTotal: 0, expenseCash: 0, expenseTransfer: 0, expenseTotalWithEdv: 0,
+    edvCollected: 0, edvPaid: 0, edvBalance: 0,
+    netCash: 0, netTransfer: 0,
     activeProjects: 0, overdueTasksCount: 0,
     monthlyIncome: [], clientBreakdown: [], projectStatus: [], agingDebt: [],
     deadlines: [], overdueReceivables: []
@@ -30,9 +31,9 @@ export default function DashboardPage() {
     try {
       const [projectsRes, incomesRes, debtsRes, expensesRes, tasksRes] = await Promise.all([
         supabase.from('projects').select('id, name, contract_value, status, deadline, client_id, clients(name)'),
-        supabase.from('incomes').select('amount, payment_date, payment_method'),
+        supabase.from('incomes').select('amount, payment_date, payment_method, edv_amount, amount_with_edv'),
         supabase.from('receivables').select('expected_amount, paid_amount, expected_date, paid'),
-        supabase.from('expenses').select('amount, payment_method'),
+        supabase.from('expenses').select('amount, payment_method, category, edv_amount, amount_with_edv'),
         supabase.from('tasks').select('status, due_date'),
       ])
 
@@ -42,20 +43,34 @@ export default function DashboardPage() {
       const expenses = expensesRes.data || []
       const tasks = tasksRes.data || []
 
-      // Balans hesablamaları
-      const totalPortfolio = projects.reduce((s, p) => s + (p.contract_value || 0), 0)
+      const totalPortfolio = projects.reduce((s, p) => s + Number(p.contract_value || 0), 0)
+      // ƏDV xaric məbləğlər
       const totalIncome = incomes.reduce((s, i) => s + Number(i.amount || 0), 0)
       const incomeCash = incomes.filter(i => i.payment_method === 'cash').reduce((s, i) => s + Number(i.amount || 0), 0)
       const incomeTransfer = incomes.filter(i => i.payment_method === 'transfer').reduce((s, i) => s + Number(i.amount || 0), 0)
+
+      // ƏDV daxil məbləğlər
+      const totalIncomeWithEdv = incomes.reduce((s, i) => s + Number(i.amount_with_edv || i.amount || 0), 0)
+      const incomeCashWithEdv = incomes.filter(i => i.payment_method === 'cash').reduce((s, i) => s + Number(i.amount || 0), 0)
+      const incomeTransferWithEdv = incomes.filter(i => i.payment_method === 'transfer').reduce((s, i) => s + Number(i.amount_with_edv || i.amount || 0), 0)
 
       const expenseTotal = expenses.reduce((s, e) => s + Number(e.amount || 0), 0)
       const expenseCash = expenses.filter(e => e.payment_method === 'cash').reduce((s, e) => s + Number(e.amount || 0), 0)
       const expenseTransfer = expenses.filter(e => e.payment_method === 'transfer').reduce((s, e) => s + Number(e.amount || 0), 0)
 
-      // ƏDV balansı: köçürmə ilə alınan gəlirin ƏDV-si
-      const edvBalance = Math.round(incomeTransfer * EDV_RATE)
+      const expenseTotalWithEdv = expenses.reduce((s, e) => s + Number(e.amount_with_edv || e.amount || 0), 0)
 
-      const totalDebt = debts.filter(d => !d.paid).reduce((s, d) => s + ((d.expected_amount || 0) - (d.paid_amount || 0)), 0)
+      // ƏDV balansı — Supabase-dəki faktiki edv_amount sütunundan
+      const edvCollected = incomes.filter(i => i.payment_method === 'transfer').reduce((s, i) => s + Number(i.edv_amount || Math.round(Number(i.amount) * EDV_RATE) || 0), 0)
+      const edvPaid = expenses.filter(e => e.payment_method === 'transfer').reduce((s, e) => s + Number(e.edv_amount || Math.round(Number(e.amount) * EDV_RATE) || 0), 0)
+      const edvBalance = edvCollected - edvPaid
+
+      // Xalis balans (gəlir - xərc)
+      const netCash = incomeCash - expenseCash
+      const netTransfer = incomeTransfer - expenseTransfer
+      const netWithEdv = totalIncomeWithEdv - expenseTotalWithEdv
+
+      const totalDebt = debts.filter(d => !d.paid).reduce((s, d) => s + ((Number(d.expected_amount) || 0) - (Number(d.paid_amount) || 0)), 0)
       const activeProjects = projects.filter(p => p.status === 'active').length
 
       const today = new Date()
@@ -63,11 +78,11 @@ export default function DashboardPage() {
         t.due_date && t.due_date < today.toISOString().split('T')[0] && t.status !== 'done'
       ).length
 
-      // Aylıq daxilolmalar
       const currentYear = new Date().getFullYear()
       const monthlyIncome = MONTHS.map((month, idx) => {
         const total = incomes
           .filter(i => {
+            if (!i.payment_date) return false
             const d = new Date(i.payment_date)
             return d.getFullYear() === currentYear && d.getMonth() === idx
           })
@@ -75,19 +90,17 @@ export default function DashboardPage() {
         return { month, amount: total }
       })
 
-      // Sifarişçi bölgüsü
       const clientMap = {}
       projects.forEach(p => {
         const name = p.clients?.name || 'Digər'
-        clientMap[name] = (clientMap[name] || 0) + (p.contract_value || 0)
+        clientMap[name] = (clientMap[name] || 0) + Number(p.contract_value || 0)
       })
       const clientBreakdown = Object.entries(clientMap)
         .map(([name, value]) => ({ name, value }))
         .sort((a, b) => b.value - a.value)
         .slice(0, 5)
 
-      // Layihə statusu
-      const statusMap = { active: 'İcrada', waiting: 'Gözləyir', completed: 'Tamamlandı' }
+      const statusMap = { active: 'İcrada', waiting: 'Gözləyir', completed: 'Tamamlandı', on_hold: 'Dayandırılıb' }
       const statusCount = {}
       projects.forEach(p => {
         const s = statusMap[p.status] || p.status
@@ -95,21 +108,18 @@ export default function DashboardPage() {
       })
       const projectStatus = Object.entries(statusCount).map(([name, count]) => ({ name, count }))
 
-      // Yaşlandırma
       const aging = { '0–30 gün': 0, '31–60 gün': 0, '60+ gün': 0 }
       const overdueReceivables = []
       debts.filter(d => !d.paid).forEach(d => {
+        if (!d.expected_date) return
         const days = Math.floor((today - new Date(d.expected_date)) / 86400000)
-        if (days <= 30) aging['0–30 gün'] += (d.expected_amount - d.paid_amount)
-        else if (days <= 60) aging['31–60 gün'] += (d.expected_amount - d.paid_amount)
-        else {
-          aging['60+ gün'] += (d.expected_amount - d.paid_amount)
-          overdueReceivables.push({ ...d, days })
-        }
+        const amount = (Number(d.expected_amount) || 0) - (Number(d.paid_amount) || 0)
+        if (days <= 30) aging['0–30 gün'] += amount
+        else if (days <= 60) aging['31–60 gün'] += amount
+        else { aging['60+ gün'] += amount; overdueReceivables.push({ ...d, days }) }
       })
       const agingDebt = Object.entries(aging).map(([name, amount]) => ({ name, amount }))
 
-      // Yaxınlaşan deadlinlər
       const deadlines = projects
         .filter(p => p.deadline && p.status !== 'completed')
         .map(p => ({ ...p, daysLeft: Math.floor((new Date(p.deadline) - today) / 86400000) }))
@@ -118,9 +128,10 @@ export default function DashboardPage() {
 
       setStats({
         totalPortfolio, totalIncome, totalDebt,
-        incomeCash, incomeTransfer,
-        expenseTotal, expenseCash, expenseTransfer,
-        edvBalance,
+        incomeCash, incomeTransfer, totalIncomeWithEdv, incomeTransferWithEdv,
+        expenseTotal, expenseCash, expenseTransfer, expenseTotalWithEdv,
+        edvCollected, edvPaid, edvBalance,
+        netCash, netTransfer, netWithEdv,
         activeProjects, overdueTasksCount,
         monthlyIncome, clientBreakdown, projectStatus, agingDebt,
         deadlines, overdueReceivables
@@ -169,90 +180,78 @@ export default function DashboardPage() {
         <StatCard label="Xərclər" value={fmt(stats.expenseTotal)} sub="Ümumi xərc" variant="danger" />
       </div>
 
-      {/* Balans bölməsi */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      {/* Şirkət Balansı — 6 kart */}
+      <div>
+        <div className="text-xs font-bold text-[#0f172a] mb-3">Şirkət Balansı</div>
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
 
-        {/* Gəlir — nağd vs köçürmə */}
-        <Card className="p-4">
-          <div className="text-xs font-bold text-[#0f172a] mb-3">Daxilolma balansı</div>
-          <div className="space-y-2.5">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-xs text-[#888]">Nağd</div>
-                <div className="text-sm font-bold text-[#0f172a]">{fmt(stats.incomeCash)}</div>
-              </div>
-              <div className="text-right">
-                <div className="text-xs text-[#888]">Köçürmə</div>
-                <div className="text-sm font-bold text-[#0f172a]">{fmt(stats.incomeTransfer)}</div>
-              </div>
+          {/* Nağd daxilolma */}
+          <Card className="p-4">
+            <div className="text-[10px] font-medium text-[#888] uppercase tracking-wide mb-2">Nağd daxilolma</div>
+            <div className="text-xl font-bold text-green-600 mb-1">{fmt(stats.incomeCash)}</div>
+            <div className="text-[10px] text-[#aaa]">
+              Ümumi daxilolmanın {stats.totalIncome > 0 ? Math.round(stats.incomeCash / stats.totalIncome * 100) : 0}%
             </div>
-            <div className="h-1.5 bg-[#f0f0ec] rounded-full overflow-hidden">
-              {stats.totalIncome > 0 && (
-                <div className="h-full bg-[#0f172a] rounded-full"
-                  style={{ width: `${Math.round(stats.incomeCash / stats.totalIncome * 100)}%` }} />
-              )}
-            </div>
-            <div className="flex justify-between text-[10px] text-[#aaa]">
-              <span>Nağd {stats.totalIncome > 0 ? Math.round(stats.incomeCash / stats.totalIncome * 100) : 0}%</span>
-              <span>Köçürmə {stats.totalIncome > 0 ? Math.round(stats.incomeTransfer / stats.totalIncome * 100) : 0}%</span>
-            </div>
-          </div>
-        </Card>
+          </Card>
 
-        {/* Xərc — nağd vs köçürmə */}
-        <Card className="p-4">
-          <div className="text-xs font-bold text-[#0f172a] mb-3">Xərc balansı</div>
-          <div className="space-y-2.5">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-xs text-[#888]">Nağd</div>
-                <div className="text-sm font-bold text-red-600">{fmt(stats.expenseCash)}</div>
-              </div>
-              <div className="text-right">
-                <div className="text-xs text-[#888]">Köçürmə</div>
-                <div className="text-sm font-bold text-red-600">{fmt(stats.expenseTransfer)}</div>
-              </div>
+          {/* Köçürmə daxilolma */}
+          <Card className="p-4">
+            <div className="text-[10px] font-medium text-[#888] uppercase tracking-wide mb-2">Köçürmə daxilolma</div>
+            <div className="text-xl font-bold text-blue-600 mb-1">{fmt(stats.incomeTransfer)}</div>
+            <div className="text-[10px] text-green-600 font-medium">{fmt(stats.incomeTransferWithEdv)} (ƏDV daxil)</div>
+            <div className="text-[10px] text-[#aaa] mt-0.5">
+              Ümumi daxilolmanın {stats.totalIncome > 0 ? Math.round(stats.incomeTransfer / stats.totalIncome * 100) : 0}%
             </div>
-            <div className="h-1.5 bg-[#f0f0ec] rounded-full overflow-hidden">
-              {stats.expenseTotal > 0 && (
-                <div className="h-full bg-red-500 rounded-full"
-                  style={{ width: `${Math.round(stats.expenseCash / stats.expenseTotal * 100)}%` }} />
-              )}
-            </div>
-            <div className="flex justify-between text-[10px] text-[#aaa]">
-              <span>Nağd {stats.expenseTotal > 0 ? Math.round(stats.expenseCash / stats.expenseTotal * 100) : 0}%</span>
-              <span>Köçürmə {stats.expenseTotal > 0 ? Math.round(stats.expenseTransfer / stats.expenseTotal * 100) : 0}%</span>
-            </div>
-          </div>
-        </Card>
+          </Card>
 
-        {/* ƏDV balansı */}
-        <Card className="p-4">
-          <div className="text-xs font-bold text-[#0f172a] mb-3">ƏDV balansı (18%)</div>
-          <div className="space-y-2.5">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-xs text-[#888]">Köçürmə gəliri</div>
-                <div className="text-sm font-bold text-[#0f172a]">{fmt(stats.incomeTransfer)}</div>
-              </div>
-              <div className="text-right">
-                <div className="text-xs text-[#888]">ƏDV məbləği</div>
-                <div className="text-sm font-bold text-amber-600">{fmt(stats.edvBalance)}</div>
-              </div>
-            </div>
-            <div className="h-1.5 bg-[#f0f0ec] rounded-full overflow-hidden">
-              <div className="h-full bg-amber-500 rounded-full" style={{ width: '18%' }} />
+          {/* ƏDV balansı */}
+          <Card className="p-4">
+            <div className="text-[10px] font-medium text-[#888] uppercase tracking-wide mb-2">ƏDV balansı (18%)</div>
+            <div className={`text-xl font-bold mb-1 ${stats.edvBalance >= 0 ? 'text-amber-600' : 'text-green-600'}`}>
+              {fmt(Math.abs(stats.edvBalance))}
             </div>
             <div className="text-[10px] text-[#aaa]">
-              Köçürmə daxilolmalarının 18%-i ƏDV öhdəliyi
+              {stats.edvBalance >= 0
+                ? `Ödəniləcək: ${fmt(stats.edvCollected)} − ${fmt(stats.edvPaid)} geri alınır`
+                : `Geri alınacaq: artıq ödənilmiş`}
             </div>
-          </div>
-        </Card>
+          </Card>
+
+          {/* Nağd xərc */}
+          <Card className="p-4">
+            <div className="text-[10px] font-medium text-[#888] uppercase tracking-wide mb-2">Nağd xərc</div>
+            <div className="text-xl font-bold text-red-500 mb-1">{fmt(stats.expenseCash)}</div>
+            <div className="text-[10px] text-[#aaa]">
+              Xərcin {stats.expenseTotal > 0 ? Math.round(stats.expenseCash / stats.expenseTotal * 100) : 0}%
+            </div>
+          </Card>
+
+          {/* Köçürmə xərc */}
+          <Card className="p-4">
+            <div className="text-[10px] font-medium text-[#888] uppercase tracking-wide mb-2">Köçürmə xərc</div>
+            <div className="text-xl font-bold text-red-500 mb-1">{fmt(stats.expenseTransfer)}</div>
+            <div className="text-[10px] text-[#aaa]">
+              Xərcin {stats.expenseTotal > 0 ? Math.round(stats.expenseTransfer / stats.expenseTotal * 100) : 0}%
+            </div>
+          </Card>
+
+          {/* Xalis balans */}
+          <Card className="p-4">
+            <div className="text-[10px] font-medium text-[#888] uppercase tracking-wide mb-2">Xalis balans</div>
+            <div className={`text-xl font-bold mb-1 ${(stats.totalIncome - stats.expenseTotal) >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+              {fmt(stats.totalIncome - stats.expenseTotal)}
+            </div>
+            <div className="text-[10px] text-blue-600 font-medium">{fmt(stats.netWithEdv)} (ƏDV daxil)</div>
+            <div className="text-[10px] text-[#aaa] mt-0.5">
+              Nağd: {fmt(stats.netCash)} · Köçürmə: {fmt(stats.netTransfer)}
+            </div>
+          </Card>
+
+        </div>
       </div>
 
       {/* Charts row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-
         <Card className="p-4">
           <div className="text-xs font-bold text-[#0f172a] mb-3">Aylıq daxilolmalar — {new Date().getFullYear()}</div>
           <ResponsiveContainer width="100%" height={160}>
@@ -349,7 +348,7 @@ export default function DashboardPage() {
                     <div className="text-[10px] text-[#aaa]">{p.clients?.name}</div>
                   </div>
                   <Badge variant={p.daysLeft < 0 ? 'danger' : p.daysLeft <= 3 ? 'warning' : 'default'} size="sm">
-                    {p.daysLeft < 0 ? `${Math.abs(p.daysLeft)} gün keçmiş` : p.daysLeft === 0 ? 'Bu gün' : `${p.daysLeft} gün`}
+                    {p.daysLeft < 0 ? `${Math.abs(p.daysLeft)}g keçmiş` : p.daysLeft === 0 ? 'Bu gün' : `${p.daysLeft} gün`}
                   </Badge>
                 </div>
               ))}
@@ -372,7 +371,7 @@ export default function DashboardPage() {
                     <div className="text-xs font-medium text-[#0f172a]">Alacaq</div>
                     <div className="text-[10px] text-[#aaa]">{r.days} gün gecikmiş</div>
                   </div>
-                  <div className="text-xs font-bold text-red-600">{fmt(r.expected_amount - r.paid_amount)}</div>
+                  <div className="text-xs font-bold text-red-600">{fmt(Number(r.expected_amount) - Number(r.paid_amount))}</div>
                 </div>
               ))}
             </div>
