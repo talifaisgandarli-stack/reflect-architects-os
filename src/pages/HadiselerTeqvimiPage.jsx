@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { supabase } from '../lib/supabase'
 import { useToast } from '../contexts/ToastContext'
 import { PageHeader, Badge, Card, Button, EmptyState, Modal, ConfirmDialog, Skeleton } from '../components/ui'
 import { IconPlus, IconEdit, IconTrash, IconCalendar, IconChevronLeft, IconChevronRight } from '@tabler/icons-react'
@@ -69,6 +70,7 @@ function EventForm({ open, onClose, onSave, event }) {
 export default function HadiselerTeqvimiPage() {
   const { addToast } = useToast()
   const [events, setEvents] = useState([])
+  const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
   const [editEvent, setEditEvent] = useState(null)
   const [deleteEvent, setDeleteEvent] = useState(null)
@@ -76,22 +78,43 @@ export default function HadiselerTeqvimiPage() {
   const [viewYear, setViewYear] = useState(today.getFullYear())
   const [viewMonth, setViewMonth] = useState(today.getMonth())
 
-  function handleSave(form) {
+  useEffect(() => { loadData() }, [])
+
+  async function loadData() {
+    setLoading(true)
+    const { data } = await supabase.from('events').select('*').order('start_date', { ascending: true })
+    setEvents(data || [])
+    setLoading(false)
+  }
+
+  async function handleSave(form) {
     if (!form.title.trim() || !form.start_date) { addToast('Ad və tarix daxil edin', 'error'); return }
+    const data = {
+      title: form.title.trim(),
+      event_type: form.event_type,
+      start_date: form.start_date,
+      end_date: form.end_date || form.start_date,
+      notes: form.notes || null,
+      color: form.color || null
+    }
     if (editEvent) {
-      setEvents(prev => prev.map(e => e.id === editEvent.id ? { ...e, ...form } : e))
+      const { error } = await supabase.from('events').update(data).eq('id', editEvent.id)
+      if (error) { addToast('Xəta: ' + error.message, 'error'); return }
       addToast('Yeniləndi', 'success')
     } else {
-      setEvents(prev => [...prev, { id: Date.now().toString(), ...form }])
+      const { error } = await supabase.from('events').insert(data)
+      if (error) { addToast('Xəta: ' + error.message, 'error'); return }
       addToast('Hadisə əlavə edildi', 'success')
     }
     setModalOpen(false); setEditEvent(null)
+    await loadData()
   }
 
-  function handleDelete() {
-    setEvents(prev => prev.filter(e => e.id !== deleteEvent.id))
+  async function handleDelete() {
+    await supabase.from('events').delete().eq('id', deleteEvent.id)
     addToast('Silindi', 'success')
     setDeleteEvent(null)
+    await loadData()
   }
 
   // Build calendar grid
@@ -119,7 +142,7 @@ export default function HadiselerTeqvimiPage() {
     .slice(0, 5)
 
   return (
-    <div className="p-6 fade-in">
+    <div className="p-4 lg:p-6 fade-in">
       <PageHeader
         title="Hadisələr Təqvimi"
         subtitle={`${events.length} hadisə`}
