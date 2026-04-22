@@ -1,220 +1,228 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useToast } from '../contexts/ToastContext'
-import { PageHeader, Card, Button, Skeleton } from '../components/ui'
-import { IconSettings, IconRobot, IconBrandWhatsapp, IconDownload } from '@tabler/icons-react'
+import { PageHeader, Card, Button } from '../components/ui'
+import { IconBrandTelegram, IconRobot, IconDownload, IconRefresh } from '@tabler/icons-react'
 
-function Toggle({ checked, onChange, disabled }) {
+function Toggle({ checked, onChange }) {
   return (
-    <button
-      onClick={() => !disabled && onChange(!checked)}
-      className={`w-11 h-6 rounded-full transition-all duration-200 flex items-center px-0.5 flex-shrink-0 ${checked ? 'bg-[#0f172a] justify-end' : 'bg-[#e8e8e4] justify-start'} ${disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
-    >
-      <span className="w-5 h-5 bg-white rounded-full shadow-sm" />
+    <button onClick={() => onChange(!checked)}
+      className={`relative w-10 h-5 rounded-full transition-colors ${checked ? 'bg-[#0f172a]' : 'bg-[#e8e8e4]'}`}>
+      <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${checked ? 'translate-x-5' : 'translate-x-0.5'}`} />
     </button>
   )
 }
 
-const NOTIF_LABELS = {
-  agent_enabled: { label: 'AI Agent', desc: 'Bütün avtomatik bildirişlər — söndürdükdə xərc sıfırlanır', icon: '🤖', group: 'agent' },
-  daily_summary: { label: 'Günlük xülasə', desc: 'Hər gün saat 08:00 — hər işçiyə şəxsi', icon: '☀️', group: 'notif' },
-  deadline_warnings: { label: 'Deadline xəbərdarlıqları', desc: '3 gün, 1 gün, deadline günü', icon: '⏰', group: 'notif' },
-  meeting_reminders: { label: 'Görüş xatırlatmaları', desc: '24 saat + 1 saat əvvəl', icon: '📅', group: 'notif' },
-  outsource_deadlines: { label: 'Podrat deadline', desc: '7, 3, 1 gün əvvəl — podratçıya + menecerə', icon: '🤝', group: 'notif' },
-  finance_alerts: { label: 'Maliyyə bildirişləri', desc: 'Gecikmiş alacaqlar — yalnız Founding Architect', icon: '💰', group: 'notif' },
-  transfer_reminders: { label: 'Köçürmə xatırlatması', desc: '60 gün limitinə yaxınlaşanda', icon: '🔄', group: 'notif' },
-  weekly_report: { label: 'Həftəlik hesabat', desc: 'Hər Cümə saat 17:00', icon: '📊', group: 'notif' },
-  monthly_report: { label: 'Aylıq icmal', desc: 'Hər ayın 1-i — yalnız Founding Architect', icon: '📈', group: 'notif' },
-  whatsapp_auto: { label: 'WhatsApp avtomatik', desc: 'Avtomatik bildirişlər WhatsApp-a göndərilir', icon: '📱', group: 'whatsapp' },
-  whatsapp_manual: { label: 'WhatsApp manual mesaj', desc: 'Sistem daxilindən birbaşa mesaj göndərmə', icon: '✉️', group: 'whatsapp' },
-}
+const NOTIFICATION_TYPES = [
+  { key: 'daily_summary', icon: '☀️', label: 'Günlük xülasə', desc: 'Hər gün saat 08:00 — hər işçiyə şəxsi' },
+  { key: 'deadline_warning', icon: '⏰', label: 'Deadline xəbərdarlıqları', desc: '7, 3, 1 gün əvvəl' },
+  { key: 'meeting_reminder', icon: '📅', label: 'Görüş xatırlatmaları', desc: '24 saat əvvəl' },
+  { key: 'weekly_report', icon: '📊', label: 'Həftəlik hesabat', desc: 'Hər Cümə saat 17:00' },
+]
 
 export default function ParametrlerPage() {
   const { addToast } = useToast()
-  const [settings, setSettings] = useState({})
+  const [settings, setSettings] = useState({
+    agent_enabled: true,
+    telegram_enabled: true,
+    daily_summary: true,
+    deadline_warning: true,
+    meeting_reminder: true,
+    weekly_report: true,
+  })
   const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(null)
+  const [testing, setTesting] = useState(null)
+  const [registeredUsers, setRegisteredUsers] = useState([])
 
-  useEffect(() => { loadSettings() }, [])
+  useEffect(() => { loadData() }, [])
 
-  async function loadSettings() {
+  async function loadData() {
     setLoading(true)
-    const { data } = await supabase.from('notification_settings').select('*')
-    const map = {}
-    ;(data || []).forEach(s => { map[s.key] = s.value })
-    setSettings(map)
+    // Settings yüklə
+    const { data } = await supabase.from('system_settings').select('key, value')
+    if (data) {
+      const s = {}
+      data.forEach(row => { s[row.key] = row.value === 'true' || row.value === true })
+      setSettings(prev => ({ ...prev, ...s }))
+    }
+    // Qeydiyyatlı Telegram istifadəçiləri
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, full_name, telegram_chat_id')
+      .not('telegram_chat_id', 'is', null)
+    setRegisteredUsers(profiles || [])
     setLoading(false)
   }
 
-  async function toggleSetting(key, value) {
-    setSaving(key)
-    const { error } = await supabase
-      .from('notification_settings')
-      .update({ value, updated_at: new Date().toISOString() })
-      .eq('key', key)
-    if (error) { addToast('Xəta: ' + error.message, 'error') }
-    else {
-      setSettings(s => ({ ...s, [key]: value }))
-      addToast(value ? 'Aktiv edildi' : 'Söndürüldü', 'success')
+  async function saveSetting(key, value) {
+    setSettings(prev => ({ ...prev, [key]: value }))
+    await supabase.from('system_settings').upsert({ key, value: value.toString() }, { onConflict: 'key' })
+  }
+
+  async function testNotification(type) {
+    setTesting(type)
+    try {
+      const res = await fetch(`/api/agent?type=${type}`)
+      const data = await res.json()
+      if (data.success) {
+        addToast(`Test göndərildi — ${data.count} nəfərə`, 'success')
+      } else {
+        addToast('Xəta: ' + (data.error || 'Bilinməyən xəta'), 'error')
+      }
+    } catch (err) {
+      addToast('Xəta: ' + err.message, 'error')
     }
-    setSaving(null)
+    setTesting(null)
   }
 
   async function exportData() {
-    const tables = ['projects', 'tasks', 'clients', 'incomes', 'expenses', 'outsource_works', 'receivables']
-    const result = {}
-    for (const t of tables) {
-      const { data } = await supabase.from(t).select('*')
-      result[t] = data || []
+    const [projects, tasks, incomes, expenses] = await Promise.all([
+      supabase.from('projects').select('*'),
+      supabase.from('tasks').select('*'),
+      supabase.from('incomes').select('*'),
+      supabase.from('expenses').select('*'),
+    ])
+    const data = {
+      exported_at: new Date().toISOString(),
+      projects: projects.data,
+      tasks: tasks.data,
+      incomes: incomes.data,
+      expenses: expenses.data,
     }
-    const blob = new Blob([JSON.stringify(result, null, 2)], { type: 'application/json' })
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
-    a.href = url
-    a.download = `reflect-backup-${new Date().toISOString().split('T')[0]}.json`
-    a.click()
-    addToast('Məlumatlar yükləndi', 'success')
+    a.href = url; a.download = `reflect-backup-${new Date().toISOString().split('T')[0]}.json`; a.click()
+    addToast('Məlumatlar ixrac edildi', 'success')
   }
 
-  const agentEnabled = settings['agent_enabled']
-
-  const agentKeys = ['agent_enabled']
-  const notifKeys = ['daily_summary', 'deadline_warnings', 'meeting_reminders', 'outsource_deadlines', 'finance_alerts', 'transfer_reminders', 'weekly_report', 'monthly_report']
-  const waKeys = ['whatsapp_auto', 'whatsapp_manual']
-
-  if (loading) return <div className="p-6"><Skeleton className="h-64" /></div>
+  async function removeTelegramUser(id) {
+    await supabase.from('profiles').update({ telegram_chat_id: null }).eq('id', id)
+    addToast('Telegram əlaqəsi silindi', 'success')
+    await loadData()
+  }
 
   return (
-    <div className="p-6 fade-in">
+    <div className="p-4 lg:p-6 fade-in">
       <PageHeader title="Parametrlər" subtitle="Sistem tənzimləmələri" />
 
-      {/* AI Agent */}
-      <div className="mb-5">
-        <div className="flex items-center gap-2 mb-3">
-          <IconRobot size={16} className="text-[#0f172a]" />
-          <h2 className="text-sm font-bold text-[#0f172a]">AI Agent</h2>
-        </div>
-        <Card>
-          {agentKeys.map(key => {
-            const info = NOTIF_LABELS[key]
-            return (
-              <div key={key} className="flex items-center gap-4 px-4 py-4 border-b border-[#f5f5f0] last:border-0">
-                <span className="text-lg">{info.icon}</span>
-                <div className="flex-1">
-                  <div className="text-sm font-medium text-[#0f172a]">{info.label}</div>
-                  <div className="text-xs text-[#888] mt-0.5">{info.desc}</div>
-                </div>
-                <Toggle
-                  checked={!!settings[key]}
-                  onChange={v => toggleSetting(key, v)}
-                  disabled={saving === key}
-                />
-              </div>
-            )
-          })}
-        </Card>
-      </div>
+      <div className="space-y-4 max-w-2xl">
 
-      {/* Bildiriş növləri */}
-      <div className="mb-5">
-        <div className="flex items-center gap-2 mb-3">
-          <span className="text-base">🔔</span>
-          <h2 className="text-sm font-bold text-[#0f172a]">Bildiriş növləri</h2>
-          {!agentEnabled && <span className="text-xs text-[#aaa] ml-1">(Agent söndürülüb — bütün bildirişlər deaktivdir)</span>}
-        </div>
-        <Card>
-          {notifKeys.map(key => {
-            const info = NOTIF_LABELS[key]
-            return (
-              <div key={key} className={`flex items-center gap-4 px-4 py-3.5 border-b border-[#f5f5f0] last:border-0 ${!agentEnabled ? 'opacity-40' : ''}`}>
-                <span className="text-base">{info.icon}</span>
-                <div className="flex-1">
-                  <div className="text-sm font-medium text-[#0f172a]">{info.label}</div>
-                  <div className="text-xs text-[#888] mt-0.5">{info.desc}</div>
-                </div>
-                <Toggle
-                  checked={!!settings[key]}
-                  onChange={v => toggleSetting(key, v)}
-                  disabled={!agentEnabled || saving === key}
-                />
+        {/* AI Agent */}
+        <Card className="p-4">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <IconRobot size={18} className="text-[#0f172a]" />
+              <div>
+                <div className="text-sm font-bold text-[#0f172a]">AI Agent</div>
+                <div className="text-xs text-[#888]">Bütün avtomatik bildirişlər</div>
               </div>
-            )
-          })}
-        </Card>
-      </div>
+            </div>
+            <Toggle checked={settings.agent_enabled} onChange={v => saveSetting('agent_enabled', v)} />
+          </div>
 
-      {/* WhatsApp */}
-      <div className="mb-5">
-        <div className="flex items-center gap-2 mb-3">
-          <IconBrandWhatsapp size={16} className="text-green-600" />
-          <h2 className="text-sm font-bold text-[#0f172a]">WhatsApp</h2>
-        </div>
-        <Card>
-          {waKeys.map(key => {
-            const info = NOTIF_LABELS[key]
-            return (
-              <div key={key} className="flex items-center gap-4 px-4 py-3.5 border-b border-[#f5f5f0] last:border-0">
-                <span className="text-base">{info.icon}</span>
-                <div className="flex-1">
-                  <div className="text-sm font-medium text-[#0f172a]">{info.label}</div>
-                  <div className="text-xs text-[#888] mt-0.5">{info.desc}</div>
+          {settings.agent_enabled && (
+            <div className="space-y-3 border-t border-[#f0f0ec] pt-3">
+              {NOTIFICATION_TYPES.map(n => (
+                <div key={n.key} className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span>{n.icon}</span>
+                    <div>
+                      <div className="text-xs font-medium text-[#0f172a]">{n.label}</div>
+                      <div className="text-[10px] text-[#888]">{n.desc}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => testNotification(n.key)} disabled={testing === n.key}
+                      className="text-[10px] text-blue-500 hover:text-blue-700 disabled:opacity-50">
+                      {testing === n.key ? '...' : 'Test'}
+                    </button>
+                    <Toggle checked={settings[n.key]} onChange={v => saveSetting(n.key, v)} />
+                  </div>
                 </div>
-                <Toggle
-                  checked={!!settings[key]}
-                  onChange={v => toggleSetting(key, v)}
-                  disabled={saving === key}
-                />
-              </div>
-            )
-          })}
+              ))}
+            </div>
+          )}
         </Card>
-      </div>
 
-      {/* Məlumat ehtiyatı */}
-      <div className="mb-5">
-        <div className="flex items-center gap-2 mb-3">
-          <IconDownload size={16} className="text-[#0f172a]" />
-          <h2 className="text-sm font-bold text-[#0f172a]">Məlumat ehtiyatı</h2>
-        </div>
-        <Card className="px-4 py-4">
+        {/* Telegram */}
+        <Card className="p-4">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <IconBrandTelegram size={18} className="text-blue-500" />
+              <div>
+                <div className="text-sm font-bold text-[#0f172a]">Telegram bildirişləri</div>
+                <div className="text-xs text-[#888]">@reflect_architects_bot vasitəsilə</div>
+              </div>
+            </div>
+            <Toggle checked={settings.telegram_enabled} onChange={v => saveSetting('telegram_enabled', v)} />
+          </div>
+
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3 text-xs text-blue-800">
+            <div className="font-medium mb-1">Əməkdaşlar necə qeydiyyat keçir:</div>
+            <div>1. Telegram-da <strong>@reflect_architects_bot</strong>-a yazın</div>
+            <div>2. <strong>/start</strong> göndərin</div>
+            <div>3. Sistemdəki tam adı yazın</div>
+          </div>
+
+          {registeredUsers.length > 0 ? (
+            <div>
+              <div className="text-xs font-medium text-[#555] mb-2">Qeydiyyatlı ({registeredUsers.length} nəfər):</div>
+              <div className="space-y-1.5">
+                {registeredUsers.map(u => (
+                  <div key={u.id} className="flex items-center justify-between bg-[#f5f5f0] rounded-lg px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center">
+                        <span className="text-blue-700 text-[9px] font-bold">
+                          {u.full_name?.split(' ').map(n => n[0]).join('').slice(0,2)}
+                        </span>
+                      </div>
+                      <span className="text-xs text-[#0f172a]">{u.full_name}</span>
+                    </div>
+                    <button onClick={() => removeTelegramUser(u.id)} className="text-[10px] text-[#aaa] hover:text-red-500">Sil</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="text-xs text-[#aaa] text-center py-2">
+              Hələ qeydiyyatlı istifadəçi yoxdur
+            </div>
+          )}
+        </Card>
+
+        {/* Məlumat ehtiyatı */}
+        <Card className="p-4">
+          <div className="text-sm font-bold text-[#0f172a] mb-3">Məlumat ehtiyatı</div>
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-sm font-medium text-[#0f172a]">JSON ixrac</div>
-              <div className="text-xs text-[#888] mt-0.5">Bütün layihə, tapşırıq, maliyyə məlumatlarını yükləyin</div>
+              <div className="text-xs text-[#555]">JSON ixrac</div>
+              <div className="text-[10px] text-[#888]">Bütün layihə, tapşırıq, maliyyə məlumatları</div>
             </div>
             <Button variant="secondary" size="sm" onClick={exportData}>
               <IconDownload size={13} /> Yüklə
             </Button>
           </div>
         </Card>
-      </div>
 
-      {/* Sistem məlumatları */}
-      <div>
-        <div className="flex items-center gap-2 mb-3">
-          <IconSettings size={16} className="text-[#0f172a]" />
-          <h2 className="text-sm font-bold text-[#0f172a]">Sistem məlumatları</h2>
-        </div>
-        <Card className="px-4 py-4">
-          <div className="grid grid-cols-2 gap-4 text-xs">
-            <div>
-              <div className="text-[#888] mb-1">Şirkət</div>
-              <div className="font-medium text-[#0f172a]">Reflect Architects</div>
-            </div>
-            <div>
-              <div className="text-[#888] mb-1">Ünvan</div>
-              <div className="font-medium text-[#0f172a]">Bakı, Azərbaycan</div>
-            </div>
-            <div>
-              <div className="text-[#888] mb-1">E-poçt</div>
-              <div className="font-medium text-[#0f172a]">info@reflect.az</div>
-            </div>
-            <div>
-              <div className="text-[#888] mb-1">Sistem versiyası</div>
-              <div className="font-medium text-[#0f172a]">v1.0 · 2026</div>
-            </div>
+        {/* Sistem məlumatları */}
+        <Card className="p-4">
+          <div className="text-sm font-bold text-[#0f172a] mb-3">Sistem məlumatları</div>
+          <div className="space-y-2 text-xs">
+            {[
+              ['Şirkət', 'Reflect Architects'],
+              ['Ünvan', 'Bakı, Azərbaycan'],
+              ['E-poçt', 'info@reflect.az'],
+              ['Sistem versiyası', 'v1.0 · 2026'],
+            ].map(([k, v]) => (
+              <div key={k} className="flex justify-between">
+                <span className="text-[#888]">{k}</span>
+                <span className="font-medium text-[#0f172a]">{v}</span>
+              </div>
+            ))}
           </div>
         </Card>
+
       </div>
     </div>
   )
