@@ -365,13 +365,13 @@ export default function PodratIsleriPage() {
       <PageHeader
         title="Podrat İşləri"
         subtitle={`${works.length} podrat · 30%/Aralıq/10% sistemi`}
-        action={<Button onClick={() => { setEditWork(null); setModalOpen(true) }} size="sm"><IconPlus size={14} /> Yeni podrat</Button>}
+        action={isAdmin ? <Button onClick={() => { setEditWork(null); setModalOpen(true) }} size="sm"><IconPlus size={14} /> Yeni podrat</Button> : null}
       />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
-        <StatCard label="Müqavilə (ƏDV xaric)" value={fmt(totalContract)} />
-        <StatCard label="ƏDV məbləği" value={fmt(totalEdvAmt)} />
-        <StatCard label="Müqavilə (ƏDV daxil)" value={fmt(totalWithEdv)} />
+        {isAdmin && <StatCard label="Müqavilə (ƏDV xaric)" value={fmt(totalContract)} />}
+        {isAdmin && <StatCard label="ƏDV məbləği" value={fmt(totalEdvAmt)} />}
+        {isAdmin && <StatCard label="Müqavilə (ƏDV daxil)" value={fmt(totalWithEdv)} />}
         <StatCard label="Aktiv podratlar" value={works.filter(w => w.work_status === 'in_progress').length} />
       </div>
 
@@ -447,7 +447,7 @@ export default function PodratIsleriPage() {
                   )
                 })}
               </tbody>
-              <tfoot>
+              {isAdmin && <tfoot>
                 <tr className="bg-[#f5f5f0]">
                   <td colSpan={5} className="px-4 py-2 font-medium text-[#555]">Cəmi</td>
                   <td className="px-4 py-2 text-right font-bold text-[#0f172a]">{fmt(totalContract)}</td>
@@ -456,7 +456,7 @@ export default function PodratIsleriPage() {
                   <td className="px-4 py-2 text-right font-bold text-red-500">{fmt(works.reduce((s, w) => s + Number(w.remaining || 0), 0))}</td>
                   <td />
                 </tr>
-              </tfoot>
+              </tfoot>}
             </table>
           </div>
         </Card>

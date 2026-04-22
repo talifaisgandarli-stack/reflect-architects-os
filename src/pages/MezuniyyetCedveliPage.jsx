@@ -124,7 +124,7 @@ function RequestForm({ open, onClose, onSave, leave, members, isAdmin }) {
 
 export default function MezuniyyetCedveliPage() {
   const { addToast } = useToast()
-  const { profile } = useAuth()
+  const { profile, isAdmin, user } = useAuth()
   const [leaves, setLeaves] = useState([])
   const [members, setMembers] = useState([])
   const [loading, setLoading] = useState(true)
@@ -133,7 +133,6 @@ export default function MezuniyyetCedveliPage() {
   const [deleteLeave, setDeleteLeave] = useState(null)
   const [filter, setFilter] = useState('all')
 
-  const isAdmin = true // Mərhələ 2-də rol sistemindən gələcək
 
   useEffect(() => { loadData() }, [])
 
@@ -203,10 +202,10 @@ export default function MezuniyyetCedveliPage() {
   const pending = leaves.filter(l => l.status === 'pending')
   const filtered = filter === 'all' ? leaves : leaves.filter(l => l.status === filter)
 
-  if (loading) return <div className="p-6"><Skeleton className="h-64" /></div>
+  if (loading) return <div className="p-4 lg:p-6"><Skeleton className="h-64" /></div>
 
   return (
-    <div className="p-6 fade-in">
+    <div className="p-4 lg:p-6 fade-in">
       <PageHeader
         title="Məzuniyyət Cədvəli"
         subtitle={`${leaves.length} sorğu · ${pending.length} gözləyir`}
@@ -217,7 +216,7 @@ export default function MezuniyyetCedveliPage() {
         }
       />
 
-      <div className="grid grid-cols-4 gap-4 mb-5">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
         <StatCard label="Ümumi sorğu" value={leaves.length} />
         <StatCard label="Gözləyir" value={pending.length} variant={pending.length > 0 ? 'warning' : 'default'} />
         <StatCard label="Təsdiqləndi" value={leaves.filter(l => l.status === 'approved').length} variant="success" />
@@ -341,7 +340,7 @@ export default function MezuniyyetCedveliPage() {
       )}
 
       <RequestForm open={modalOpen} onClose={() => { setModalOpen(false); setEditLeave(null) }}
-        onSave={handleSave} leave={editLeave} members={members} isAdmin={isAdmin} />
+        onSave={handleSave} leave={editLeave} members={isAdmin ? members : members.filter(m => m.id === user?.id)} isAdmin={isAdmin} />
       <ConfirmDialog open={!!deleteLeave} title="Sorğunu sil"
         message="Bu məzuniyyət sorğusunu silmək istədiyinizə əminsiniz?"
         onConfirm={handleDelete} onCancel={() => setDeleteLeave(null)} danger />

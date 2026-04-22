@@ -1,3 +1,4 @@
+import { useAuth } from './contexts/AuthContext'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthContext'
 import { ToastProvider } from './contexts/ToastContext'
@@ -5,6 +6,7 @@ import ProtectedRoute from './components/ProtectedRoute'
 import MainLayout from './components/layout/MainLayout'
 import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/DashboardPage'
+import EmployeeDashboardPage from './pages/EmployeeDashboardPage'
 import LayihelerPage from './pages/LayihelerPage'
 import TapshiriqlarPage from './pages/TapshiriqlarPage'
 import PipelinePage from './pages/PipelinePage'
@@ -32,9 +34,15 @@ import HedefNeticeOKRPage from './pages/HedefNeticeOKRPage'
 import MezmunPlanlamasiPage from './pages/MezmunPlanlamasiPage'
 import SendArxiviPage from './pages/SendArxiviPage'
 import WhatsAppPage from './pages/WhatsAppPage'
+import QaynaqlarPage from './pages/QaynaqlarPage'
 import ComingSoonPage from './pages/ComingSoonPage'
 
 function CS({ t }) { return <ComingSoonPage title={t} /> }
+
+function RoleBasedDashboard() {
+  const { isAdmin } = useAuth()
+  return isAdmin ? <DashboardPage /> : <EmployeeDashboardPage />
+}
 
 export default function App() {
   return (
@@ -48,7 +56,7 @@ export default function App() {
                 <MainLayout />
               </ProtectedRoute>
             }>
-              <Route index element={<DashboardPage />} />
+              <Route index element={<RoleBasedDashboard />} />
               <Route path="layiheler" element={<LayihelerPage />} />
               <Route path="tapshiriqlar" element={<TapshiriqlarPage />} />
               <Route path="is-ucotu" element={<CS t="İş Uçotu" />} />
@@ -77,7 +85,7 @@ export default function App() {
               <Route path="mezmun-planlamasi" element={<MezmunPlanlamasiPage />} />
               <Route path="sened-arxivi" element={<SendArxiviPage />} />
               <Route path="whatsapp" element={<WhatsAppPage />} />
-              <Route path="qaynaqlar" element={<CS t="Qaynaqlar" />} />
+              <Route path="qaynaqlar" element={<QaynaqlarPage />} />
               <Route path="parametrler" element={<ParametrlerPage />} />
               <Route path="sistem-arxivi" element={<CS t="Sistem Arxivi" />} />
             </Route>

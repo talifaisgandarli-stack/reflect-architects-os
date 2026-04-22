@@ -589,13 +589,13 @@ export default function LayihelerPage() {
               <tfoot>
                 <tr className="bg-[#f5f5f0]">
                   <td colSpan={4} className="px-4 py-2 text-xs font-medium text-[#555]">Cəmi ({filtered.length} layihə)</td>
-                  <td className="px-4 py-2 text-right text-xs">
+                  {isAdmin && <td className="px-4 py-2 text-right text-xs">
                     <div className="font-bold text-[#0f172a]">{fmt(filtered.reduce((s, p) => s + Number(p.contract_value || 0), 0))}</div>
                     <div className="text-green-600">{fmt(filtered.reduce((s, p) => s + Number(p.amount_with_edv || p.contract_value || 0), 0))} (ƏDV daxil)</div>
-                  </td>
-                  <td className="px-4 py-2 text-right text-xs font-bold text-[#0f172a]">
+                  </td>}
+                  {isAdmin && <td className="px-4 py-2 text-right text-xs font-bold text-[#0f172a]">
                     {fmt(filtered.reduce((s, p) => s + Number(p.advance_paid || 0), 0))}
-                  </td>
+                  </td>}
                   <td colSpan={3} />
                 </tr>
               </tfoot>
