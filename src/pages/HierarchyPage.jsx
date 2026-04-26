@@ -223,28 +223,32 @@ export default function HierarchyPage() {
         ))}
       </div>
 
+
       {/* TAM STRUKTUR */}
       {tab === 'struct' && (
-        <div className="max-w-2xl">
+        <div className="w-full">
           <div className="flex items-center gap-2 mb-3">
             <div className="h-px flex-1 bg-[#e8e8e4]" />
             <span className="text-[10px] font-bold text-[#aaa] uppercase tracking-widest">Memarlıq bölməsi</span>
             <div className="h-px flex-1 bg-[#e8e8e4]" />
           </div>
-          {LEVELS.map(l => <LevelCard key={l.key} level={l} />)}
-
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
+            {LEVELS.map(l => <LevelCard key={l.key} level={l} />)}
+          </div>
           <div className="flex items-center gap-2 my-5">
             <div className="h-px flex-1 bg-[#e8e8e4]" />
             <span className="text-[10px] font-bold text-[#aaa] uppercase tracking-widest whitespace-nowrap">Biznes inkişaf bölməsi</span>
             <div className="h-px flex-1 bg-[#e8e8e4]" />
           </div>
-          {BD_LEVELS.map(l => <LevelCard key={l.key} level={l} />)}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
+            {BD_LEVELS.map(l => <LevelCard key={l.key} level={l} />)}
+          </div>
         </div>
       )}
 
       {/* KARYERA YOLU */}
       {tab === 'path' && (
-        <div className="max-w-lg">
+        <div className="w-full grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div className="bg-white border border-[#e8e8e4] rounded-2xl p-5">
             <div className="text-xs font-bold text-[#0f172a] mb-6">Memarlıq karyera yolu</div>
             {CAREER_PATH.map((step, i) => (
@@ -266,44 +270,65 @@ export default function HierarchyPage() {
               </div>
             ))}
           </div>
+          <div className="space-y-3">
+            <div className="bg-[#0f172a] rounded-2xl p-5 text-white">
+              <div className="text-xs font-bold mb-2">Karyera yolu haqqında</div>
+              <p className="text-xs leading-relaxed text-white/70">Reflect Architects-də karyera L6 səviyyəsindən başlayır və performans, texniki bacarıq və peşəkar töhfəyə əsasən yüksəlir. Hər səviyyənin standart müddəti var, lakin yüksək performanslı əməkdaşlar üçün erkən yüksəliş imkanı mövcuddur.</p>
+            </div>
+            <div className="bg-white border border-[#e8e8e4] rounded-2xl p-5">
+              <div className="text-xs font-bold text-[#0f172a] mb-3">Yüksəliş prinsipləri</div>
+              <div className="space-y-2.5">
+                {[
+                  { icon: '⏱', title: 'Standart müddət', desc: 'Hər səviyyənin minimum iş müddəti var — texniki yetkinliyin formalaşması üçün vacibdir.' },
+                  { icon: '⭐', title: 'Performans skoru', desc: '2 ardıcıl il 4.5+/5.0 bal — erkən yüksəliş hüququ qazandırır.' },
+                  { icon: '🎯', title: 'Texniki + Kreativ', desc: 'Yüksəliş yalnız texniki deyil — kreativlik, araşdırma və peşəkar töhfə də qiymətləndirilir.' },
+                  { icon: '📋', title: 'Tam tələblər', desc: '"Tam struktur" tabında hər səviyyənin detallı keçid meyarları göstərilir.' },
+                ].map(item => (
+                  <div key={item.title} className="flex gap-3">
+                    <span className="text-base flex-shrink-0">{item.icon}</span>
+                    <div>
+                      <div className="text-xs font-semibold text-[#0f172a]">{item.title}</div>
+                      <div className="text-[11px] text-[#888] mt-0.5 leading-relaxed">{item.desc}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
       {/* ERKƏN YÜKSƏLİŞ */}
       {tab === 'early' && (
-        <div className="max-w-lg space-y-3">
-          <div className="bg-[#0f172a] rounded-2xl p-5 text-white">
-            <div className="text-sm font-bold mb-2">🚀 Erkən yüksəliş nədir?</div>
-            <p className="text-xs leading-relaxed text-white/70">
-              Standart müddəti tamamlamadan əvvəl növbəti karyera səviyyəsinə yüksəlmə imkanıdır.
-              Yüksək performans göstərən əməkdaşlar üçün nəzərdə tutulmuşdur.
-              2 ardıcıl ildə yüksək skor əldə edən işçilər bu hüququ qazanır.
-            </p>
-          </div>
-
-          <div className="bg-white border border-[#e8e8e4] rounded-2xl p-5">
-            <div className="text-xs font-bold text-[#0f172a] mb-4">Meyarlar</div>
-            <div className="space-y-3">
-              {[
-                { icon: '⭐', title: '2 ardıcıl il 4.5+/5.0 performans skoru', desc: '360° survey + rəhbər qiyməti + tapşırıq statistikasının ağırlıqlı ortalaması' },
-                { icon: '✅', title: 'Rəhbər tövsiyəsi', desc: 'Birbaşa rəhbərin yazılı tövsiyəsi — əməkdaşın növbəti səviyyəyə hazır olduğunu təsdiqləyir' },
-                { icon: '📋', title: 'Növbəti səviyyənin tələbləri', desc: '"Tam struktur" tabında hər səviyyə üçün göstərilən bütün meyarların qarşılanması' },
-                { icon: '📅', title: 'Minimum 1 il cari səviyyədə iş', desc: 'Erkən yüksəliş belə, ən azı 1 il cari vəzifədə olmağı tələb edir' },
-              ].map(item => (
-                <div key={item.title} className="flex gap-3 pb-3 border-b border-[#f5f5f0] last:border-0 last:pb-0">
-                  <span className="text-base flex-shrink-0">{item.icon}</span>
-                  <div>
-                    <div className="text-xs font-semibold text-[#0f172a]">{item.title}</div>
-                    <div className="text-[11px] text-[#888] mt-0.5 leading-relaxed">{item.desc}</div>
+        <div className="w-full grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="space-y-3">
+            <div className="bg-[#0f172a] rounded-2xl p-5 text-white">
+              <div className="text-sm font-bold mb-2">🚀 Erkən yüksəliş nədir?</div>
+              <p className="text-xs leading-relaxed text-white/70">Standart müddəti tamamlamadan əvvəl növbəti karyera səviyyəsinə yüksəlmə imkanıdır. Yüksək performans göstərən əməkdaşlar üçün nəzərdə tutulmuşdur. 2 ardıcıl ildə yüksək skor əldə edən işçilər bu hüququ qazanır.</p>
+            </div>
+            <div className="bg-white border border-[#e8e8e4] rounded-2xl p-5">
+              <div className="text-xs font-bold text-[#0f172a] mb-4">Meyarlar</div>
+              <div className="space-y-3">
+                {[
+                  { icon: '⭐', title: '2 ardıcıl il 4.5+/5.0 performans skoru', desc: '360° survey + rəhbər qiyməti + tapşırıq statistikasının ağırlıqlı ortalaması' },
+                  { icon: '✅', title: 'Rəhbər tövsiyəsi', desc: 'Birbaşa rəhbərin yazılı tövsiyəsi — əməkdaşın növbəti səviyyəyə hazır olduğunu təsdiqləyir' },
+                  { icon: '📋', title: 'Növbəti səviyyənin tələbləri', desc: '"Tam struktur" tabında hər səviyyə üçün göstərilən bütün meyarların qarşılanması' },
+                  { icon: '📅', title: 'Minimum 1 il cari səviyyədə iş', desc: 'Erkən yüksəliş belə, ən azı 1 il cari vəzifədə olmağı tələb edir' },
+                ].map(item => (
+                  <div key={item.title} className="flex gap-3 pb-3 border-b border-[#f5f5f0] last:border-0 last:pb-0">
+                    <span className="text-base flex-shrink-0">{item.icon}</span>
+                    <div>
+                      <div className="text-xs font-semibold text-[#0f172a]">{item.title}</div>
+                      <div className="text-[11px] text-[#888] mt-0.5 leading-relaxed">{item.desc}</div>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </div>
-
-          <div className="bg-white border border-[#e8e8e4] rounded-2xl p-5">
+          <div className="bg-white border border-[#e8e8e4] rounded-2xl p-5 h-fit">
             <div className="text-xs font-bold text-[#0f172a] mb-4">Performans skoru necə hesablanır?</div>
-            <div className="space-y-2.5">
+            <div className="space-y-3">
               {[
                 { label: '360° Survey', weight: '40%', color: '#0f172a', desc: 'Həmkarlar + rəhbər + özü — Google Forms vasitəsilə ildə bir dəfə' },
                 { label: 'Rəhbər qiyməti', weight: '30%', color: '#1a3d2e', desc: 'Texniki keyfiyyət, müstəqillik, şirkətə töhfə — ildə bir dəfə admin daxil edir' },
@@ -320,13 +345,13 @@ export default function HierarchyPage() {
                 </div>
               ))}
             </div>
-            <div className="mt-4 pt-4 border-t border-[#f0f0ec] flex items-center justify-between">
+            <div className="mt-5 pt-4 border-t border-[#f0f0ec] flex items-center justify-between">
               <div>
                 <div className="text-[11px] text-[#888]">Erkən yüksəliş hüququ üçün minimum</div>
-                <div className="text-[11px] text-[#888] mt-0.5">2 ardıcıl ildə bu skoru saxlamaq lazımdır</div>
+                <div className="text-[11px] text-[#888] mt-0.5">2 ardıcıl ildə saxlamaq lazımdır</div>
               </div>
               <div className="text-right">
-                <div className="text-xl font-black text-green-600">4.5+</div>
+                <div className="text-2xl font-black text-green-600">4.5+</div>
                 <div className="text-[10px] text-[#aaa]">/ 5.0 bal</div>
               </div>
             </div>
