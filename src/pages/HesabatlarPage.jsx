@@ -16,6 +16,7 @@ function fmt(n) { return '₼' + Math.round(Number(n || 0)).toLocaleString() }
 export default function HesabatlarPage() {
   const [loading, setLoading] = useState(true)
   const [year, setYear] = useState(new Date().getFullYear())
+  const [filterMonth, setFilterMonth] = useState(0)
   const [data, setData] = useState({
     combined: [], clientBreakdown: [], projectStatus: [],
     taskStats: [], expByCategory: [],
@@ -44,7 +45,7 @@ export default function HesabatlarPage() {
     const receivables = recRes.data || []
 
     // Aylıq məlumatlar
-    const combined = MONTHS.map((month, idx) => {
+    const combined = MONTHS.filter((_, idx) => filterMonth === 0 || idx + 1 === filterMonth).map((month, idx) => {
       const monthInc = incomes.filter(i => {
         if (!i.payment_date) return false
         const d = new Date(i.payment_date)
@@ -131,10 +132,10 @@ export default function HesabatlarPage() {
     a.href = url; a.download = `hesabat-${year}.csv`; a.click()
   }
 
-  if (loading) return <div className="p-6 space-y-4"><Skeleton className="h-20" /><Skeleton className="h-64" /></div>
+  if (loading) return <div className="p-4 lg:p-6 space-y-4"><Skeleton className="h-20" /><Skeleton className="h-64" /></div>
 
   return (
-    <div className="p-6 fade-in">
+    <div className="p-4 lg:p-6 fade-in">
       <PageHeader
         title="Hesabatlar"
         subtitle="Maliyyə və əməliyyat analitikası"
@@ -143,6 +144,13 @@ export default function HesabatlarPage() {
             <select value={year} onChange={e => setYear(Number(e.target.value))}
               className="px-3 py-1.5 border border-[#e8e8e4] rounded-lg text-xs focus:outline-none focus:border-[#0f172a]">
               {[2024, 2025, 2026, 2027].map(y => <option key={y} value={y}>{y}</option>)}
+            </select>
+            <select value={filterMonth} onChange={e => setFilterMonth(Number(e.target.value))}
+              className="px-3 py-1.5 border border-[#e8e8e4] rounded-lg text-xs focus:outline-none focus:border-[#0f172a]">
+              <option value={0}>Bütün aylar</option>
+              {['Yan','Fev','Mar','Apr','May','İyn','İyl','Avq','Sen','Okt','Noy','Dek'].map((m,i) => (
+                <option key={i+1} value={i+1}>{m}</option>
+              ))}
             </select>
             <Button variant="secondary" size="sm" onClick={exportCSV}>
               <IconDownload size={13} /> CSV

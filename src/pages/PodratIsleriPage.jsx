@@ -293,6 +293,8 @@ export default function PodratIsleriPage() {
   const [projects, setProjects] = useState([])
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
+  const [filterStatus, setFilterStatus] = useState('all')
+  const [filterPayment, setFilterPayment] = useState('all')
   const [editWork, setEditWork] = useState(null)
   const [deleteWork, setDeleteWork] = useState(null)
 
@@ -361,6 +363,11 @@ export default function PodratIsleriPage() {
   }
 
   const getProject = id => projects.find(p => p.id === id)
+  const filteredWorks = works.filter(w => {
+    if (filterStatus !== 'all' && w.work_status !== filterStatus) return false
+    if (filterPayment !== 'all' && w.payment_status !== filterPayment) return false
+    return true
+  })
   const totalContract = works.reduce((s, w) => s + Number(w.contract_amount || 0), 0)
   const totalWithEdv = works.reduce((s, w) => s + Number(w.amount_with_edv || w.contract_amount || 0), 0)
   const totalEdvAmt = works.filter(w => w.payment_method === 'transfer').reduce((s, w) => s + Number(w.edv_amount || 0), 0)
@@ -380,6 +387,19 @@ export default function PodratIsleriPage() {
         {isAdmin && <StatCard label="ƏDV məbləği" value={fmt(totalEdvAmt)} />}
         {isAdmin && <StatCard label="Müqavilə (ƏDV daxil)" value={fmt(totalWithEdv)} />}
         <StatCard label="Aktiv podratlar" value={works.filter(w => w.work_status === 'in_progress').length} />
+      </div>
+
+      <div className="flex gap-2 mb-3 flex-wrap">
+        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
+          className="px-3 py-1.5 border border-[#e8e8e4] rounded-lg text-xs focus:outline-none focus:border-[#0f172a]">
+          <option value="all">Bütün iş statusları</option>
+          {WORK_STATUSES.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
+        </select>
+        <select value={filterPayment} onChange={e => setFilterPayment(e.target.value)}
+          className="px-3 py-1.5 border border-[#e8e8e4] rounded-lg text-xs focus:outline-none focus:border-[#0f172a]">
+          <option value="all">Bütün ödəniş statusları</option>
+          {PAYMENT_STATUSES.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
+        </select>
       </div>
 
       {works.length === 0 ? (
@@ -404,7 +424,7 @@ export default function PodratIsleriPage() {
                 </tr>
               </thead>
               <tbody>
-                {works.map(w => {
+                {filteredWorks.map(w => {
                   const days = w.planned_deadline ? Math.floor((new Date(w.planned_deadline) - new Date()) / 86400000) : null
                   const ws = WORK_STATUSES.find(s => s.key === w.work_status)
                   const ps = PAYMENT_STATUSES.find(s => s.key === w.payment_status)

@@ -27,7 +27,7 @@ export default function DashboardPage() {
     deadlines: [], overdueReceivables: []
   })
 
-  useEffect(() => { loadDashboard() }, [])
+  useEffect(() => { loadDashboard() }, [filterYear, filterMonth])
 
   async function loadDashboard() {
     try {
@@ -40,10 +40,26 @@ export default function DashboardPage() {
       ])
 
       const projects = projectsRes.data || []
-      const incomes = incomesRes.data || []
+      const allIncomes = incomesRes.data || []
       const debts = debtsRes.data || []
-      const expenses = expensesRes.data || []
+      const allExpenses = expensesRes.data || []
       const tasks = tasksRes.data || []
+
+      // Filter by year/month
+      const incomes = allIncomes.filter(i => {
+        if (!i.payment_date) return filterYear === 0
+        const d = new Date(i.payment_date)
+        if (filterYear && d.getFullYear() !== filterYear) return false
+        if (filterMonth && d.getMonth() + 1 !== filterMonth) return false
+        return true
+      })
+      const expenses = allExpenses.filter(e => {
+        if (!e.expense_date) return filterYear === 0
+        const d = new Date(e.expense_date)
+        if (filterYear && d.getFullYear() !== filterYear) return false
+        if (filterMonth && d.getMonth() + 1 !== filterMonth) return false
+        return true
+      })
 
       const totalPortfolio = projects.reduce((s, p) => s + Number(p.contract_value || 0), 0)
       // ƏDV xaric məbləğlər

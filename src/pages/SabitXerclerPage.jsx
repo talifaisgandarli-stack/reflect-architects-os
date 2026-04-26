@@ -103,6 +103,8 @@ export default function SabitXerclerPage() {
   const [subs, setSubs] = useState([])
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
+  const [filterFreq, setFilterFreq] = useState('all')
+  const [filterActive, setFilterActive] = useState('active')
   const [editSub, setEditSub] = useState(null)
   const [deleteSub, setDeleteSub] = useState(null)
 
@@ -145,6 +147,12 @@ export default function SabitXerclerPage() {
     setDeleteSub(null); await loadData()
   }
 
+  const filteredSubs = subs.filter(s => {
+    if (filterFreq !== 'all' && s.frequency !== filterFreq) return false
+    if (filterActive === 'active' && !s.is_active) return false
+    if (filterActive === 'inactive' && s.is_active) return false
+    return true
+  })
   const active = subs.filter(s => s.is_active)
   const monthlyTotal = active.reduce((sum, s) => {
     const m = s.frequency === 'monthly' ? Number(s.amount) : s.frequency === 'yearly' ? Number(s.amount) / 12 : s.frequency === 'quarterly' ? Number(s.amount) / 3 : 0
@@ -156,18 +164,32 @@ export default function SabitXerclerPage() {
     return sum + m
   }, 0)
 
-  if (loading) return <div className="p-6"><Skeleton className="h-64" /></div>
+  if (loading) return <div className="p-4 lg:p-6"><Skeleton className="h-64" /></div>
 
   return (
-    <div className="p-6 fade-in">
+    <div className="p-4 lg:p-6 fade-in">
       <PageHeader title="Sabit Xərclər" subtitle="Müntəzəm ödənişlər"
         action={<Button onClick={() => { setEditSub(null); setModalOpen(true) }} size="sm"><IconPlus size={14} /> Yeni sabit xərc</Button>} />
 
-      <div className="grid grid-cols-4 gap-4 mb-5">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
         <StatCard label="Aktiv maddə" value={active.length} />
         <StatCard label="Aylıq (ƏDV xaric)" value={fmt(Math.round(monthlyTotal))} variant="danger" />
         <StatCard label="Aylıq ƏDV" value={fmt(Math.round(monthlyTotalWithEdv - monthlyTotal))} />
         <StatCard label="Aylıq (ƏDV daxil)" value={fmt(Math.round(monthlyTotalWithEdv))} variant="danger" />
+      </div>
+
+      <div className="flex gap-2 mb-3 flex-wrap">
+        <select value={filterActive} onChange={e => setFilterActive(e.target.value)}
+          className="px-3 py-1.5 border border-[#e8e8e4] rounded-lg text-xs focus:outline-none focus:border-[#0f172a]">
+          <option value="all">Hamısı</option>
+          <option value="active">Aktiv</option>
+          <option value="inactive">Deaktiv</option>
+        </select>
+        <select value={filterFreq} onChange={e => setFilterFreq(e.target.value)}
+          className="px-3 py-1.5 border border-[#e8e8e4] rounded-lg text-xs focus:outline-none focus:border-[#0f172a]">
+          <option value="all">Bütün tezliklər</option>
+          {FREQUENCIES.map(f => <option key={f.key} value={f.key}>{f.label}</option>)}
+        </select>
       </div>
 
       {subs.length === 0 ? (
@@ -191,7 +213,7 @@ export default function SabitXerclerPage() {
                 </tr>
               </thead>
               <tbody>
-                {subs.map(s => {
+                {filteredSubs.map(s => {
                   const freq = FREQUENCIES.find(f => f.key === s.frequency)
                   const isTransfer = s.payment_method === 'transfer'
                   return (
