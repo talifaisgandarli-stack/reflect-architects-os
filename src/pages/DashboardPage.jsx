@@ -45,23 +45,32 @@ export default function DashboardPage() {
       const allExpenses = expensesRes.data || []
       const tasks = tasksRes.data || []
 
-      // Filter by year/month
+      // Filter incomes by payment_date
       const incomes = allIncomes.filter(i => {
-        if (!i.payment_date) return filterYear === 0
+        if (!i.payment_date) return false
         const d = new Date(i.payment_date)
-        if (filterYear && d.getFullYear() !== filterYear) return false
+        if (d.getFullYear() !== filterYear) return false
         if (filterMonth && d.getMonth() + 1 !== filterMonth) return false
         return true
       })
+      // Filter expenses by expense_date
       const expenses = allExpenses.filter(e => {
-        if (!e.expense_date) return filterYear === 0
+        if (!e.expense_date) return false
         const d = new Date(e.expense_date)
-        if (filterYear && d.getFullYear() !== filterYear) return false
+        if (d.getFullYear() !== filterYear) return false
         if (filterMonth && d.getMonth() + 1 !== filterMonth) return false
         return true
       })
 
-      const totalPortfolio = projects.reduce((s, p) => s + Number(p.contract_value || 0), 0)
+      // Filter projects by deadline
+      const filteredProjects = projects.filter(p => {
+        if (!p.deadline) return false
+        const d = new Date(p.deadline)
+        if (d.getFullYear() !== filterYear) return false
+        if (filterMonth && d.getMonth() + 1 !== filterMonth) return false
+        return true
+      })
+      const totalPortfolio = filteredProjects.reduce((s, p) => s + Number(p.contract_value || 0), 0)
       // ƏDV xaric məbləğlər
       const totalIncome = incomes.reduce((s, i) => s + Number(i.amount || 0), 0)
       const incomeCash = incomes.filter(i => i.payment_method === 'cash').reduce((s, i) => s + Number(i.amount || 0), 0)
@@ -88,8 +97,15 @@ export default function DashboardPage() {
       const netTransfer = incomeTransfer - expenseTransfer
       const netWithEdv = totalIncomeWithEdv - expenseTotalWithEdv
 
-      const totalDebt = debts.filter(d => !d.paid).reduce((s, d) => s + ((Number(d.expected_amount) || 0) - (Number(d.paid_amount) || 0)), 0)
-      const activeProjects = projects.filter(p => p.status === 'active').length
+      const filteredDebts = debts.filter(d => {
+        if (!d.expected_date) return false
+        const dt = new Date(d.expected_date)
+        if (dt.getFullYear() !== filterYear) return false
+        if (filterMonth && dt.getMonth() + 1 !== filterMonth) return false
+        return true
+      })
+      const totalDebt = filteredDebts.filter(d => !d.paid).reduce((s, d) => s + ((Number(d.expected_amount) || 0) - (Number(d.paid_amount) || 0)), 0)
+      const activeProjects = filteredProjects.filter(p => p.status === 'active').length
 
       const today = new Date()
       const overdueTasksCount = tasks.filter(t =>
@@ -109,7 +125,7 @@ export default function DashboardPage() {
       })
 
       const clientMap = {}
-      projects.forEach(p => {
+      filteredProjects.forEach(p => {
         const name = p.clients?.name || 'Digər'
         clientMap[name] = (clientMap[name] || 0) + Number(p.contract_value || 0)
       })

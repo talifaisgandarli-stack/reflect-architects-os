@@ -26,7 +26,7 @@ export default function HesabatlarPage() {
     netEdv: 0
   })
 
-  useEffect(() => { loadData() }, [year])
+  useEffect(() => { loadData() }, [year, filterMonth])
 
   async function loadData() {
     setLoading(true)
@@ -45,7 +45,10 @@ export default function HesabatlarPage() {
     const receivables = recRes.data || []
 
     // Aylıq məlumatlar
-    const combined = MONTHS.filter((_, idx) => filterMonth === 0 || idx + 1 === filterMonth).map((month, idx) => {
+    const combined = MONTHS.map((month, idx) => {
+      if (filterMonth !== 0 && idx + 1 !== filterMonth) {
+        return { month, income: 0, incomeWithEdv: 0, expense: 0, expenseWithEdv: 0, profit: 0, profitWithEdv: 0 }
+      }
       const monthInc = incomes.filter(i => {
         if (!i.payment_date) return false
         const d = new Date(i.payment_date)
@@ -101,13 +104,27 @@ export default function HesabatlarPage() {
     const expByCategory = Object.entries(catMap).map(([name, value]) => ({ name, value: Math.round(value) })).sort((a, b) => b.value - a.value)
 
     // Ümumi KPI
-    const totalIncome = incomes.reduce((s, i) => s + Number(i.amount || 0), 0)
-    const totalIncomeWithEdv = incomes.reduce((s, i) => s + Number(i.amount_with_edv || i.amount || 0), 0)
-    const totalEdvCollected = incomes.filter(i => i.payment_method === 'transfer').reduce((s, i) => s + Number(i.edv_amount || 0), 0)
+    const filtInc = incomes.filter(i => {
+      if (!i.payment_date) return false
+      const d = new Date(i.payment_date)
+      if (d.getFullYear() !== year) return false
+      if (filterMonth && d.getMonth() + 1 !== filterMonth) return false
+      return true
+    })
+    const filtExp = expenses.filter(e => {
+      if (!e.expense_date) return false
+      const d = new Date(e.expense_date)
+      if (d.getFullYear() !== year) return false
+      if (filterMonth && d.getMonth() + 1 !== filterMonth) return false
+      return true
+    })
+    const totalIncome = filtInc.reduce((s, i) => s + Number(i.amount || 0), 0)
+    const totalIncomeWithEdv = filtInc.reduce((s, i) => s + Number(i.amount_with_edv || i.amount || 0), 0)
+    const totalEdvCollected = filtInc.filter(i => i.payment_method === 'transfer').reduce((s, i) => s + Number(i.edv_amount || 0), 0)
 
-    const totalExpense = expenses.reduce((s, e) => s + Number(e.amount || 0), 0)
-    const totalExpenseWithEdv = expenses.reduce((s, e) => s + Number(e.amount_with_edv || e.amount || 0), 0)
-    const totalEdvPaid = expenses.filter(e => e.payment_method === 'transfer').reduce((s, e) => s + Number(e.edv_amount || 0), 0)
+    const totalExpense = filtExp.reduce((s, e) => s + Number(e.amount || 0), 0)
+    const totalExpenseWithEdv = filtExp.reduce((s, e) => s + Number(e.amount_with_edv || e.amount || 0), 0)
+    const totalEdvPaid = filtExp.filter(e => e.payment_method === 'transfer').reduce((s, e) => s + Number(e.edv_amount || 0), 0)
 
     const totalReceivable = receivables.filter(r => !r.paid).reduce((s, r) => s + (Number(r.expected_amount || 0) - Number(r.paid_amount || 0)), 0)
     const netEdv = totalEdvCollected - totalEdvPaid

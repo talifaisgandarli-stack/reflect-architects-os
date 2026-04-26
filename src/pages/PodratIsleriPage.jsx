@@ -12,9 +12,8 @@ function withEdv(n) { return Math.round(Number(n || 0) * (1 + EDV)) }
 
 const PAYMENT_STATUSES = [
   { key: 'not_started', label: 'Başlanmayıb', color: 'default' },
-  { key: '30_paid', label: '30% Ödənilib', color: 'info' },
+  { key: 'advance_paid', label: 'Avans ödənilib', color: 'info' },
   { key: 'interim_paid', label: 'Aralıq ödənilib', color: 'warning' },
-  { key: 'hold_10', label: '10% Saxlanılır', color: 'warning' },
   { key: 'fully_closed', label: 'Tam bağlandı', color: 'success' },
 ]
 
@@ -25,35 +24,30 @@ const WORK_STATUSES = [
   { key: 'overdue', label: 'Gecikmiş', color: 'danger' },
 ]
 
-function EdvPreview({ amount, isTransfer }) {
+const MONTHS = ['Yan','Fev','Mar','Apr','May','İyn','İyl','Avq','Sen','Okt','Noy','Dek']
+
+function EdvBox({ amount, method }) {
   const amt = Number(amount) || 0
   if (!amt) return null
+  const isT = method === 'transfer'
   return (
-    <div className={`rounded-lg p-2.5 text-xs mt-1 ${isTransfer ? 'bg-amber-50 border border-amber-200' : 'bg-[#f5f5f0]'}`}>
-      {isTransfer ? (
-        <div className="grid grid-cols-3 gap-2 text-center">
-          <div><div className="text-[#888] mb-0.5">ƏDV xaric</div><div className="font-bold text-[#0f172a]">{fmt(amt)}</div></div>
-          <div><div className="text-[#888] mb-0.5">ƏDV (18%)</div><div className="font-bold text-amber-600">{fmt(edv(amt))}</div></div>
-          <div><div className="text-[#888] mb-0.5">ƏDV daxil</div><div className="font-bold text-green-600">{fmt(withEdv(amt))}</div></div>
-        </div>
-      ) : (
-        <div className="text-center text-[#555]">Nağd — ƏDV yoxdur · Cəmi: <span className="font-bold">{fmt(amt)}</span></div>
-      )}
+    <div className={`rounded p-1.5 text-[10px] mt-1 ${isT ? 'bg-amber-50 border border-amber-100' : 'bg-[#f5f5f0]'}`}>
+      {isT ? `ƏDV xaric: ${fmt(amt)} · ƏDV: ${fmt(edv(amt))} · Cəmi: ${fmt(withEdv(amt))}` : `Nağd · ${fmt(amt)}`}
     </div>
   )
 }
 
 function PodratForm({ open, onClose, onSave, work, projects }) {
-  const [form, setForm] = useState({
+  const empty = {
     name: '', outsource_type: 'company', project_id: '', work_type: '',
     contract_amount: '', payment_method: 'transfer',
-    payment_status: 'not_started', work_status: 'not_started',
-    advance_percent: 30, paid_30_percent: false, paid_30_date: '', paid_30_method: 'transfer',
+    advance_percent: 30, advance_date: '', advance_paid: false, advance_method: 'transfer',
     interim_payments: [],
-    paid_final_10: false, paid_final_10_date: '', paid_final_10_method: 'transfer',
-    client_approval_date: '', planned_deadline: '', followup_date: '',
-    contract_number: '', notes: ''
-  })
+    final_paid: false, final_date: '', final_method: 'transfer',
+    payment_status: 'not_started', work_status: 'not_started',
+    client_approval_date: '', planned_deadline: '', contract_number: '', notes: ''
+  }
+  const [form, setForm] = useState(empty)
 
   useEffect(() => {
     if (work) {
@@ -61,49 +55,48 @@ function PodratForm({ open, onClose, onSave, work, projects }) {
         name: work.name || '', outsource_type: work.outsource_type || 'company',
         project_id: work.project_id || '', work_type: work.work_type || '',
         contract_amount: work.contract_amount || '', payment_method: work.payment_method || 'transfer',
-        payment_status: work.payment_status || 'not_started', work_status: work.work_status || 'not_started',
-        advance_percent: work.advance_percent || 30, paid_30_percent: work.paid_30_percent || false, paid_30_date: work.paid_30_date || '',
-        paid_30_method: work.paid_30_method || 'transfer',
-        interim_payments: work.interim_payments || [],
-        paid_final_10: work.paid_final_10 || false, paid_final_10_date: work.paid_final_10_date || '',
-        paid_final_10_method: work.paid_final_10_method || 'transfer',
+        advance_percent: work.advance_percent || 30,
+        advance_date: work.advance_date || '', advance_paid: work.advance_paid || false,
+        advance_method: work.advance_method || 'transfer',
+        interim_payments: Array.isArray(work.interim_payments) ? work.interim_payments : [],
+        final_paid: work.final_paid || false, final_date: work.final_date || '',
+        final_method: work.final_method || 'transfer',
+        payment_status: work.payment_status || 'not_started',
+        work_status: work.work_status || 'not_started',
         client_approval_date: work.client_approval_date || '',
-        planned_deadline: work.planned_deadline || '', followup_date: work.followup_date || '',
+        planned_deadline: work.planned_deadline || '',
         contract_number: work.contract_number || '', notes: work.notes || ''
       })
-    } else {
-      setForm({ name: '', outsource_type: 'company', project_id: '', work_type: '', contract_amount: '', payment_method: 'transfer', advance_percent: 30, payment_status: 'not_started', work_status: 'not_started', paid_30_percent: false, paid_30_date: '', paid_30_method: 'transfer', interim_payments: [], paid_final_10: false, paid_final_10_date: '', paid_final_10_method: 'transfer', client_approval_date: '', planned_deadline: '', followup_date: '', contract_number: '', notes: '' })
-    }
+    } else setForm(empty)
   }, [work, open])
 
   function set(k, v) { setForm(f => ({ ...f, [k]: v })) }
 
+  const amt = Number(form.contract_amount) || 0
+  const advanceAmt = Math.round(amt * (Number(form.advance_percent) || 30) / 100)
+  const interimTotal = (form.interim_payments || []).reduce((s, p) => s + (Number(p.amount) || 0), 0)
+  const remaining = amt - (form.advance_paid ? advanceAmt : 0) - interimTotal - (form.final_paid ? amt - advanceAmt - interimTotal : 0)
+
   function addInterim() {
-    setForm(f => ({ ...f, interim_payments: [...f.interim_payments, { amount: '', date: '', method: 'transfer' }] }))
-  }
-  function removeInterim(i) {
-    setForm(f => ({ ...f, interim_payments: f.interim_payments.filter((_, idx) => idx !== i) }))
+    set('interim_payments', [...(form.interim_payments || []), { amount: '', method: 'transfer', date: '', note: '' }])
   }
   function setInterim(i, k, v) {
-    setForm(f => {
-      const arr = [...f.interim_payments]
-      arr[i] = { ...arr[i], [k]: v }
-      return { ...f, interim_payments: arr }
-    })
+    const arr = [...form.interim_payments]
+    arr[i] = { ...arr[i], [k]: v }
+    set('interim_payments', arr)
+  }
+  function removeInterim(i) {
+    set('interim_payments', form.interim_payments.filter((_, idx) => idx !== i))
   }
 
-  const amt30 = form.paid_30_percent ? Math.round(Number(form.contract_amount || 0) * (Number(form.advance_percent) || 30) / 100) : 0
-  const amt10 = form.paid_final_10 ? Math.round(Number(form.contract_amount || 0) * 0.1) : 0
-
   return (
-    <Modal open={open} onClose={onClose} title={work ? 'Podrat işini redaktə et' : 'Yeni podrat işi'} size="lg">
-      <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-3">
+    <Modal open={open} onClose={onClose} title={work ? 'Podrat işini redaktə et' : 'Yeni podrat işi'} size="xl">
+      <div className="space-y-3">
+        <div className="grid grid-cols-3 gap-3">
           <div className="col-span-2">
             <label className="block text-xs font-medium text-[#555] mb-1">Podratçı adı *</label>
             <input value={form.name} onChange={e => set('name', e.target.value)}
-              className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]"
-              placeholder="Şirkət və ya şəxs adı" />
+              className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]" placeholder="Şirkət və ya şəxs adı" />
           </div>
           <div>
             <label className="block text-xs font-medium text-[#555] mb-1">Növ</label>
@@ -124,8 +117,12 @@ function PodratForm({ open, onClose, onSave, work, projects }) {
           <div>
             <label className="block text-xs font-medium text-[#555] mb-1">İş növü</label>
             <input value={form.work_type} onChange={e => set('work_type', e.target.value)}
-              className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]"
-              placeholder="Konstruksiya, MEP..." />
+              className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]" placeholder="Konstruksiya, MEP..." />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-[#555] mb-1">Müqavilə nömrəsi</label>
+            <input value={form.contract_number} onChange={e => set('contract_number', e.target.value)}
+              className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]" placeholder="№..." />
           </div>
           <div>
             <label className="block text-xs font-medium text-[#555] mb-1">Müqavilə məbləği (₼, ƏDV xaric)</label>
@@ -141,119 +138,6 @@ function PodratForm({ open, onClose, onSave, work, projects }) {
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-[#555] mb-1">Müqavilə nömrəsi</label>
-            <input value={form.contract_number} onChange={e => set('contract_number', e.target.value)}
-              className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]" placeholder="№..." />
-          </div>
-        </div>
-
-        {/* ƏDV preview — müqavilə məbləği */}
-        {Number(form.contract_amount) > 0 && (
-          <EdvPreview amount={form.contract_amount} isTransfer={form.payment_method === 'transfer'} />
-        )}
-
-        {/* Ödəniş mərhələləri */}
-        <div className="border-t border-[#f0f0ec] pt-3">
-          <div className="text-xs font-bold text-[#0f172a] mb-3">Ödəniş mərhələləri</div>
-
-          {/* 30% */}
-          <div className="bg-[#fafaf8] border border-[#e8e8e4] rounded-lg p-3 mb-2">
-            <div className="flex items-center gap-2 mb-2">
-              <input type="checkbox" checked={form.paid_30_percent} onChange={e => set('paid_30_percent', e.target.checked)}
-                className="w-4 h-4 accent-[#0f172a]" />
-              <span className="text-xs font-medium text-[#0f172a]">Avans ödənilib</span>
-              <div className="flex items-center gap-1 ml-2">
-                <input type="number" value={form.advance_percent} onChange={e => set('advance_percent', e.target.value)}
-                  className="w-14 px-2 py-0.5 border border-[#e8e8e4] rounded text-xs focus:outline-none focus:border-[#0f172a]"
-                  min="1" max="100" />
-                <span className="text-xs text-[#888]">%</span>
-              </div>
-              {amt30 > 0 && <span className="text-xs text-[#888] ml-auto">{fmt(amt30)}</span>}
-            </div>
-            {form.paid_30_percent && (
-              <div className="grid grid-cols-2 gap-2 mt-2">
-                <input type="date" value={form.paid_30_date} onChange={e => set('paid_30_date', e.target.value)}
-                  className="w-full px-2 py-1.5 border border-[#e8e8e4] rounded text-xs focus:outline-none focus:border-[#0f172a]" />
-                <select value={form.paid_30_method} onChange={e => set('paid_30_method', e.target.value)}
-                  className="w-full px-2 py-1.5 border border-[#e8e8e4] rounded text-xs focus:outline-none focus:border-[#0f172a]">
-                  <option value="transfer">Köçürmə</option>
-                  <option value="cash">Nağd</option>
-                </select>
-                <div className="col-span-2">
-                  <EdvPreview amount={amt30} isTransfer={form.paid_30_method === 'transfer'} />
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Aralıq ödənişlər */}
-          <div className="mb-2">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-medium text-[#0f172a]">Aralıq ödənişlər</span>
-              <button onClick={addInterim}
-                className="text-xs text-blue-500 hover:text-blue-700 font-medium">+ Əlavə et</button>
-            </div>
-            {form.interim_payments.map((ip, i) => (
-              <div key={i} className="bg-[#fafaf8] border border-[#e8e8e4] rounded-lg p-3 mb-2">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-medium text-[#555]">Aralıq ödəniş {i + 1}</span>
-                  <button onClick={() => removeInterim(i)} className="text-[#aaa] hover:text-red-500 text-xs">Sil</button>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <input type="number" placeholder="Məbləğ (₼)" value={ip.amount} onChange={e => setInterim(i, 'amount', e.target.value)}
-                    className="w-full px-2 py-1.5 border border-[#e8e8e4] rounded text-xs focus:outline-none focus:border-[#0f172a]" />
-                  <select value={ip.method} onChange={e => setInterim(i, 'method', e.target.value)}
-                    className="w-full px-2 py-1.5 border border-[#e8e8e4] rounded text-xs focus:outline-none focus:border-[#0f172a]">
-                    <option value="transfer">Köçürmə</option>
-                    <option value="cash">Nağd</option>
-                  </select>
-                  <input type="date" value={ip.date} onChange={e => setInterim(i, 'date', e.target.value)}
-                    className="w-full px-2 py-1.5 border border-[#e8e8e4] rounded text-xs focus:outline-none focus:border-[#0f172a]" />
-                  <div />
-                  {Number(ip.amount) > 0 && (
-                    <div className="col-span-2">
-                      <EdvPreview amount={ip.amount} isTransfer={ip.method === 'transfer'} />
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Final 10% */}
-          <div className="bg-[#fafaf8] border border-[#e8e8e4] rounded-lg p-3">
-            <div className="flex items-center gap-2 mb-2">
-              <input type="checkbox" checked={form.paid_final_10} onChange={e => set('paid_final_10', e.target.checked)}
-                className="w-4 h-4 accent-[#0f172a]" />
-              <span className="text-xs font-medium text-[#0f172a]">Final 10% ödənilib (sifarişçi təsdiqindən sonra)</span>
-              {amt10 > 0 && <span className="text-xs text-[#888] ml-auto">{fmt(amt10)}</span>}
-            </div>
-            {form.paid_final_10 && (
-              <div className="grid grid-cols-2 gap-2 mt-2">
-                <input type="date" value={form.paid_final_10_date} onChange={e => set('paid_final_10_date', e.target.value)}
-                  className="w-full px-2 py-1.5 border border-[#e8e8e4] rounded text-xs focus:outline-none focus:border-[#0f172a]" />
-                <select value={form.paid_final_10_method} onChange={e => set('paid_final_10_method', e.target.value)}
-                  className="w-full px-2 py-1.5 border border-[#e8e8e4] rounded text-xs focus:outline-none focus:border-[#0f172a]">
-                  <option value="transfer">Köçürmə</option>
-                  <option value="cash">Nağd</option>
-                </select>
-                <div className="col-span-2">
-                  <EdvPreview amount={amt10} isTransfer={form.paid_final_10_method === 'transfer'} />
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3 border-t border-[#f0f0ec] pt-3">
-          <div>
-            <label className="block text-xs font-medium text-[#555] mb-1">Ödəniş statusu</label>
-            <select value={form.payment_status} onChange={e => set('payment_status', e.target.value)}
-              className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]">
-              {PAYMENT_STATUSES.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
-            </select>
-          </div>
-          <div>
             <label className="block text-xs font-medium text-[#555] mb-1">İş statusu</label>
             <select value={form.work_status} onChange={e => set('work_status', e.target.value)}
               className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]">
@@ -265,10 +149,107 @@ function PodratForm({ open, onClose, onSave, work, projects }) {
             <input type="date" value={form.planned_deadline} onChange={e => set('planned_deadline', e.target.value)}
               className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]" />
           </div>
+        </div>
+
+        {/* ƏDV preview */}
+        {amt > 0 && (
+          <div className={`rounded-lg p-2.5 text-xs ${form.payment_method === 'transfer' ? 'bg-amber-50 border border-amber-200' : 'bg-[#f5f5f0]'}`}>
+            {form.payment_method === 'transfer'
+              ? <span>ƏDV xaric: <b>{fmt(amt)}</b> · ƏDV 18%: <b className="text-amber-600">{fmt(edv(amt))}</b> · ƏDV daxil: <b className="text-green-600">{fmt(withEdv(amt))}</b></span>
+              : <span>Nağd ödəniş · Cəmi: <b>{fmt(amt)}</b></span>}
+          </div>
+        )}
+
+        {/* Ödəniş mərhələləri */}
+        <div className="border border-[#e8e8e4] rounded-lg p-3 space-y-3">
+          <div className="text-xs font-bold text-[#0f172a]">Ödəniş mərhələləri</div>
+
+          {/* Avans */}
+          <div className="bg-[#fafaf8] rounded-lg p-2.5">
+            <div className="flex items-center gap-2 mb-2">
+              <input type="checkbox" checked={form.advance_paid} onChange={e => set('advance_paid', e.target.checked)} className="w-4 h-4 accent-[#0f172a]" />
+              <span className="text-xs font-medium text-[#0f172a]">Avans ödənilib</span>
+              <div className="flex items-center gap-1 ml-1">
+                <input type="number" value={form.advance_percent} onChange={e => set('advance_percent', e.target.value)}
+                  className="w-14 px-2 py-0.5 border border-[#e8e8e4] rounded text-xs" min="1" max="100" />
+                <span className="text-xs text-[#888]">%</span>
+              </div>
+              {amt > 0 && <span className="text-xs text-[#888] ml-auto font-medium">{fmt(advanceAmt)}</span>}
+            </div>
+            {form.advance_paid && (
+              <div className="grid grid-cols-2 gap-2">
+                <input type="date" value={form.advance_date} onChange={e => set('advance_date', e.target.value)}
+                  className="px-2 py-1.5 border border-[#e8e8e4] rounded text-xs" placeholder="Ödəniş tarixi" />
+                <select value={form.advance_method} onChange={e => set('advance_method', e.target.value)}
+                  className="px-2 py-1.5 border border-[#e8e8e4] rounded text-xs">
+                  <option value="transfer">Köçürmə</option>
+                  <option value="cash">Nağd</option>
+                </select>
+                <div className="col-span-2"><EdvBox amount={advanceAmt} method={form.advance_method} /></div>
+              </div>
+            )}
+          </div>
+
+          {/* Aralıq ödənişlər */}
           <div>
-            <label className="block text-xs font-medium text-[#555] mb-1">Sifarişçi təsdiq tarixi</label>
-            <input type="date" value={form.client_approval_date} onChange={e => set('client_approval_date', e.target.value)}
-              className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]" />
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-medium text-[#555]">Aralıq ödənişlər</span>
+              <button onClick={addInterim} className="text-xs text-blue-500 hover:text-blue-700 font-medium">+ Əlavə et</button>
+            </div>
+            {(form.interim_payments || []).map((ip, i) => (
+              <div key={i} className="bg-[#fafaf8] rounded-lg p-2.5 mb-2">
+                <div className="flex justify-between items-center mb-1.5">
+                  <span className="text-xs font-medium text-[#555]">Aralıq {i + 1}</span>
+                  <button onClick={() => removeInterim(i)} className="text-[10px] text-red-400 hover:text-red-600">Sil</button>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <input type="number" placeholder="Məbləğ (₼)" value={ip.amount}
+                    onChange={e => setInterim(i, 'amount', e.target.value)}
+                    className="px-2 py-1.5 border border-[#e8e8e4] rounded text-xs" />
+                  <select value={ip.method || 'transfer'} onChange={e => setInterim(i, 'method', e.target.value)}
+                    className="px-2 py-1.5 border border-[#e8e8e4] rounded text-xs">
+                    <option value="transfer">Köçürmə</option>
+                    <option value="cash">Nağd</option>
+                  </select>
+                  <input type="date" value={ip.date || ''} onChange={e => setInterim(i, 'date', e.target.value)}
+                    className="px-2 py-1.5 border border-[#e8e8e4] rounded text-xs" placeholder="Ödəniş tarixi" />
+                  <input placeholder="Qeyd" value={ip.note || ''} onChange={e => setInterim(i, 'note', e.target.value)}
+                    className="px-2 py-1.5 border border-[#e8e8e4] rounded text-xs" />
+                  {Number(ip.amount) > 0 && (
+                    <div className="col-span-2"><EdvBox amount={ip.amount} method={ip.method || 'transfer'} /></div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Final ödəniş */}
+          <div className="bg-[#fafaf8] rounded-lg p-2.5">
+            <div className="flex items-center gap-2 mb-2">
+              <input type="checkbox" checked={form.final_paid} onChange={e => set('final_paid', e.target.checked)} className="w-4 h-4 accent-[#0f172a]" />
+              <span className="text-xs font-medium text-[#0f172a]">Final ödəniş ödənilib</span>
+              {amt > 0 && form.final_paid && <span className="text-xs text-[#888] ml-auto font-medium">{fmt(Math.max(0, remaining + (form.final_paid ? Math.max(0, amt - advanceAmt - interimTotal) : 0)))}</span>}
+            </div>
+            {form.final_paid && (
+              <div className="grid grid-cols-2 gap-2">
+                <input type="date" value={form.final_date} onChange={e => set('final_date', e.target.value)}
+                  className="px-2 py-1.5 border border-[#e8e8e4] rounded text-xs" placeholder="Ödəniş tarixi" />
+                <select value={form.final_method} onChange={e => set('final_method', e.target.value)}
+                  className="px-2 py-1.5 border border-[#e8e8e4] rounded text-xs">
+                  <option value="transfer">Köçürmə</option>
+                  <option value="cash">Nağd</option>
+                </select>
+              </div>
+            )}
+          </div>
+
+          {/* Ödəniş statusu */}
+          <div>
+            <label className="block text-xs font-medium text-[#555] mb-1">Ödəniş statusu</label>
+            <select value={form.payment_status} onChange={e => set('payment_status', e.target.value)}
+              className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]">
+              {PAYMENT_STATUSES.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
+            </select>
           </div>
         </div>
 
@@ -277,6 +258,7 @@ function PodratForm({ open, onClose, onSave, work, projects }) {
           <textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={2}
             className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a] resize-none" />
         </div>
+
         <div className="flex gap-2 pt-2 border-t border-[#f0f0ec]">
           <Button variant="secondary" onClick={onClose}>Ləğv et</Button>
           <Button onClick={() => onSave(form)} className="ml-auto">{work ? 'Yadda saxla' : 'Əlavə et'}</Button>
@@ -293,10 +275,14 @@ export default function PodratIsleriPage() {
   const [projects, setProjects] = useState([])
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
-  const [filterStatus, setFilterStatus] = useState('all')
-  const [filterPayment, setFilterPayment] = useState('all')
   const [editWork, setEditWork] = useState(null)
   const [deleteWork, setDeleteWork] = useState(null)
+
+  // Filters
+  const [filterYear, setFilterYear] = useState(0)
+  const [filterMonth, setFilterMonth] = useState(0)
+  const [filterProject, setFilterProject] = useState('')
+  const [filterContractor, setFilterContractor] = useState('')
 
   useEffect(() => { loadData() }, [])
 
@@ -304,45 +290,87 @@ export default function PodratIsleriPage() {
     setLoading(true)
     const [wRes, pRes] = await Promise.all([
       supabase.from('outsource_works').select('*').order('created_at', { ascending: false }),
-      supabase.from('projects').select('id, name'),
+      supabase.from('projects').select('id, name').order('name'),
     ])
     setWorks(wRes.data || [])
     setProjects(pRes.data || [])
     setLoading(false)
   }
 
+  // Get all payment dates for a work (avans + aralıq + final)
+  function getPaymentDatesForWork(w) {
+    const dates = []
+    if (w.advance_paid && w.advance_date) dates.push(w.advance_date)
+    if (Array.isArray(w.interim_payments)) {
+      w.interim_payments.forEach(p => { if (p.date) dates.push(p.date) })
+    }
+    if (w.final_paid && w.final_date) dates.push(w.final_date)
+    return dates
+  }
+
+  // Calculate paid amount in selected period
+  function getPaidInPeriod(w) {
+    let total = 0
+    const advAmt = Math.round(Number(w.contract_amount || 0) * (Number(w.advance_percent) || 30) / 100)
+    const interimTotal = (w.interim_payments || []).reduce((s, p) => s + Number(p.amount || 0), 0)
+    const finalAmt = Math.max(0, Number(w.contract_amount || 0) - advAmt - interimTotal)
+
+    if (w.advance_paid && w.advance_date && matchesFilter(w.advance_date)) total += advAmt
+    if (Array.isArray(w.interim_payments)) {
+      w.interim_payments.forEach(p => { if (p.date && matchesFilter(p.date)) total += Number(p.amount || 0) })
+    }
+    if (w.final_paid && w.final_date && matchesFilter(w.final_date)) total += finalAmt
+    return total
+  }
+
+  function matchesFilter(dateStr) {
+    if (!filterYear && !filterMonth) return true
+    if (!dateStr) return false
+    const d = new Date(dateStr)
+    if (filterYear && d.getFullYear() !== filterYear) return false
+    if (filterMonth && d.getMonth() + 1 !== filterMonth) return false
+    return true
+  }
+
+  // Filter works - show works that have at least one payment in the selected period
+  // OR show all if no date filter
+  const filteredWorks = works.filter(w => {
+    if (filterProject && w.project_id !== filterProject) return false
+    if (filterContractor && !w.name.toLowerCase().includes(filterContractor.toLowerCase())) return false
+    if (filterYear || filterMonth) {
+      const dates = getPaymentDatesForWork(w)
+      if (dates.length === 0) return false
+      return dates.some(d => matchesFilter(d))
+    }
+    return true
+  })
+
   async function handleSave(form) {
     if (!form.name.trim()) { addToast('Ad daxil edin', 'error'); return }
     const amt = Number(form.contract_amount) || 0
-    const isTransfer = form.payment_method === 'transfer'
-
-    // Ödənilmiş cəmi hesabla
-    const paid30 = form.paid_30_percent ? Math.round(amt * (Number(form.advance_percent) || 30) / 100) : 0
-    const paidInterim = form.interim_payments.reduce((s, ip) => s + (Number(ip.amount) || 0), 0)
-    const paid10 = form.paid_final_10 ? Math.round(amt * 0.1) : 0
-    const totalPaid = paid30 + paidInterim + paid10
+    const isT = form.payment_method === 'transfer'
+    const advAmt = Math.round(amt * (Number(form.advance_percent) || 30) / 100)
+    const interimTotal = (form.interim_payments || []).reduce((s, p) => s + Number(p.amount || 0), 0)
+    const finalAmt = Math.max(0, amt - advAmt - interimTotal)
+    const totalPaid = (form.advance_paid ? advAmt : 0) + interimTotal + (form.final_paid ? finalAmt : 0)
 
     const data = {
       name: form.name.trim(), outsource_type: form.outsource_type,
       project_id: form.project_id || null, work_type: form.work_type || null,
       contract_amount: amt, payment_method: form.payment_method,
-      edv_amount: isTransfer ? edv(amt) : 0,
-      amount_with_edv: isTransfer ? withEdv(amt) : amt,
-      payment_status: form.payment_status, work_status: form.work_status,
+      edv_amount: isT ? edv(amt) : 0, amount_with_edv: isT ? withEdv(amt) : amt,
       advance_percent: Number(form.advance_percent) || 30,
-      paid_30_percent: form.paid_30_percent, paid_30_date: form.paid_30_date || null,
-      paid_30_method: form.paid_30_method,
+      advance_paid: form.advance_paid, advance_date: form.advance_date || null,
+      advance_method: form.advance_method,
       interim_payments: form.interim_payments,
-      interim_payment: paidInterim,
-      paid_final_10: form.paid_final_10, paid_final_10_date: form.paid_final_10_date || null,
-      paid_final_10_method: form.paid_final_10_method,
+      interim_payment: interimTotal,
+      final_paid: form.final_paid, final_date: form.final_date || null,
+      final_method: form.final_method,
+      payment_status: form.payment_status, work_status: form.work_status,
       client_approval_date: form.client_approval_date || null,
       planned_deadline: form.planned_deadline || null,
-      followup_date: form.followup_date || null,
-      contract_number: form.contract_number || null,
-      notes: form.notes || null,
-      total_paid: totalPaid,
-      remaining: amt - totalPaid
+      contract_number: form.contract_number || null, notes: form.notes || null,
+      total_paid: totalPaid, remaining: amt - totalPaid
     }
     if (editWork) {
       const { error } = await supabase.from('outsource_works').update(data).eq('id', editWork.id)
@@ -363,14 +391,9 @@ export default function PodratIsleriPage() {
   }
 
   const getProject = id => projects.find(p => p.id === id)
-  const filteredWorks = works.filter(w => {
-    if (filterStatus !== 'all' && w.work_status !== filterStatus) return false
-    if (filterPayment !== 'all' && w.payment_status !== filterPayment) return false
-    return true
-  })
-  const totalContract = works.reduce((s, w) => s + Number(w.contract_amount || 0), 0)
-  const totalWithEdv = works.reduce((s, w) => s + Number(w.amount_with_edv || w.contract_amount || 0), 0)
-  const totalEdvAmt = works.filter(w => w.payment_method === 'transfer').reduce((s, w) => s + Number(w.edv_amount || 0), 0)
+  const totalContract = filteredWorks.reduce((s, w) => s + Number(w.contract_amount || 0), 0)
+  const totalPaidPeriod = filteredWorks.reduce((s, w) => s + getPaidInPeriod(w), 0)
+  const totalEdvAmt = filteredWorks.filter(w => w.payment_method === 'transfer').reduce((s, w) => s + Number(w.edv_amount || 0), 0)
 
   if (loading) return <div className="p-4 lg:p-6"><Skeleton className="h-64" /></div>
 
@@ -378,33 +401,50 @@ export default function PodratIsleriPage() {
     <div className="p-4 lg:p-6 fade-in">
       <PageHeader
         title="Podrat İşləri"
-        subtitle={`${works.length} podrat · 30%/Aralıq/10% sistemi`}
+        subtitle={`${filteredWorks.length} podrat`}
         action={isAdmin ? <Button onClick={() => { setEditWork(null); setModalOpen(true) }} size="sm"><IconPlus size={14} /> Yeni podrat</Button> : null}
       />
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
-        {isAdmin && <StatCard label="Müqavilə (ƏDV xaric)" value={fmt(totalContract)} />}
-        {isAdmin && <StatCard label="ƏDV məbləği" value={fmt(totalEdvAmt)} />}
-        {isAdmin && <StatCard label="Müqavilə (ƏDV daxil)" value={fmt(totalWithEdv)} />}
-        <StatCard label="Aktiv podratlar" value={works.filter(w => w.work_status === 'in_progress').length} />
-      </div>
+      {isAdmin && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+          <StatCard label="Müqavilə (ƏDV xaric)" value={fmt(totalContract)} />
+          <StatCard label="ƏDV məbləği" value={fmt(totalEdvAmt)} />
+          <StatCard label={filterYear ? `${filterYear}${filterMonth ? ` - ${MONTHS[filterMonth-1]}` : ''} ödənildi` : 'Cəmi ödənildi'} value={fmt(totalPaidPeriod)} variant="success" />
+          <StatCard label="Aktiv podratlar" value={works.filter(w => w.work_status === 'in_progress').length} />
+        </div>
+      )}
 
-      <div className="flex gap-2 mb-3 flex-wrap">
-        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
+      {/* Filterlər */}
+      <div className="flex gap-2 mb-4 flex-wrap">
+        <select value={filterYear} onChange={e => setFilterYear(Number(e.target.value))}
           className="px-3 py-1.5 border border-[#e8e8e4] rounded-lg text-xs focus:outline-none focus:border-[#0f172a]">
-          <option value="all">Bütün iş statusları</option>
-          {WORK_STATUSES.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
+          <option value={0}>Bütün illər</option>
+          {[2024,2025,2026,2027].map(y => <option key={y} value={y}>{y}</option>)}
         </select>
-        <select value={filterPayment} onChange={e => setFilterPayment(e.target.value)}
+        <select value={filterMonth} onChange={e => setFilterMonth(Number(e.target.value))}
           className="px-3 py-1.5 border border-[#e8e8e4] rounded-lg text-xs focus:outline-none focus:border-[#0f172a]">
-          <option value="all">Bütün ödəniş statusları</option>
-          {PAYMENT_STATUSES.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
+          <option value={0}>Bütün aylar</option>
+          {MONTHS.map((m,i) => <option key={i+1} value={i+1}>{m}</option>)}
         </select>
+        <select value={filterProject} onChange={e => setFilterProject(e.target.value)}
+          className="px-3 py-1.5 border border-[#e8e8e4] rounded-lg text-xs focus:outline-none focus:border-[#0f172a]">
+          <option value="">Bütün layihələr</option>
+          {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+        <input value={filterContractor} onChange={e => setFilterContractor(e.target.value)}
+          placeholder="Podratçı axtar..."
+          className="px-3 py-1.5 border border-[#e8e8e4] rounded-lg text-xs focus:outline-none focus:border-[#0f172a]" />
+        {(filterYear || filterMonth || filterProject || filterContractor) && (
+          <button onClick={() => { setFilterYear(0); setFilterMonth(0); setFilterProject(''); setFilterContractor('') }}
+            className="px-3 py-1.5 text-xs text-red-500 border border-red-200 rounded-lg hover:bg-red-50">
+            Sıfırla ✕
+          </button>
+        )}
       </div>
 
       {works.length === 0 ? (
         <EmptyState icon={IconHeartHandshake} title="Hələ podrat işi yoxdur"
-          action={<Button onClick={() => setModalOpen(true)} size="sm"><IconPlus size={14} /> Əlavə et</Button>} />
+          action={isAdmin ? <Button onClick={() => setModalOpen(true)} size="sm"><IconPlus size={14} /> Əlavə et</Button> : null} />
       ) : (
         <Card>
           <div className="overflow-x-auto">
@@ -416,26 +456,27 @@ export default function PodratIsleriPage() {
                   <th className="text-left px-4 py-3 font-medium text-[#888]">İş statusu</th>
                   <th className="text-left px-4 py-3 font-medium text-[#888]">Ödəniş</th>
                   <th className="text-left px-4 py-3 font-medium text-[#888]">Mərhələlər</th>
-                  {isAdmin && <th className="text-right px-4 py-3 font-medium text-[#888]">ƏDV xaric</th>}
-                  {isAdmin && <th className="text-right px-4 py-3 font-medium text-[#888]">ƏDV (18%)</th>}
-                  {isAdmin && <th className="text-right px-4 py-3 font-medium text-[#888]">ƏDV daxil</th>}
-                  {isAdmin && <th className="text-right px-4 py-3 font-medium text-[#888]">Qalıq</th>}
-                  <th className="px-4 py-3"></th>
+                  {isAdmin && <>
+                    <th className="text-right px-4 py-3 font-medium text-[#888]">Müqavilə</th>
+                    <th className="text-right px-4 py-3 font-medium text-[#888]">{filterYear || filterMonth ? 'Dövrdə ödənildi' : 'Ödənildi'}</th>
+                    <th className="text-right px-4 py-3 font-medium text-[#888]">Qalıq</th>
+                  </>}
+                  {isAdmin && <th className="px-4 py-3"></th>}
                 </tr>
               </thead>
               <tbody>
                 {filteredWorks.map(w => {
-                  const days = w.planned_deadline ? Math.floor((new Date(w.planned_deadline) - new Date()) / 86400000) : null
                   const ws = WORK_STATUSES.find(s => s.key === w.work_status)
                   const ps = PAYMENT_STATUSES.find(s => s.key === w.payment_status)
-                  const isTransfer = w.payment_method === 'transfer'
-                  const interimCount = (w.interim_payments || []).length
+                  const days = w.planned_deadline ? Math.floor((new Date(w.planned_deadline) - new Date()) / 86400000) : null
+                  const paidInPeriod = getPaidInPeriod(w)
+                  const interimCount = (w.interim_payments || []).filter(p => p.date).length
                   return (
                     <tr key={w.id} className="border-b border-[#f5f5f0] hover:bg-[#fafaf8]">
                       <td className="px-4 py-3">
                         <div className="font-medium text-[#0f172a]">{w.name}</div>
                         {w.work_type && <div className="text-[10px] text-[#aaa]">{w.work_type}</div>}
-                        {w.planned_deadline && (
+                        {days !== null && (
                           <div className={`text-[10px] ${days < 0 ? 'text-red-500' : days <= 7 ? 'text-yellow-600' : 'text-[#aaa]'}`}>
                             {new Date(w.planned_deadline).toLocaleDateString('az-AZ')}
                           </div>
@@ -443,47 +484,39 @@ export default function PodratIsleriPage() {
                       </td>
                       <td className="px-4 py-3 text-[#555]">{getProject(w.project_id)?.name || '—'}</td>
                       <td className="px-4 py-3"><Badge variant={ws?.color} size="sm">{ws?.label}</Badge></td>
+                      <td className="px-4 py-3"><Badge variant={ps?.color} size="sm">{ps?.label}</Badge></td>
                       <td className="px-4 py-3">
-                        <Badge variant={ps?.color} size="sm">{ps?.label}</Badge>
-                        <div className="mt-1"><Badge variant={isTransfer ? 'info' : 'default'} size="sm">{isTransfer ? 'Köçürmə' : 'Nağd'}</Badge></div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex gap-1">
-                          <span className={`text-[9px] px-1.5 py-0.5 rounded ${w.paid_30_percent ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>30%</span>
-                          <span className={`text-[9px] px-1.5 py-0.5 rounded ${interimCount > 0 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
-                            {interimCount > 0 ? `Ara×${interimCount}` : 'Ara'}
+                        <div className="flex gap-1 flex-wrap">
+                          <span className={`text-[9px] px-1.5 py-0.5 rounded ${w.advance_paid ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
+                            Avans {w.advance_percent || 30}%
                           </span>
-                          <span className={`text-[9px] px-1.5 py-0.5 rounded ${w.paid_final_10 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>10%</span>
+                          <span className={`text-[9px] px-1.5 py-0.5 rounded ${interimCount > 0 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
+                            Ara×{interimCount}
+                          </span>
+                          <span className={`text-[9px] px-1.5 py-0.5 rounded ${w.final_paid ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
+                            Final
+                          </span>
                         </div>
                       </td>
-                      {isAdmin && <td className="px-4 py-3 text-right font-medium text-[#0f172a]">{fmt(w.contract_amount)}</td>}
-                      {isAdmin && <td className="px-4 py-3 text-right text-amber-600">{isTransfer ? fmt(w.edv_amount || edv(w.contract_amount)) : '—'}</td>}
-                      {isAdmin && <td className="px-4 py-3 text-right font-bold text-[#0f172a]">{fmt(w.amount_with_edv || w.contract_amount)}</td>}
-                      {isAdmin && <td className="px-4 py-3 text-right">
-                        {Number(w.remaining) > 0
-                          ? <span className="font-bold text-red-500">{fmt(w.remaining)}</span>
-                          : <span className="text-green-600 font-bold">Bağlandı</span>}
-                      </td>}
-                      <td className="px-4 py-3">
-                        {isAdmin && <div className="flex gap-1">
+                      {isAdmin && <>
+                        <td className="px-4 py-3 text-right font-medium text-[#0f172a]">{fmt(w.contract_amount)}</td>
+                        <td className="px-4 py-3 text-right font-bold text-green-600">{fmt(paidInPeriod)}</td>
+                        <td className="px-4 py-3 text-right">
+                          {Number(w.remaining) > 0
+                            ? <span className="font-bold text-red-500">{fmt(w.remaining)}</span>
+                            : <span className="text-green-600 font-bold">Bağlandı</span>}
+                        </td>
+                      </>}
+                      {isAdmin && <td className="px-4 py-3">
+                        <div className="flex gap-1">
                           <button onClick={() => { setEditWork(w); setModalOpen(true) }} className="text-[#aaa] hover:text-[#0f172a] p-1"><IconEdit size={12} /></button>
                           <button onClick={() => setDeleteWork(w)} className="text-[#aaa] hover:text-red-500 p-1"><IconTrash size={12} /></button>
-                        </div>}
-                      </td>
+                        </div>
+                      </td>}
                     </tr>
                   )
                 })}
               </tbody>
-              {isAdmin && <tfoot>
-                <tr className="bg-[#f5f5f0]">
-                  <td colSpan={5} className="px-4 py-2 font-medium text-[#555]">Cəmi</td>
-                  <td className="px-4 py-2 text-right font-bold text-[#0f172a]">{fmt(totalContract)}</td>
-                  <td className="px-4 py-2 text-right font-bold text-amber-600">{fmt(totalEdvAmt)}</td>
-                  <td className="px-4 py-2 text-right font-bold text-[#0f172a]">{fmt(totalWithEdv)}</td>
-                  <td className="px-4 py-2 text-right font-bold text-red-500">{fmt(works.reduce((s, w) => s + Number(w.remaining || 0), 0))}</td>
-                  <td />
-                </tr>
-              </tfoot>}
             </table>
           </div>
         </Card>
