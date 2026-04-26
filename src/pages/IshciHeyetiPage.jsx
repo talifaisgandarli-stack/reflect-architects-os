@@ -3,63 +3,80 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
 import { PageHeader, Badge, Card, Button, EmptyState, Modal, ConfirmDialog, Skeleton } from '../components/ui'
-import { IconPlus, IconEdit, IconTrash, IconUsersGroup, IconMail, IconPhone, IconKey, IconPower } from '@tabler/icons-react'
+import { IconPlus, IconEdit, IconTrash, IconUsersGroup, IconMail, IconPhone, IconKey, IconPower, IconStar, IconChevronUp } from '@tabler/icons-react'
+
+const CAREER_LEVELS = [
+  { key: 'L1', label: 'Principal / Founding Partner', az: 'Baş Ortaq / Təsisçi Ortaq', color: '#0a0a0a', text: '#f5f5f0', years: null },
+  { key: 'L2', label: 'Senior Associate', az: 'Baş Əməkdaş', color: '#1a2744', text: '#dce8ff', years: '10+ il' },
+  { key: 'L3', label: 'Project Architect', az: 'Layihə Memarı', color: '#1a3d2e', text: '#d0f0e0', years: '6–10 il' },
+  { key: 'L4', label: 'Architect', az: 'Memar', color: '#2d3a00', text: '#eaf0b0', years: '3–6 il' },
+  { key: 'L5', label: 'Junior Architect', az: 'Kiçik Memar', color: '#3a1f00', text: '#f5ddb0', years: '1–3 il' },
+  { key: 'L6', label: 'Architectural Assistant', az: 'Memar Köməkçisi', color: '#2a1540', text: '#e8d0ff', years: '0–1 il' },
+  { key: 'BD-1', label: 'Head of Business Development', az: 'Biznes İnkişaf Rəhbəri', color: '#1a3040', text: '#c0e0f8', years: null },
+  { key: 'BD-2', label: 'Junior BD Manager', az: 'BD Köməkçi Menecer', color: '#0f2030', text: '#a8d0f0', years: '1–3 il' },
+  { key: 'Ops', label: 'Operations', az: 'Əməliyyat', color: '#2a2a2a', text: '#e0e0e0', years: null },
+]
 
 function IshciForm({ open, onClose, onSave, member, roles, isNew }) {
   const [form, setForm] = useState({
-    full_name: '', email: '', password: '', phone: '', role_id: '',
-    department: '', monthly_salary: '', whatsapp_number: '',
-    joining_date: '', is_active: true
+    full_name: '', email: '', phone: '', role_id: '',
+    department: '', joining_date: '', is_active: true,
+    career_level: 'L6', promotion_eligible: false
   })
+  const [password, setPassword] = useState('')
 
   useEffect(() => {
-    if (member && !isNew) {
+    if (member) {
       setForm({
-        full_name: member.full_name || '', email: member.email || '',
-        password: '', phone: member.phone || '',
-        role_id: member.role_id || '', department: member.department || '',
-        monthly_salary: member.monthly_salary || '',
-        whatsapp_number: member.whatsapp_number || '',
-        joining_date: member.joining_date || '', is_active: member.is_active !== false
+        full_name: member.full_name || '',
+        email: member.email || '',
+        phone: member.phone || '',
+        role_id: member.role_id || '',
+        department: member.department || '',
+        joining_date: member.joining_date || '',
+        is_active: member.is_active !== false,
+        career_level: member.career_level || 'L6',
+        promotion_eligible: member.promotion_eligible || false
       })
     } else {
-      setForm({ full_name: '', email: '', password: '', phone: '', role_id: '', department: '', monthly_salary: '', whatsapp_number: '', joining_date: '', is_active: true })
+      setForm({ full_name: '', email: '', phone: '', role_id: '', department: '', joining_date: '', is_active: true, career_level: 'L6', promotion_eligible: false })
+      setPassword('')
     }
   }, [member, open])
 
   function set(k, v) { setForm(f => ({ ...f, [k]: v })) }
+  const cl = CAREER_LEVELS.find(l => l.key === form.career_level)
 
   return (
     <Modal open={open} onClose={onClose} title={isNew ? 'Yeni işçi əlavə et' : 'İşçini redaktə et'}>
       <div className="space-y-3">
-        {isNew && (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-xs text-blue-800">
-            ℹ️ İşçi sisteminə daxil olmaq üçün email və şifrəni özü dəyişdirə bilər
-          </div>
-        )}
+        <div>
+          <label className="block text-xs font-medium text-[#555] mb-1">Ad Soyad *</label>
+          <input value={form.full_name} onChange={e => set('full_name', e.target.value)}
+            className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]"
+            placeholder="Ad Soyad" />
+        </div>
         <div className="grid grid-cols-2 gap-3">
-          <div className="col-span-2">
-            <label className="block text-xs font-medium text-[#555] mb-1">Ad Soyad *</label>
-            <input value={form.full_name} onChange={e => set('full_name', e.target.value)}
+          <div>
+            <label className="block text-xs font-medium text-[#555] mb-1">E-poçt {isNew && '*'}</label>
+            <input type="email" value={form.email} onChange={e => set('email', e.target.value)}
               className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]"
-              placeholder="Ad Soyad" />
+              placeholder="ad@reflect.az" disabled={!isNew} />
           </div>
           {isNew && (
-            <>
-              <div>
-                <label className="block text-xs font-medium text-[#555] mb-1">Email *</label>
-                <input type="email" value={form.email} onChange={e => set('email', e.target.value)}
-                  className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]"
-                  placeholder="ad@reflect.az" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-[#555] mb-1">İlkin şifrə *</label>
-                <input type="password" value={form.password} onChange={e => set('password', e.target.value)}
-                  className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]"
-                  placeholder="Minimum 6 simvol" />
-              </div>
-            </>
+            <div>
+              <label className="block text-xs font-medium text-[#555] mb-1">Şifrə *</label>
+              <input type="password" value={password} onChange={e => setPassword(e.target.value)}
+                className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]"
+                placeholder="Minimum 6 simvol" />
+            </div>
           )}
+          <div>
+            <label className="block text-xs font-medium text-[#555] mb-1">Telefon</label>
+            <input value={form.phone} onChange={e => set('phone', e.target.value)}
+              className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]"
+              placeholder="+994 50 000 00 00" />
+          </div>
           <div>
             <label className="block text-xs font-medium text-[#555] mb-1">Vəzifə</label>
             <select value={form.role_id} onChange={e => set('role_id', e.target.value)}
@@ -72,25 +89,7 @@ function IshciForm({ open, onClose, onSave, member, roles, isNew }) {
             <label className="block text-xs font-medium text-[#555] mb-1">Şöbə</label>
             <input value={form.department} onChange={e => set('department', e.target.value)}
               className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]"
-              placeholder="Memarlıq, BD, Dizayn..." />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-[#555] mb-1">Telefon</label>
-            <input value={form.phone} onChange={e => set('phone', e.target.value)}
-              className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]"
-              placeholder="+994 50 000 00 00" />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-[#555] mb-1">WhatsApp</label>
-            <input value={form.whatsapp_number} onChange={e => set('whatsapp_number', e.target.value)}
-              className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]"
-              placeholder="+994 50 000 00 00" />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-[#555] mb-1">Aylıq maaş (₼)</label>
-            <input type="number" value={form.monthly_salary} onChange={e => set('monthly_salary', e.target.value)}
-              className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]"
-              placeholder="0" />
+              placeholder="Memarlıq, BD..." />
           </div>
           <div>
             <label className="block text-xs font-medium text-[#555] mb-1">İşə başlama tarixi</label>
@@ -98,10 +97,36 @@ function IshciForm({ open, onClose, onSave, member, roles, isNew }) {
               className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]" />
           </div>
         </div>
+
+        {/* Karyera səviyyəsi */}
+        <div>
+          <label className="block text-xs font-medium text-[#555] mb-1">Karyera səviyyəsi</label>
+          <select value={form.career_level} onChange={e => set('career_level', e.target.value)}
+            className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]">
+            {CAREER_LEVELS.map(l => <option key={l.key} value={l.key}>{l.key} — {l.label} ({l.az})</option>)}
+          </select>
+          {cl && (
+            <div className="mt-1.5 px-3 py-2 rounded-lg text-xs font-medium" style={{ background: cl.color, color: cl.text }}>
+              {cl.key} · {cl.label} · {cl.az}{cl.years ? ` · ${cl.years}` : ''}
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center gap-4">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={form.promotion_eligible} onChange={e => set('promotion_eligible', e.target.checked)} className="w-4 h-4 accent-[#0f172a]" />
+            <span className="text-xs text-[#555]">🚀 Erkən yüksəliş hüququ</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={form.is_active} onChange={e => set('is_active', e.target.checked)} className="w-4 h-4 accent-[#0f172a]" />
+            <span className="text-xs text-[#555]">Aktiv işçi</span>
+          </label>
+        </div>
+
         <div className="flex gap-2 pt-2 border-t border-[#f0f0ec]">
           <Button variant="secondary" onClick={onClose}>Ləğv et</Button>
-          <Button onClick={() => onSave(form)} className="ml-auto">
-            {isNew ? 'İşçi yarat' : 'Yadda saxla'}
+          <Button onClick={() => onSave(form, password)} className="ml-auto">
+            {isNew ? 'Əlavə et' : 'Yadda saxla'}
           </Button>
         </div>
       </div>
@@ -109,67 +134,73 @@ function IshciForm({ open, onClose, onSave, member, roles, isNew }) {
   )
 }
 
-function ResetPasswordModal({ open, onClose, onSave, member }) {
-  const [password, setPassword] = useState('')
-  return (
-    <Modal open={open} onClose={onClose} title={`Şifrəni sıfırla — ${member?.full_name}`}>
-      <div className="space-y-3">
-        <div>
-          <label className="block text-xs font-medium text-[#555] mb-1">Yeni şifrə *</label>
-          <input type="password" value={password} onChange={e => setPassword(e.target.value)}
-            className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]"
-            placeholder="Minimum 6 simvol" />
-        </div>
-        <div className="flex gap-2 pt-2 border-t border-[#f0f0ec]">
-          <Button variant="secondary" onClick={onClose}>Ləğv et</Button>
-          <Button onClick={() => { onSave(password); setPassword('') }} className="ml-auto">Sıfırla</Button>
-        </div>
-      </div>
-    </Modal>
-  )
-}
-
-function MemberCard({ member, role, onEdit, onDelete, onResetPassword, onToggleActive, isAdmin = true }) {
+function MemberCard({ member, role, onEdit, onDelete, onResetPassword, onToggleActive, isAdmin }) {
   const initials = member.full_name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || '??'
+  const cl = CAREER_LEVELS.find(l => l.key === member.career_level)
+
   return (
-    <div className={`bg-white border rounded-lg p-4 transition-colors group ${member.is_active ? 'border-[#e8e8e4] hover:border-[#0f172a]' : 'border-[#f0f0ec] opacity-60'}`}>
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex items-center gap-3">
-          <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 ${member.is_active ? 'bg-[#0f172a] text-white' : 'bg-[#e8e8e4] text-[#888]'}`}>
-            {initials}
-          </div>
-          <div>
-            <div className="text-sm font-medium text-[#0f172a]">{member.full_name}</div>
-            <div className="text-xs text-[#888]">{role?.title_az || '—'}</div>
-          </div>
+    <div className="bg-white border border-[#e8e8e4] rounded-xl overflow-hidden hover:border-[#0f172a] transition-colors group">
+      {/* Karyera səviyyəsi rəngli başlıq */}
+      {cl && (
+        <div className="px-3 py-1.5 flex items-center justify-between" style={{ background: cl.color }}>
+          <span className="text-[10px] font-bold tracking-wider" style={{ color: cl.text }}>{cl.key}</span>
+          <span className="text-[10px]" style={{ color: cl.text, opacity: 0.75 }}>{cl.az}</span>
+          {member.promotion_eligible && (
+            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-yellow-400 text-yellow-900 font-bold">🚀 Yüksəliş</span>
+          )}
         </div>
-        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button onClick={() => onEdit(member)} className="text-[#aaa] hover:text-[#0f172a] p-1" title="Redaktə"><IconEdit size={13} /></button>
-          <button onClick={() => onResetPassword(member)} className="text-[#aaa] hover:text-blue-500 p-1" title="Şifrə sıfırla"><IconKey size={13} /></button>
-          <button onClick={() => onToggleActive(member)} className={`p-1 ${member.is_active ? 'text-[#aaa] hover:text-red-500' : 'text-[#aaa] hover:text-green-500'}`} title={member.is_active ? 'Deaktiv et' : 'Aktiv et'}>
-            <IconPower size={13} />
-          </button>
+      )}
+
+      <div className="p-4">
+        <div className="flex items-start justify-between mb-3">
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 ${member.is_active ? 'bg-[#0f172a] text-white' : 'bg-[#e8e8e4] text-[#888]'}`}>
+              {initials}
+            </div>
+            <div>
+              <div className="text-sm font-medium text-[#0f172a]">{member.full_name}</div>
+              <div className="text-xs text-[#888]">{role?.title_az || '—'}</div>
+            </div>
+          </div>
+          {isAdmin && (
+            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button onClick={() => onEdit(member)} className="text-[#aaa] hover:text-[#0f172a] p-1" title="Redaktə"><IconEdit size={13} /></button>
+              <button onClick={() => onResetPassword(member)} className="text-[#aaa] hover:text-blue-500 p-1" title="Şifrə sıfırla"><IconKey size={13} /></button>
+              <button onClick={() => onToggleActive(member)} className={`p-1 ${member.is_active ? 'text-[#aaa] hover:text-red-500' : 'text-[#aaa] hover:text-green-500'}`} title={member.is_active ? 'Deaktiv et' : 'Aktiv et'}>
+                <IconPower size={13} />
+              </button>
+            </div>
+          )}
         </div>
-      </div>
-      <div className="space-y-1.5">
-        {member.email && (
-          <div className="flex items-center gap-2 text-xs text-[#555]">
-            <IconMail size={11} className="text-[#aaa]" />
-            <span className="truncate">{member.email}</span>
-          </div>
-        )}
-        {member.phone && (
-          <div className="flex items-center gap-2 text-xs text-[#555]">
-            <IconPhone size={11} className="text-[#aaa]" />
-            <span>{member.phone}</span>
-          </div>
-        )}
-      </div>
-      <div className="flex items-center justify-between mt-3 pt-3 border-t border-[#f5f5f0]">
-        <Badge variant={member.is_active ? 'success' : 'default'} size="sm">
-          {member.is_active ? 'Aktiv' : 'Deaktiv'}
-        </Badge>
-        {member.department && <span className="text-[10px] text-[#aaa]">{member.department}</span>}
+
+        <div className="space-y-1.5">
+          {member.email && (
+            <div className="flex items-center gap-2 text-xs text-[#555]">
+              <IconMail size={11} className="text-[#aaa]" />
+              <span className="truncate">{member.email}</span>
+            </div>
+          )}
+          {member.phone && (
+            <div className="flex items-center gap-2 text-xs text-[#555]">
+              <IconPhone size={11} className="text-[#aaa]" />
+              <span>{member.phone}</span>
+            </div>
+          )}
+          {member.joining_date && (
+            <div className="text-[10px] text-[#aaa]">
+              İşə başlama: {new Date(member.joining_date).toLocaleDateString('az-AZ')}
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center justify-between mt-3 pt-3 border-t border-[#f5f5f0]">
+          <Badge variant={member.is_active ? 'success' : 'default'} size="sm">
+            {member.is_active ? 'Aktiv' : 'Deaktiv'}
+          </Badge>
+          {member.department && (
+            <span className="text-[10px] text-[#aaa]">{member.department}</span>
+          )}
+        </div>
       </div>
     </div>
   )
@@ -181,10 +212,10 @@ export default function IshciHeyetiPage() {
   const [members, setMembers] = useState([])
   const [roles, setRoles] = useState([])
   const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
   const [isNew, setIsNew] = useState(false)
   const [editMember, setEditMember] = useState(null)
+  const [deleteMember, setDeleteMember] = useState(null)
   const [resetMember, setResetMember] = useState(null)
   const [confirmToggle, setConfirmToggle] = useState(null)
   const [filter, setFilter] = useState('all')
@@ -202,89 +233,47 @@ export default function IshciHeyetiPage() {
     setLoading(false)
   }
 
-  async function handleCreate(form) {
-    if (!form.full_name.trim() || !form.email.trim() || !form.password) {
-      addToast('Ad, email və şifrə lazımdır', 'error'); return
-    }
-    if (form.password.length < 6) {
-      addToast('Şifrə minimum 6 simvol olmalıdır', 'error'); return
-    }
-    setSaving(true)
-    try {
+  async function handleSave(form, password) {
+    if (!form.full_name.trim()) { addToast('Ad daxil edin', 'error'); return }
+
+    if (isNew) {
+      if (!form.email || !password) { addToast('Email və şifrə daxil edin', 'error'); return }
       const res = await fetch('/api/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'create',
-          email: form.email, password: form.password,
-          full_name: form.full_name, role_id: form.role_id || null,
-          department: form.department || null, phone: form.phone || null,
-          monthly_salary: form.monthly_salary || 0,
-          whatsapp_number: form.whatsapp_number || null,
-          joining_date: form.joining_date || null
-        })
+        body: JSON.stringify({ email: form.email, password, full_name: form.full_name, role_id: form.role_id, department: form.department, phone: form.phone, joining_date: form.joining_date, career_level: form.career_level, promotion_eligible: form.promotion_eligible })
       })
       const data = await res.json()
-      if (data.error) { addToast('Xəta: ' + data.error, 'error'); return }
-      addToast('İşçi uğurla əlavə edildi!', 'success')
-      setModalOpen(false)
-      await loadData()
-    } catch (err) {
-      addToast('Xəta: ' + err.message, 'error')
+      if (!res.ok) { addToast('Xəta: ' + (data.error || 'Bilinməyən xəta'), 'error'); return }
+      addToast('İşçi əlavə edildi', 'success')
+    } else {
+      const { error } = await supabase.from('profiles').update({
+        full_name: form.full_name.trim(),
+        phone: form.phone || null,
+        role_id: form.role_id || null,
+        department: form.department || null,
+        joining_date: form.joining_date || null,
+        is_active: form.is_active,
+        career_level: form.career_level,
+        promotion_eligible: form.promotion_eligible
+      }).eq('id', editMember.id)
+      if (error) { addToast('Xəta: ' + error.message, 'error'); return }
+      addToast('Yeniləndi', 'success')
     }
-    setSaving(false)
+    setModalOpen(false); setEditMember(null); await loadData()
   }
 
-  async function handleUpdate(form) {
-    if (!form.full_name.trim()) { addToast('Ad lazımdır', 'error'); return }
-    setSaving(true)
-    const { error } = await supabase.from('profiles').update({
-      full_name: form.full_name, role_id: form.role_id || null,
-      department: form.department || null, phone: form.phone || null,
-      monthly_salary: Number(form.monthly_salary) || 0,
-      whatsapp_number: form.whatsapp_number || null,
-      joining_date: form.joining_date || null
-    }).eq('id', editMember.id)
-    if (error) { addToast('Xəta: ' + error.message, 'error'); setSaving(false); return }
-    addToast('Yeniləndi', 'success')
-    setModalOpen(false); setEditMember(null)
-    await loadData()
-    setSaving(false)
-  }
-
-  async function handleResetPassword(password) {
-    if (!password || password.length < 6) { addToast('Minimum 6 simvol', 'error'); return }
-    try {
-      const res = await fetch('/api/users', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'reset_password', user_id: resetMember.id, password })
-      })
-      const data = await res.json()
-      if (data.error) { addToast('Xəta: ' + data.error, 'error'); return }
-      addToast('Şifrə sıfırlandı', 'success')
-      setResetMember(null)
-    } catch (err) {
-      addToast('Xəta: ' + err.message, 'error')
-    }
+  async function handleResetPassword() {
+    const { error } = await supabase.auth.resetPasswordForEmail(resetMember.email)
+    if (error) { addToast('Xəta: ' + error.message, 'error') }
+    else addToast('Şifrə sıfırlama emaili göndərildi', 'success')
+    setResetMember(null)
   }
 
   async function handleToggleActive() {
-    const newStatus = !confirmToggle.is_active
-    try {
-      const res = await fetch('/api/users', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'toggle_active', user_id: confirmToggle.id, is_active: newStatus })
-      })
-      const data = await res.json()
-      if (data.error) { addToast('Xəta: ' + data.error, 'error'); return }
-      addToast(newStatus ? 'Aktiv edildi' : 'Deaktiv edildi', 'success')
-      setConfirmToggle(null)
-      await loadData()
-    } catch (err) {
-      addToast('Xəta: ' + err.message, 'error')
-    }
+    await supabase.from('profiles').update({ is_active: !confirmToggle.is_active }).eq('id', confirmToggle.id)
+    addToast(confirmToggle.is_active ? 'Deaktiv edildi' : 'Aktiv edildi', 'success')
+    setConfirmToggle(null); await loadData()
   }
 
   const getRole = id => roles.find(r => r.id === id)
@@ -314,8 +303,7 @@ export default function IshciHeyetiPage() {
       </div>
 
       {members.length === 0 ? (
-        <EmptyState icon={IconUsersGroup} title="Hələ işçi yoxdur"
-          action={<Button onClick={() => { setIsNew(true); setModalOpen(true) }} size="sm"><IconPlus size={14} /> İşçi əlavə et</Button>} />
+        <EmptyState icon={IconUsersGroup} title="Hələ işçi yoxdur" />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {filtered.map(member => (
@@ -324,7 +312,7 @@ export default function IshciHeyetiPage() {
               member={member}
               role={getRole(member.role_id)}
               onEdit={m => { setIsNew(false); setEditMember(m); setModalOpen(true) }}
-              onDelete={() => {}}
+              onDelete={setDeleteMember}
               onResetPassword={setResetMember}
               onToggleActive={setConfirmToggle}
               isAdmin={isAdmin}
@@ -336,27 +324,17 @@ export default function IshciHeyetiPage() {
       <IshciForm
         open={modalOpen}
         onClose={() => { setModalOpen(false); setEditMember(null) }}
-        onSave={isNew ? handleCreate : handleUpdate}
+        onSave={handleSave}
         member={editMember}
         roles={roles}
         isNew={isNew}
       />
-
-      <ResetPasswordModal
-        open={!!resetMember}
-        onClose={() => setResetMember(null)}
-        onSave={handleResetPassword}
-        member={resetMember}
-      />
-
-      <ConfirmDialog
-        open={!!confirmToggle}
-        title={confirmToggle?.is_active ? 'İşçini deaktiv et' : 'İşçini aktiv et'}
-        message={`"${confirmToggle?.full_name}" ${confirmToggle?.is_active ? 'deaktiv edilsin? Sisteme girişi bağlanacaq.' : 'aktiv edilsin? Sisteme girişi açılacaq.'}`}
-        onConfirm={handleToggleActive}
-        onCancel={() => setConfirmToggle(null)}
-        danger={confirmToggle?.is_active}
-      />
+      <ConfirmDialog open={!!resetMember} title="Şifrə sıfırla"
+        message={`${resetMember?.email} ünvanına şifrə sıfırlama emaili göndəriləcək.`}
+        onConfirm={handleResetPassword} onCancel={() => setResetMember(null)} />
+      <ConfirmDialog open={!!confirmToggle} title={confirmToggle?.is_active ? 'Deaktiv et' : 'Aktiv et'}
+        message={`${confirmToggle?.full_name} üçün statusu dəyişmək istədiyinizə əminsiniz?`}
+        onConfirm={handleToggleActive} onCancel={() => setConfirmToggle(null)} danger={confirmToggle?.is_active} />
     </div>
   )
 }
