@@ -17,7 +17,7 @@ const FREQUENCIES = [
 
 const MONTHS = ['Yan','Fev','Mar','Apr','May','İyn','İyl','Avq','Sen','Okt','Noy','Dek']
 
-function SubForm({ open, onClose, onSave, sub }) {
+function SubForm({ open, onClose, onSave, sub, categories = [] }) {
   const [form, setForm] = useState({ name: '', amount: '', payment_method: 'transfer', frequency: 'monthly', sub_type: '', next_payment_date: '', is_active: true, notes: '' })
 
   useEffect(() => {
@@ -64,9 +64,11 @@ function SubForm({ open, onClose, onSave, sub }) {
           </div>
           <div>
             <label className="block text-xs font-medium text-[#555] mb-1">Kateqoriya</label>
-            <input value={form.sub_type} onChange={e => set('sub_type', e.target.value)}
-              className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]"
-              placeholder="Ofis, Proqram, Xidmət..." />
+            <select value={form.sub_type} onChange={e => set('sub_type', e.target.value)}
+              className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]">
+              <option value="">Seçin</option>
+              {categories.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
           </div>
           <div>
             <label className="block text-xs font-medium text-[#555] mb-1">Növbəti ödəniş</label>
@@ -413,7 +415,7 @@ export default function SabitXerclerPage() {
         ))
       )}
 
-      <SubForm open={modalOpen} onClose={() => { setModalOpen(false); setEditSub(null) }} onSave={handleSave} sub={editSub} />
+      <SubForm open={modalOpen} onClose={() => { setModalOpen(false); setEditSub(null) }} onSave={handleSave} sub={editSub} categories={Object.keys(groups).sort()} />
       <PaymentModal open={payModalOpen} onClose={() => { setPayModalOpen(false); setPaySub(null) }} onSave={handlePayment} sub={paySub} />
       <ConfirmDialog open={!!deleteSub} title="Sabit xərci sil"
         message={`"${deleteSub?.name}" qeydini silmək istədiyinizə əminsiniz?`}
