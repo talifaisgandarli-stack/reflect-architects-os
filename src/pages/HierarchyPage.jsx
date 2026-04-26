@@ -4,16 +4,25 @@ import { IconChevronDown, IconChevronUp } from '@tabler/icons-react'
 
 const LEVELS = [
   {
-    key: 'L1a', label: 'Founding Partner — CEO & Chief Architect', az: 'Təsisçi Ortaq — CEO və Baş Memar',
+    key: 'RA-1', label: 'Founding Partner — CEO & Chief Architect', az: 'Təsisçi Ortaq — CEO və Baş Memar',
     tag: 'Şirkət sahibi', color: '#0a0a0a', text: '#f5f5f0',
     desc: 'Şirkətin strateji istiqamətini və bədii vizyonunu müəyyənləşdirir. Ən mühüm dizayn qərarlarını qəbul edir. Şirkətin texniki və bədii nüfuzunu şəxsən daşıyır. Əsas sifarişçilərlə strateji münasibət qurur. Şirkətin maliyyə, hüquqi və idarəetmə məsələlərindən tam məsuldur.',
     years: null, next_reqs: null, reqs_detail: null
   },
   {
-    key: 'L1b', label: 'Partner', az: 'Ortaq',
-    tag: 'Ortaq səviyyəsi', color: '#1a1a1a', text: '#e8e8e0',
-    desc: 'Şirkətin müəyyən bir sahəsinin (layihə, biznes inkişaf və ya əməliyyat) strateji rəhbərliyini həyata keçirir. CEO ilə birgə şirkətin inkişaf strategiyasını formalaşdırır. Böyük sifarişçi münasibətlərini idarə edir.',
-    years: null, next_reqs: null, reqs_detail: null
+    key: 'RA-2', label: 'Partner', az: 'Ortaq',
+    tag: 'Ortaq səviyyəsi', color: '#1c1c1c', text: '#e8e8e0',
+    desc: 'Şirkətin müəyyən bir sahəsinin — layihə portfeli, biznes inkişaf və ya əməliyyat — strateji rəhbərliyini həyata keçirir. CEO ilə birgə şirkətin inkişaf strategiyasını formalaşdırır. Böyük sifarişçi münasibətlərini şəxsən idarə edir. Şirkətin uzunmüddətli gəlirliliyinə cavabdehdir.',
+    years: null,
+    next_reqs: 'Partner olmaq üçün:',
+    reqs_detail: [
+      '📁 Portfolio — ən azı 5 böyük layihəni başdan sona müstəqil rəhbərlik edib tamamlamaq; bu layihələrdən ən azı biri şirkətin portfoliosuna dəyər katan olmalıdır (mükafat, media, güclü referans)',
+      '💼 Biznes töhfəsi — ən azı 2–3 yeni sifarişçi gətirib aktiv layihəyə çevirmək; şirkətin gəlir artımına ölçülə bilən töhfə vermək',
+      '👥 Komanda liderliyi — ən azı 3–5 işçinin mentoru olmaq və onları növbəti karyera səviyyəsinə çatdırmaq; komanda mədəniyyətini qorumaq və yaymaq',
+      '🌐 Brend və nüfuz — şirkəti peşəkar icmada təmsil etmək (konfrans, nəşr, mükafat); sektorda şəxsi tanınma qazanmaq',
+      '📊 Maliyyə savadlılığı — layihə büdcələrini idarə etmək, müqavilə şərtlərini müstəqil danışmaq, şirkətin maliyyə sağlamlığına məsuliyyət daşımaq',
+      '🎯 Dəyər uyğunluğu — şirkətin dizayn fəlsəfəsini tam qəbul etmək; uzunmüddətli öhdəlik və şirkətin gələcəyinə inanc',
+    ]
   },
   {
     key: 'L2', label: 'Senior Associate', az: 'Baş Əməkdaş',
@@ -119,8 +128,8 @@ const CAREER_PATH = [
   { key: 'L4', label: 'Architect', years: '3–6 il', dot: '#2d3a00', reqs: 'Tam layihə məsuliyyəti. Müstəqil dizayn qərarları. Büdcə idarəetməsi başlayır. Sifarişçi ilə müstəqil iş.' },
   { key: 'L3', label: 'Project Architect', years: '6–10 il', dot: '#1a3d2e', reqs: 'Böyük layihə rəhbərliyi. Komanda idarəetməsi. Çoxsaylı paralel layihə. Podratçı münasibətlərinin tam idarəsi.' },
   { key: 'L2', label: 'Senior Associate', years: '10+ il', dot: '#1a2744', reqs: 'Şirkətin texniki nüfuzunu daşıyır. Gənc mütəxəssislərin mentoru. Sifarişçilərlə strateji münasibət.' },
-  { key: 'L1b', label: 'Partner', years: '—', dot: '#1a1a1a', reqs: 'Şirkətin müəyyən bir sahəsinin strateji rəhbərliyi. CEO ilə birgə inkişaf strategiyası.' },
-  { key: 'L1a', label: 'Founding Partner — CEO & Chief Architect', years: '—', dot: '#0a0a0a', reqs: 'Şirkətin strateji istiqamətini müəyyənləşdirir. Tam idarəetmə məsuliyyəti.' },
+  { key: 'RA-2', label: 'Partner', years: '—', dot: '#1c1c1c', reqs: 'Şirkətin müəyyən bir sahəsinin strateji rəhbərliyi. CEO ilə birgə inkişaf strategiyası. Biznes töhfəsi və komanda liderliyi.' },
+  { key: 'RA-1', label: 'Founding Partner — CEO & Chief Architect', years: '—', dot: '#0a0a0a', reqs: 'Şirkətin strateji istiqamətini müəyyənləşdirir. Tam idarəetmə məsuliyyəti. Bədii vizyon.' },
 ]
 
 function LevelCard({ level }) {
@@ -154,10 +163,9 @@ function LevelCard({ level }) {
               <div className="text-[10px] font-bold uppercase tracking-wider mb-2.5" style={{ color: level.text, opacity: 0.5 }}>
                 {level.next_reqs}
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2.5">
                 {level.reqs_detail.map((req, i) => (
                   <div key={i} className="flex gap-2">
-                    <span className="text-[10px] mt-0.5 flex-shrink-0" style={{ color: level.text, opacity: 0.4 }}>→</span>
                     <span className="text-[11px] leading-relaxed" style={{ color: level.text, opacity: 0.78 }}>{req}</span>
                   </div>
                 ))}

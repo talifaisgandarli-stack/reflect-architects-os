@@ -6,7 +6,8 @@ import { PageHeader, Badge, Card, Button, EmptyState, Modal, ConfirmDialog, Skel
 import { IconPlus, IconEdit, IconTrash, IconUsersGroup, IconMail, IconPhone, IconKey, IconPower, IconStar, IconChevronUp } from '@tabler/icons-react'
 
 const CAREER_LEVELS = [
-  { key: 'L1', label: 'Principal / Founding Partner', az: 'Baş Ortaq / Təsisçi Ortaq', color: '#0a0a0a', text: '#f5f5f0', years: null },
+  { key: 'RA-1', label: 'Founding Partner — CEO & Chief Architect', az: 'Təsisçi Ortaq — CEO və Baş Memar', color: '#0a0a0a', text: '#f5f5f0', years: null },
+  { key: 'RA-2', label: 'Partner', az: 'Ortaq', color: '#1c1c1c', text: '#e8e8e0', years: null },
   { key: 'L2', label: 'Senior Associate', az: 'Baş Əməkdaş', color: '#1a2744', text: '#dce8ff', years: '10+ il' },
   { key: 'L3', label: 'Project Architect', az: 'Layihə Memarı', color: '#1a3d2e', text: '#d0f0e0', years: '6–10 il' },
   { key: 'L4', label: 'Architect', az: 'Memar', color: '#2d3a00', text: '#eaf0b0', years: '3–6 il' },
