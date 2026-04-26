@@ -35,6 +35,8 @@ import MezmunPlanlamasiPage from './pages/MezmunPlanlamasiPage'
 import SendArxiviPage from './pages/SendArxiviPage'
 import WhatsAppPage from './pages/WhatsAppPage'
 import QaynaqlarPage from './pages/QaynaqlarPage'
+import PerformansPage from './pages/PerformansPage'
+import HierarchyPage from './pages/HierarchyPage'
 import ComingSoonPage from './pages/ComingSoonPage'
 
 function CS({ t }) { return <ComingSoonPage title={t} /> }
@@ -77,6 +79,8 @@ export default function App() {
               <Route path="sabit-xercler" element={<SabitXerclerPage />} />
               <Route path="isci-heyeti" element={<IshciHeyetiPage />} />
               <Route path="emek-haqqi" element={<EmekHaqqiPage />} />
+              <Route path="performans" element={<PerformansPage />} />
+              <Route path="karyera-strukturu" element={<HierarchyPage />} />
               <Route path="elanlar" element={<ElanlarLovhesiPage />} />
               <Route path="hadiseler" element={<HadiselerTeqvimiPage />} />
               <Route path="mezuniyyet" element={<MezuniyyetCedveliPage />} />

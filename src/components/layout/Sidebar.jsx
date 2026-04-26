@@ -10,7 +10,7 @@ import {
   IconSpeakerphone, IconCalendar, IconUmbrella, IconDeviceLaptop,
   IconTarget, IconBrandInstagram, IconFolder, IconBook,
   IconSettings, IconDatabase, IconChevronDown, IconChevronRight, IconBrandWhatsapp,
-  IconLogout, IconSearch, IconBell, IconHeartHandshake
+  IconLogout, IconSearch, IconBell, IconHeartHandshake, IconStar, IconSitemap
 } from '@tabler/icons-react'
 
 const NAV_GROUPS = [
@@ -55,6 +55,8 @@ const NAV_GROUPS = [
     items: [
       { to: '/isci-heyeti', icon: IconUsersGroup, label: 'İşçi Heyəti' },
       { to: '/emek-haqqi', icon: IconWallet, label: 'Əmək haqqı' },
+      { to: '/performans', icon: IconStar, label: 'Performans' },
+      { to: '/karyera-strukturu', icon: IconSitemap, label: 'Karyera Strukturu' },
       { to: '/elanlar', icon: IconSpeakerphone, label: 'Elanlar Lövhəsi' },
       { to: '/hadiseler', icon: IconCalendar, label: 'Hadisələr Təqvimi' },
       { to: '/mezuniyyet', icon: IconUmbrella, label: 'Məzuniyyət Cədvəli' },
