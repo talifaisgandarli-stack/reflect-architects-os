@@ -415,7 +415,11 @@ export default function SabitXerclerPage() {
         ))
       )}
 
-      <SubForm open={modalOpen} onClose={() => { setModalOpen(false); setEditSub(null) }} onSave={handleSave} sub={editSub} categories={Object.keys(groups).sort()} />
+      <SubForm open={modalOpen} onClose={() => { setModalOpen(false); setEditSub(null) }} onSave={handleSave} sub={editSub}
+        categories={[...new Set([
+          'Ofis', 'Proqram', 'Xidmət', 'Sığorta', 'Nəqliyyat', 'Kommunal', 'Digər',
+          ...Object.keys(groups)
+        ])].sort()} />
       <PaymentModal open={payModalOpen} onClose={() => { setPayModalOpen(false); setPaySub(null) }} onSave={handlePayment} sub={paySub} />
       <ConfirmDialog open={!!deleteSub} title="Sabit xərci sil"
         message={`"${deleteSub?.name}" qeydini silmək istədiyinizə əminsiniz?`}
