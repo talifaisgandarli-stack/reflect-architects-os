@@ -86,6 +86,7 @@ function ProjectForm({ open, onClose, onSave, project, clients }) {
     advance_paid: '', advance_method: 'transfer', interim_payments: [], status: 'waiting', risk_level: 'normal',
     phases: ['concept'], completion_percent: '0',
     deadline: '', start_date: '', payment_method: 'transfer',
+    final_payment: '', final_payment_method: 'transfer', final_payment_date: '',
     vat_included: false, notes: '', next_action: '', blocker: ''
   })
 
@@ -101,6 +102,9 @@ function ProjectForm({ open, onClose, onSave, project, clients }) {
         status: project.status || 'waiting',
         risk_level: project.risk_level || 'normal',
         phases: Array.isArray(project.phases) ? project.phases : (project.phase ? [project.phase] : ['concept']),
+        final_payment: project.final_payment || '',
+        final_payment_method: project.final_payment_method || 'transfer',
+        final_payment_date: project.final_payment_date || '',
         completion_percent: project.completion_percent || '0',
         deadline: project.deadline || '',
         start_date: project.start_date || '',
@@ -267,6 +271,29 @@ function ProjectForm({ open, onClose, onSave, project, clients }) {
               <button onClick={() => set('interim_payments', form.interim_payments.filter((_, idx) => idx !== i))} className="text-[#aaa] hover:text-red-500 text-xs">✕</button>
             </div>
           ))}
+          {/* Final ödəniş */}
+          <div className="mt-2 pt-2 border-t border-[#e8e8e4]">
+            <div className="text-[10px] font-medium text-[#555] mb-1.5">Final ödəniş</div>
+            <div className="flex gap-2">
+              <input type="number" placeholder="Məbləğ (₼)" value={form.final_payment}
+                onChange={e => set('final_payment', e.target.value)}
+                className="flex-1 px-2 py-1.5 border border-[#e8e8e4] rounded text-xs focus:outline-none focus:border-[#0f172a]" />
+              <select value={form.final_payment_method} onChange={e => set('final_payment_method', e.target.value)}
+                className="flex-1 px-2 py-1.5 border border-[#e8e8e4] rounded text-xs focus:outline-none focus:border-[#0f172a]">
+                <option value="transfer">Köçürmə</option>
+                <option value="cash">Nağd</option>
+              </select>
+              <input type="date" value={form.final_payment_date} onChange={e => set('final_payment_date', e.target.value)}
+                className="flex-1 px-2 py-1.5 border border-[#e8e8e4] rounded text-xs focus:outline-none focus:border-[#0f172a]" />
+            </div>
+            {Number(form.final_payment) > 0 && (
+              <div className={`mt-1.5 rounded p-1.5 text-[10px] ${form.final_payment_method === 'transfer' ? 'bg-amber-50' : 'bg-[#f5f5f0]'}`}>
+                {form.final_payment_method === 'transfer'
+                  ? `ƏDV xaric: ${fmt(Number(form.final_payment))} · ƏDV: ${fmt(edvCalc(Number(form.final_payment)))} · ƏDV daxil: ${fmt(withEdvCalc(Number(form.final_payment)))}`
+                  : `Nağd · ${fmt(Number(form.final_payment))}`}
+              </div>
+            )}
+          </div>
         </div>
 
         <div>
@@ -405,6 +432,9 @@ export default function LayihelerPage() {
       risk_level: form.risk_level,
       phases: form.phases || [],
       phase: (form.phases || [])[0] || 'concept',
+      final_payment: Number(form.final_payment) || 0,
+      final_payment_method: form.final_payment_method || 'transfer',
+      final_payment_date: form.final_payment_date || null,
       completion_percent: Number(form.completion_percent) || 0,
       deadline: form.deadline || null,
       start_date: form.start_date || null,

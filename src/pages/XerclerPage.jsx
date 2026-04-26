@@ -108,6 +108,9 @@ export default function XerclerPage() {
   const [editExpense, setEditExpense] = useState(null)
   const [deleteExpense, setDeleteExpense] = useState(null)
   const [filterCat, setFilterCat] = useState('all')
+  const [filterProject, setFilterProject] = useState('')
+  const [filterYear, setFilterYear] = useState(0)
+  const [filterMonth, setFilterMonth] = useState(0)
 
   useEffect(() => { loadData() }, [])
 
@@ -158,26 +161,54 @@ export default function XerclerPage() {
   const totalWithEdv = expenses.reduce((s, e) => s + Number(e.amount_with_edv || e.amount || 0), 0)
   const total = expenses.reduce((s, e) => s + Number(e.amount || 0), 0)
 
-  const filtered = filterCat === 'all' ? expenses : expenses.filter(e => e.category === filterCat)
+  const filtered = expenses.filter(e => {
+    if (filterCat !== 'all' && e.category !== filterCat) return false
+    if (filterProject && e.project_id !== filterProject) return false
+    if (filterYear && e.expense_date) {
+      const d = new Date(e.expense_date)
+      if (d.getFullYear() !== filterYear) return false
+      if (filterMonth && d.getMonth() + 1 !== filterMonth) return false
+    }
+    return true
+  })
   const getProject = id => projects.find(p => p.id === id)
 
-  if (loading) return <div className="p-6"><Skeleton className="h-64" /></div>
+  if (loading) return <div className="p-4 lg:p-6"><Skeleton className="h-64" /></div>
 
   return (
-    <div className="p-6 fade-in">
+    <div className="p-4 lg:p-6 fade-in">
       <PageHeader
         title="Xərclər"
         subtitle={`${expenses.length} qeyd`}
         action={<Button onClick={() => { setEditExpense(null); setModalOpen(true) }} size="sm"><IconPlus size={14} /> Yeni xərc</Button>}
       />
 
-      <div className="grid grid-cols-4 gap-4 mb-5">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
         <StatCard label="Nağd xərc" value={fmt(totalCash)} variant="danger" />
         <StatCard label="Köçürmə (ƏDV xaric)" value={fmt(totalTransfer)} variant="danger" />
         <StatCard label="ƏDV geri alınır" value={fmt(totalEdv)} variant="success" />
         <StatCard label="Ümumi (ƏDV daxil)" value={fmt(totalWithEdv)} variant="danger" />
       </div>
 
+      <div className="flex gap-2 mb-3 flex-wrap">
+        <select value={filterYear} onChange={e => setFilterYear(Number(e.target.value))}
+          className="px-3 py-1.5 border border-[#e8e8e4] rounded-lg text-xs focus:outline-none focus:border-[#0f172a]">
+          <option value={0}>Bütün illər</option>
+          {[2024,2025,2026,2027].map(y => <option key={y} value={y}>{y}</option>)}
+        </select>
+        <select value={filterMonth} onChange={e => setFilterMonth(Number(e.target.value))}
+          className="px-3 py-1.5 border border-[#e8e8e4] rounded-lg text-xs focus:outline-none focus:border-[#0f172a]">
+          <option value={0}>Bütün aylar</option>
+          {['Yan','Fev','Mar','Apr','May','İyn','İyl','Avq','Sen','Okt','Noy','Dek'].map((m,i) => (
+            <option key={i+1} value={i+1}>{m}</option>
+          ))}
+        </select>
+        <select value={filterProject} onChange={e => setFilterProject(e.target.value)}
+          className="px-3 py-1.5 border border-[#e8e8e4] rounded-lg text-xs focus:outline-none focus:border-[#0f172a]">
+          <option value="">Bütün layihələr</option>
+          {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+      </div>
       <div className="flex gap-1 mb-4 flex-wrap">
         {[{ key: 'all', label: 'Hamısı' }, ...CATEGORIES.map(c => ({ key: c, label: c }))].map(c => (
           <button key={c.key} onClick={() => setFilterCat(c.key)}

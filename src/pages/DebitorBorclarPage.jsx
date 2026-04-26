@@ -120,6 +120,10 @@ export default function DebitorBorclarPage() {
   const [editRec, setEditRec] = useState(null)
   const [deleteRec, setDeleteRec] = useState(null)
   const [showPaid, setShowPaid] = useState(false)
+  const [filterProject, setFilterProject] = useState('')
+  const [filterClient, setFilterClient] = useState('')
+  const [filterMonth, setFilterMonth] = useState(0)
+  const [filterYear, setFilterYear] = useState(0)
 
   useEffect(() => { loadData() }, [])
 
@@ -181,12 +185,21 @@ export default function DebitorBorclarPage() {
   const overdue60 = unpaid.filter(r => getAging(r.expected_date) > 60).length
   const getProject = id => projects.find(p => p.id === id)
   const getClient = id => clients.find(c => c.id === id)
-  const displayed = showPaid ? receivables : unpaid
+  const displayed = (showPaid ? receivables : unpaid).filter(r => {
+    if (filterProject && r.project_id !== filterProject) return false
+    if (filterClient && r.client_id !== filterClient) return false
+    if (filterYear && r.expected_date) {
+      const d = new Date(r.expected_date)
+      if (d.getFullYear() !== filterYear) return false
+      if (filterMonth && d.getMonth() + 1 !== filterMonth) return false
+    }
+    return true
+  })
 
-  if (loading) return <div className="p-6"><Skeleton className="h-64" /></div>
+  if (loading) return <div className="p-4 lg:p-6"><Skeleton className="h-64" /></div>
 
   return (
-    <div className="p-6 fade-in">
+    <div className="p-4 lg:p-6 fade-in">
       <PageHeader title="Debitor Borclar" subtitle="Gözlənilən alacaqlar · Yaşlandırma hesabatı"
         action={
           <div className="flex gap-2">
@@ -195,11 +208,36 @@ export default function DebitorBorclarPage() {
           </div>
         } />
 
-      <div className="grid grid-cols-4 gap-4 mb-5">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
         <StatCard label="Gözlənilən (ƏDV xaric)" value={fmt(totalExpected)} variant="danger" />
         <StatCard label="Gözlənilən (ƏDV daxil)" value={fmt(totalExpected + totalEdv)} />
         <StatCard label="Açıq alacaqlar" value={unpaid.length} />
         <StatCard label="60+ gün gecikmiş" value={overdue60} variant={overdue60 > 0 ? 'danger' : 'default'} />
+      </div>
+
+      <div className="flex gap-2 mb-3 flex-wrap">
+        <select value={filterYear} onChange={e => setFilterYear(Number(e.target.value))}
+          className="px-3 py-1.5 border border-[#e8e8e4] rounded-lg text-xs focus:outline-none focus:border-[#0f172a]">
+          <option value={0}>Bütün illər</option>
+          {[2024,2025,2026,2027].map(y => <option key={y} value={y}>{y}</option>)}
+        </select>
+        <select value={filterMonth} onChange={e => setFilterMonth(Number(e.target.value))}
+          className="px-3 py-1.5 border border-[#e8e8e4] rounded-lg text-xs focus:outline-none focus:border-[#0f172a]">
+          <option value={0}>Bütün aylar</option>
+          {['Yan','Fev','Mar','Apr','May','İyn','İyl','Avq','Sen','Okt','Noy','Dek'].map((m,i) => (
+            <option key={i+1} value={i+1}>{m}</option>
+          ))}
+        </select>
+        <select value={filterProject} onChange={e => setFilterProject(e.target.value)}
+          className="px-3 py-1.5 border border-[#e8e8e4] rounded-lg text-xs focus:outline-none focus:border-[#0f172a]">
+          <option value="">Bütün layihələr</option>
+          {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+        <select value={filterClient} onChange={e => setFilterClient(e.target.value)}
+          className="px-3 py-1.5 border border-[#e8e8e4] rounded-lg text-xs focus:outline-none focus:border-[#0f172a]">
+          <option value="">Bütün sifarişçilər</option>
+          {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
       </div>
 
       {receivables.length === 0 ? (

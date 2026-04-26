@@ -1,7 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { supabase } from '../lib/supabase'
+import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
-import { PageHeader, Badge, Card, Button, EmptyState, Modal, ConfirmDialog, StatCard } from '../components/ui'
-import { IconPlus, IconEdit, IconTrash, IconFolder, IconFile, IconExternalLink, IconSearch } from '@tabler/icons-react'
+import { PageHeader, Badge, Card, Button, EmptyState, Modal, ConfirmDialog, Skeleton, StatCard } from '../components/ui'
+import { IconPlus, IconEdit, IconTrash, IconFolder, IconExternalLink, IconSearch } from '@tabler/icons-react'
 
 const DOC_TYPES = [
   { key: 'contract', label: 'Müqavilə', color: 'info' },
@@ -11,12 +13,14 @@ const DOC_TYPES = [
   { key: 'other', label: 'Digər', color: 'default' },
 ]
 
-function DocForm({ open, onClose, onSave, doc }) {
-  const [form, setForm] = useState({ title: '', doc_type: 'other', project: '', drive_link: '', notes: '' })
+const EMPLOYEE_TYPES = ['project_task', 'presentation']
 
-  useState(() => {
-    if (doc) setForm({ title: doc.title || '', doc_type: doc.doc_type || 'other', project: doc.project || '', drive_link: doc.drive_link || '', notes: doc.notes || '' })
-    else setForm({ title: '', doc_type: 'other', project: '', drive_link: '', notes: '' })
+function DocForm({ open, onClose, onSave, doc }) {
+  const [form, setForm] = useState({ title: '', doc_type: 'contract', project: '', drive_link: '', notes: '' })
+
+  useEffect(() => {
+    if (doc) setForm({ title: doc.title || '', doc_type: doc.doc_type || 'contract', project: doc.project || '', drive_link: doc.drive_link || '', notes: doc.notes || '' })
+    else setForm({ title: '', doc_type: 'contract', project: '', drive_link: '', notes: '' })
   }, [doc, open])
 
   function set(k, v) { setForm(f => ({ ...f, [k]: v })) }
@@ -42,7 +46,7 @@ function DocForm({ open, onClose, onSave, doc }) {
             <label className="block text-xs font-medium text-[#555] mb-1">Layihə</label>
             <input value={form.project} onChange={e => set('project', e.target.value)}
               className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]"
-              placeholder="Layihənin adı" />
+              placeholder="Layihə adı" />
           </div>
         </div>
         <div>
@@ -69,125 +73,134 @@ export default function SendArxiviPage() {
   const { addToast } = useToast()
   const { isAdmin } = useAuth()
   const [docs, setDocs] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [filter, setFilter] = useState('all')
   const [modalOpen, setModalOpen] = useState(false)
   const [editDoc, setEditDoc] = useState(null)
   const [deleteDoc, setDeleteDoc] = useState(null)
-  const [search, setSearch] = useState('')
-  const [filter, setFilter] = useState('all')
 
-  function handleSave(form) {
+  useEffect(() => { loadData() }, [])
+
+  async function loadData() {
+    setLoading(true)
+    const { data, error } = await supabase
+      .from('documents')
+      .select('*')
+      .order('created_at', { ascending: false })
+    if (error) console.error('Documents error:', error)
+    setDocs(data || [])
+    setLoading(false)
+  }
+
+  async function handleSave(form) {
     if (!form.title.trim()) { addToast('Ad daxil edin', 'error'); return }
-    const data = { ...form, created_at: new Date().toISOString() }
+    const data = { title: form.title.trim(), doc_type: form.doc_type, project: form.project || null, drive_link: form.drive_link || null, notes: form.notes || null }
     if (editDoc) {
-      setDocs(prev => prev.map(d => d.id === editDoc.id ? { ...d, ...data } : d))
+      const { error } = await supabase.from('documents').update(data).eq('id', editDoc.id)
+      if (error) { addToast('Xəta: ' + error.message, 'error'); return }
       addToast('Yeniləndi', 'success')
     } else {
-      setDocs(prev => [...prev, { id: Date.now().toString(), ...data }])
+      const { error } = await supabase.from('documents').insert(data)
+      if (error) { addToast('Xəta: ' + error.message, 'error'); return }
       addToast('Sənəd əlavə edildi', 'success')
     }
-    setModalOpen(false); setEditDoc(null)
+    setModalOpen(false); setEditDoc(null); await loadData()
   }
 
-  function handleDelete() {
-    setDocs(prev => prev.filter(d => d.id !== deleteDoc.id))
+  async function handleDelete() {
+    await supabase.from('documents').delete().eq('id', deleteDoc.id)
     addToast('Silindi', 'success')
-    setDeleteDoc(null)
+    setDeleteDoc(null); await loadData()
   }
 
-  const EMPLOYEE_TYPES = ['project_task', 'presentation']
-  const filtered = docs.filter(d => {
-    if (!isAdmin && !EMPLOYEE_TYPES.includes(d.doc_type)) return false
-    const matchSearch = !search || d.title.toLowerCase().includes(search.toLowerCase()) || d.project?.toLowerCase().includes(search.toLowerCase())
+  const visibleDocs = isAdmin ? docs : docs.filter(d => EMPLOYEE_TYPES.includes(d.doc_type))
+  const filtered = visibleDocs.filter(d => {
+    const matchSearch = !search || d.title.toLowerCase().includes(search.toLowerCase()) || (d.project || '').toLowerCase().includes(search.toLowerCase())
     const matchType = filter === 'all' || d.doc_type === filter
     return matchSearch && matchType
   })
+
+  if (loading) return <div className="p-4 lg:p-6"><Skeleton className="h-64" /></div>
 
   return (
     <div className="p-4 lg:p-6 fade-in">
       <PageHeader
         title="Sənəd Arxivi"
-        subtitle={`${docs.length} sənəd · Google Drive inteqrasiyası`}
-        action={isAdmin ? <Button onClick={() => { setEditDoc(null); setModalOpen(true) }} size="sm"><IconPlus size={14} /> Sənəd əlavə et</Button> : null}
+        subtitle={`${filtered.length} sənəd`}
+        action={isAdmin ? (
+          <Button onClick={() => { setEditDoc(null); setModalOpen(true) }} size="sm">
+            <IconPlus size={14} /> Sənəd əlavə et
+          </Button>
+        ) : null}
       />
 
-      {/* Search */}
-      <div className="flex gap-3 mb-5">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+        {DOC_TYPES.filter(t => isAdmin || EMPLOYEE_TYPES.includes(t.key)).map(t => (
+          <StatCard key={t.key} label={t.label} value={visibleDocs.filter(d => d.doc_type === t.key).length} />
+        ))}
+      </div>
+
+      <div className="flex gap-2 mb-4">
         <div className="relative flex-1">
           <IconSearch size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#aaa]" />
           <input value={search} onChange={e => setSearch(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]"
-            placeholder="Sənəd adı, layihə axtar..." />
+            placeholder="Sənəd adı və ya layihə axtar..."
+            className="w-full pl-8 pr-3 py-2 border border-[#e8e8e4] rounded-lg text-xs focus:outline-none focus:border-[#0f172a]" />
         </div>
       </div>
 
       <div className="flex gap-1 mb-4 border-b border-[#e8e8e4] flex-wrap">
-        {[{ key: 'all', label: 'Hamısı' }, ...DOC_TYPES.filter(t => isAdmin || ['project_task','presentation'].includes(t.key))].map(t => (
+        {[{ key: 'all', label: 'Hamısı' }, ...DOC_TYPES.filter(t => isAdmin || EMPLOYEE_TYPES.includes(t.key))].map(t => (
           <button key={t.key} onClick={() => setFilter(t.key)}
             className={`px-3 py-2 text-xs font-medium border-b-2 transition-colors ${filter === t.key ? 'border-[#0f172a] text-[#0f172a]' : 'border-transparent text-[#888] hover:text-[#555]'}`}>
             {t.label}
+            <span className="ml-1 text-[10px] text-[#aaa]">
+              {t.key === 'all' ? visibleDocs.length : visibleDocs.filter(d => d.doc_type === t.key).length}
+            </span>
           </button>
         ))}
       </div>
 
-      {docs.length === 0 ? (
-        <EmptyState icon={IconFolder} title="Hələ sənəd yoxdur"
-          description="Müqavilələr, çertyojlar, icazələr və digər sənədləri Google Drive linki ilə əlavə edin"
-          action={<Button onClick={() => setModalOpen(true)} size="sm"><IconPlus size={14} /> Sənəd əlavə et</Button>} />
+      {filtered.length === 0 ? (
+        <EmptyState icon={IconFolder} title="Sənəd tapılmadı"
+          action={isAdmin ? <Button onClick={() => setModalOpen(true)} size="sm"><IconPlus size={14} /> Əlavə et</Button> : null} />
       ) : (
-        <Card>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-[#e8e8e4]">
-                  <th className="text-left px-4 py-3 font-medium text-[#888]">Sənəd</th>
-                  <th className="text-left px-4 py-3 font-medium text-[#888]">Növ</th>
-                  <th className="text-left px-4 py-3 font-medium text-[#888]">Layihə</th>
-                  <th className="text-left px-4 py-3 font-medium text-[#888]">Tarix</th>
-                  <th className="text-left px-4 py-3 font-medium text-[#888]">Drive</th>
-                  <th className="px-4 py-3"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map(d => {
-                  const dt = DOC_TYPES.find(t => t.key === d.doc_type)
-                  return (
-                    <tr key={d.id} className="border-b border-[#f5f5f0] hover:bg-[#fafaf8]">
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <IconFile size={14} className="text-[#aaa]" />
-                          <span className="font-medium text-[#0f172a]">{d.title}</span>
-                        </div>
-                        {d.notes && <div className="text-[10px] text-[#aaa] mt-0.5 ml-5">{d.notes}</div>}
-                      </td>
-                      <td className="px-4 py-3"><Badge variant={dt?.color} size="sm">{dt?.label}</Badge></td>
-                      <td className="px-4 py-3 text-[#555]">{d.project || '—'}</td>
-                      <td className="px-4 py-3 text-[#555]">{d.created_at ? new Date(d.created_at).toLocaleDateString('az-AZ') : '—'}</td>
-                      <td className="px-4 py-3">
-                        {d.drive_link ? (
-                          <a href={d.drive_link} target="_blank" rel="noopener noreferrer"
-                            className="flex items-center gap-1 text-blue-500 hover:text-blue-700 transition-colors">
-                            <IconExternalLink size={12} />
-                            <span>Aç</span>
-                          </a>
-                        ) : <span className="text-[#ddd]">—</span>}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex gap-1">
-                          <button onClick={() => { setEditDoc(d); setModalOpen(true) }} className="text-[#aaa] hover:text-[#0f172a] p-1"><IconEdit size={12} /></button>
-                          <button onClick={() => setDeleteDoc(d)} className="text-[#aaa] hover:text-red-500 p-1"><IconTrash size={12} /></button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {filtered.map(doc => {
+            const dt = DOC_TYPES.find(t => t.key === doc.doc_type)
+            return (
+              <Card key={doc.id} className="p-4 group hover:border-[#0f172a] transition-colors">
+                <div className="flex items-start justify-between mb-2">
+                  <Badge variant={dt?.color} size="sm">{dt?.label}</Badge>
+                  {isAdmin && (
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={() => { setEditDoc(doc); setModalOpen(true) }} className="text-[#aaa] hover:text-[#0f172a] p-1"><IconEdit size={12} /></button>
+                      <button onClick={() => setDeleteDoc(doc)} className="text-[#aaa] hover:text-red-500 p-1"><IconTrash size={12} /></button>
+                    </div>
+                  )}
+                </div>
+                <div className="text-sm font-medium text-[#0f172a] mb-1 truncate">{doc.title}</div>
+                {doc.project && <div className="text-[10px] text-[#888] mb-2">{doc.project}</div>}
+                {doc.notes && <div className="text-[10px] text-[#aaa] mb-2 line-clamp-2">{doc.notes}</div>}
+                {doc.drive_link && (
+                  <a href={doc.drive_link} target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-1 text-[10px] text-blue-500 hover:text-blue-700 mt-2">
+                    <IconExternalLink size={11} /> Google Drive-da aç
+                  </a>
+                )}
+                <div className="text-[9px] text-[#ccc] mt-2">
+                  {new Date(doc.created_at).toLocaleDateString('az-AZ')}
+                </div>
+              </Card>
+            )
+          })}
+        </div>
       )}
 
       <DocForm open={modalOpen} onClose={() => { setModalOpen(false); setEditDoc(null) }} onSave={handleSave} doc={editDoc} />
-      <ConfirmDialog open={!!deleteDoc} title="Sənədi sil" message={`"${deleteDoc?.title}" silmək istədiyinizə əminsiniz?`}
+      <ConfirmDialog open={!!deleteDoc} title="Sənədi sil"
+        message={`"${deleteDoc?.title}" silmək istədiyinizə əminsiniz?`}
         onConfirm={handleDelete} onCancel={() => setDeleteDoc(null)} danger />
     </div>
   )

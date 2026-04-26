@@ -48,7 +48,7 @@ function PodratForm({ open, onClose, onSave, work, projects }) {
     name: '', outsource_type: 'company', project_id: '', work_type: '',
     contract_amount: '', payment_method: 'transfer',
     payment_status: 'not_started', work_status: 'not_started',
-    paid_30_percent: false, paid_30_date: '', paid_30_method: 'transfer',
+    advance_percent: 30, paid_30_percent: false, paid_30_date: '', paid_30_method: 'transfer',
     interim_payments: [],
     paid_final_10: false, paid_final_10_date: '', paid_final_10_method: 'transfer',
     client_approval_date: '', planned_deadline: '', followup_date: '',
@@ -62,7 +62,7 @@ function PodratForm({ open, onClose, onSave, work, projects }) {
         project_id: work.project_id || '', work_type: work.work_type || '',
         contract_amount: work.contract_amount || '', payment_method: work.payment_method || 'transfer',
         payment_status: work.payment_status || 'not_started', work_status: work.work_status || 'not_started',
-        paid_30_percent: work.paid_30_percent || false, paid_30_date: work.paid_30_date || '',
+        advance_percent: work.advance_percent || 30, paid_30_percent: work.paid_30_percent || false, paid_30_date: work.paid_30_date || '',
         paid_30_method: work.paid_30_method || 'transfer',
         interim_payments: work.interim_payments || [],
         paid_final_10: work.paid_final_10 || false, paid_final_10_date: work.paid_final_10_date || '',
@@ -72,7 +72,7 @@ function PodratForm({ open, onClose, onSave, work, projects }) {
         contract_number: work.contract_number || '', notes: work.notes || ''
       })
     } else {
-      setForm({ name: '', outsource_type: 'company', project_id: '', work_type: '', contract_amount: '', payment_method: 'transfer', payment_status: 'not_started', work_status: 'not_started', paid_30_percent: false, paid_30_date: '', paid_30_method: 'transfer', interim_payments: [], paid_final_10: false, paid_final_10_date: '', paid_final_10_method: 'transfer', client_approval_date: '', planned_deadline: '', followup_date: '', contract_number: '', notes: '' })
+      setForm({ name: '', outsource_type: 'company', project_id: '', work_type: '', contract_amount: '', payment_method: 'transfer', advance_percent: 30, payment_status: 'not_started', work_status: 'not_started', paid_30_percent: false, paid_30_date: '', paid_30_method: 'transfer', interim_payments: [], paid_final_10: false, paid_final_10_date: '', paid_final_10_method: 'transfer', client_approval_date: '', planned_deadline: '', followup_date: '', contract_number: '', notes: '' })
     }
   }, [work, open])
 
@@ -92,7 +92,7 @@ function PodratForm({ open, onClose, onSave, work, projects }) {
     })
   }
 
-  const amt30 = form.paid_30_percent ? Math.round(Number(form.contract_amount || 0) * 0.3) : 0
+  const amt30 = form.paid_30_percent ? Math.round(Number(form.contract_amount || 0) * (Number(form.advance_percent) || 30) / 100) : 0
   const amt10 = form.paid_final_10 ? Math.round(Number(form.contract_amount || 0) * 0.1) : 0
 
   return (
@@ -161,7 +161,13 @@ function PodratForm({ open, onClose, onSave, work, projects }) {
             <div className="flex items-center gap-2 mb-2">
               <input type="checkbox" checked={form.paid_30_percent} onChange={e => set('paid_30_percent', e.target.checked)}
                 className="w-4 h-4 accent-[#0f172a]" />
-              <span className="text-xs font-medium text-[#0f172a]">30% Avans ödənilib</span>
+              <span className="text-xs font-medium text-[#0f172a]">Avans ödənilib</span>
+              <div className="flex items-center gap-1 ml-2">
+                <input type="number" value={form.advance_percent} onChange={e => set('advance_percent', e.target.value)}
+                  className="w-14 px-2 py-0.5 border border-[#e8e8e4] rounded text-xs focus:outline-none focus:border-[#0f172a]"
+                  min="1" max="100" />
+                <span className="text-xs text-[#888]">%</span>
+              </div>
               {amt30 > 0 && <span className="text-xs text-[#888] ml-auto">{fmt(amt30)}</span>}
             </div>
             {form.paid_30_percent && (
@@ -309,7 +315,7 @@ export default function PodratIsleriPage() {
     const isTransfer = form.payment_method === 'transfer'
 
     // Ödənilmiş cəmi hesabla
-    const paid30 = form.paid_30_percent ? Math.round(amt * 0.3) : 0
+    const paid30 = form.paid_30_percent ? Math.round(amt * (Number(form.advance_percent) || 30) / 100) : 0
     const paidInterim = form.interim_payments.reduce((s, ip) => s + (Number(ip.amount) || 0), 0)
     const paid10 = form.paid_final_10 ? Math.round(amt * 0.1) : 0
     const totalPaid = paid30 + paidInterim + paid10
@@ -321,6 +327,7 @@ export default function PodratIsleriPage() {
       edv_amount: isTransfer ? edv(amt) : 0,
       amount_with_edv: isTransfer ? withEdv(amt) : amt,
       payment_status: form.payment_status, work_status: form.work_status,
+      advance_percent: Number(form.advance_percent) || 30,
       paid_30_percent: form.paid_30_percent, paid_30_date: form.paid_30_date || null,
       paid_30_method: form.paid_30_method,
       interim_payments: form.interim_payments,

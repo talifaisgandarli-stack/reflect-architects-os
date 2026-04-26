@@ -14,6 +14,8 @@ const EDV_RATE = 0.18
 export default function DashboardPage() {
   const { profile } = useAuth()
   const [loading, setLoading] = useState(true)
+  const [filterYear, setFilterYear] = useState(new Date().getFullYear())
+  const [filterMonth, setFilterMonth] = useState(0) // 0 = hamisi
   const [stats, setStats] = useState({
     totalPortfolio: 0, totalIncome: 0, totalDebt: 0,
     incomeCash: 0, incomeTransfer: 0, totalIncomeWithEdv: 0, incomeTransferWithEdv: 0,
@@ -146,8 +148,8 @@ export default function DashboardPage() {
   const fmt = (n) => '₼' + Math.round(n).toLocaleString()
 
   if (loading) return (
-    <div className="p-6 space-y-4">
-      <div className="grid grid-cols-4 gap-4">
+    <div className="p-4 lg:p-6 space-y-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-20" />)}
       </div>
       <div className="grid grid-cols-2 gap-4">
@@ -159,7 +161,7 @@ export default function DashboardPage() {
   const today = new Date()
 
   return (
-    <div className="p-6 space-y-5 fade-in">
+    <div className="p-4 lg:p-6 space-y-5 fade-in">
 
       {/* Welcome */}
       <div>
@@ -170,6 +172,21 @@ export default function DashboardPage() {
           {today.toLocaleDateString('az-AZ', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
           {stats.overdueTasksCount > 0 && ` · ${stats.overdueTasksCount} vaxtı keçmiş tapşırıq`}
         </p>
+      </div>
+
+      {/* Filter */}
+      <div className="flex gap-2 items-center">
+        <select value={filterYear} onChange={e => setFilterYear(Number(e.target.value))}
+          className="px-3 py-1.5 border border-[#e8e8e4] rounded-lg text-xs focus:outline-none focus:border-[#0f172a]">
+          {[2024, 2025, 2026, 2027].map(y => <option key={y} value={y}>{y}</option>)}
+        </select>
+        <select value={filterMonth} onChange={e => setFilterMonth(Number(e.target.value))}
+          className="px-3 py-1.5 border border-[#e8e8e4] rounded-lg text-xs focus:outline-none focus:border-[#0f172a]">
+          <option value={0}>Bütün aylar</option>
+          {['Yanvar','Fevral','Mart','Aprel','May','İyun','İyul','Avqust','Sentyabr','Oktyabr','Noyabr','Dekabr'].map((m,i) => (
+            <option key={i+1} value={i+1}>{m}</option>
+          ))}
+        </select>
       </div>
 
       {/* KPI Cards */}
