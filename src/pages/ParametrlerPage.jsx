@@ -126,9 +126,17 @@ export default function ParametrlerPage() {
     setTesting(type)
     setTestResult(prev => ({ ...prev, [type]: null }))
     try {
-      const res  = await fetch(`/api/agent?type=${type}`)
-      const data = await res.json()
-      if (data.success !== false) {
+      const res = await fetch('/api/agent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type })
+      })
+      const text = await res.text()
+      let data
+      try { data = JSON.parse(text) }
+      catch { addToast('Server xətası: ' + text.slice(0, 80), 'error'); setTestResult(prev => ({ ...prev, [type]: 'err' })); setTesting(null); return }
+
+      if (data.success !== false && !data.error) {
         addToast(`"${NOTIFICATIONS.find(n=>n.key===type)?.label}" göndərildi — ${data.count ?? '?'} nəfərə`, 'success')
         setTestResult(prev => ({ ...prev, [type]: 'ok' }))
       } else {

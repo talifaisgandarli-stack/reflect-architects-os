@@ -72,7 +72,11 @@ function daysLeft(due) {
 
 // ── Ana handler ───────────────────────────────────────────────────────────────
 export default async function handler(req, res) {
-  const type = req.query.type || req.body?.type
+  // GET və POST hər ikisini dəstəklə
+  const type = req.query?.type || req.body?.type
+
+  // CORS headers
+  res.setHeader('Content-Type', 'application/json')
 
   // ── Manual mesaj ─────────────────────────────────────────────────────────────
   if (type === 'send_manual') {
