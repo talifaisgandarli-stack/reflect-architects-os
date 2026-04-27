@@ -155,7 +155,7 @@ function ReviewForm({ open, onClose, onSave, review, members }) {
 
 export default function PerformansPage() {
   const { addToast } = useToast()
-  const { isAdmin } = useAuth()
+  const { isAdmin, user } = useAuth()
   const [reviews, setReviews] = useState([])
   const [members, setMembers] = useState([])
   const [loading, setLoading] = useState(true)
@@ -168,8 +168,13 @@ export default function PerformansPage() {
 
   async function loadData() {
     setLoading(true)
+    let reviewQuery = supabase.from('performance_reviews')
+      .select('*, profiles(full_name, career_level)')
+      .order('review_year', { ascending: false })
+    if (!isAdmin) reviewQuery = reviewQuery.eq('employee_id', user?.id)
+
     const [rRes, mRes] = await Promise.all([
-      supabase.from('performance_reviews').select('*, profiles(full_name, career_level)').order('review_year', { ascending: false }),
+      reviewQuery,
       supabase.from('profiles').select('id, full_name, career_level').eq('is_active', true).order('full_name'),
     ])
     setReviews(rRes.data || [])
@@ -260,6 +265,80 @@ export default function PerformansPage() {
   const eligible = filtered.filter(r => r.total_score >= 4.5).length
 
   if (loading) return <div className="p-4 lg:p-6"><Skeleton className="h-64" /></div>
+
+  // İşçi üçün şəxsi görünüş
+  if (!isAdmin) {
+    return (
+      <div className="p-4 lg:p-6 fade-in">
+        <div className="mb-5">
+          <h1 className="text-base font-bold text-[#0f172a]">Mənim Performansım</h1>
+          <p className="text-xs text-[#888] mt-0.5">İllik 360° survey + rəhbər + tapşırıq statistikası</p>
+        </div>
+
+        {reviews.length === 0 ? (
+          <div className="text-center py-16 text-[#aaa] text-sm">
+            <div className="text-4xl mb-3">📊</div>
+            <div>Hələ performans qiymətləndirməniz yoxdur</div>
+            <div className="text-xs mt-1">Rəhbərinizlə əlaqə saxlayın</div>
+          </div>
+        ) : (
+          <div className="space-y-4 max-w-2xl">
+            {reviews.map(r => {
+              const scoreColor = r.total_score >= 4.5 ? '#16a34a' : r.total_score >= 3.5 ? '#ca8a04' : '#dc2626'
+              return (
+                <div key={r.id} className="bg-white border border-[#e8e8e4] rounded-2xl p-5">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <div className="text-sm font-bold text-[#0f172a]">{r.review_year} ili</div>
+                      <div className="text-xs text-[#888] mt-0.5">{r.reviewed_by ? `Qiymətləyən: ${r.reviewed_by}` : ''}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-3xl font-black" style={{ color: scoreColor }}>{fmt1(r.total_score)}</div>
+                      <div className="text-[10px] text-[#aaa]">/ 5.0 bal</div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    {[
+                      { label: '360° Survey', value: r.survey_360, weight: '40%' },
+                      { label: 'Rəhbər qiyməti', value: r.manager_score, weight: '30%' },
+                      { label: 'Tapşırıq statistikası', value: r.task_score, weight: '30%' },
+                    ].map(item => item.value != null && (
+                      <div key={item.label}>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs text-[#555]">{item.label}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] text-[#aaa]">{item.weight}</span>
+                            <span className="text-xs font-bold text-[#0f172a]">{fmt1(item.value)}/5.0</span>
+                          </div>
+                        </div>
+                        <div className="h-1.5 bg-[#f0f0ec] rounded-full overflow-hidden">
+                          <div className="h-full rounded-full transition-all" style={{ width: `${(item.value / 5) * 100}%`, background: scoreColor }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {r.notes && (
+                    <div className="mt-4 pt-3 border-t border-[#f0f0ec]">
+                      <div className="text-[10px] text-[#aaa] mb-1 uppercase tracking-wider">Rəhbər qeydi</div>
+                      <p className="text-xs text-[#555] leading-relaxed">{r.notes}</p>
+                    </div>
+                  )}
+
+                  {r.total_score >= 4.5 && (
+                    <div className="mt-3 bg-green-50 border border-green-200 rounded-xl px-3 py-2 text-xs text-green-700 font-medium">
+                      🚀 Erkən yüksəliş hüququ qazanıldı!
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className="p-4 lg:p-6 fade-in">
