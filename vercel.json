@@ -4,9 +4,11 @@
     { "source": "/(.*)", "destination": "/" }
   ],
   "crons": [
-    { "path": "/api/agent?type=daily_summary", "schedule": "0 4 * * *" },
-    { "path": "/api/agent?type=deadline_warning", "schedule": "0 4 * * *" },
-    { "path": "/api/agent?type=meeting_reminder", "schedule": "0 4 * * *" },
-    { "path": "/api/agent?type=weekly_report", "schedule": "0 13 * * 5" }
+    { "path": "/api/agent?type=morning",           "schedule": "0 5 * * *"   },
+    { "path": "/api/agent?type=morning_admin",     "schedule": "0 5 * * *"   },
+    { "path": "/api/agent?type=outsource_deadline","schedule": "0 5 * * *"   },
+    { "path": "/api/agent?type=deadline_warning",  "schedule": "0 10 * * *"  },
+    { "path": "/api/agent?type=evening",           "schedule": "0 14 * * *"  },
+    { "path": "/api/agent?type=weekly_report",     "schedule": "0 13 * * 5"  }
   ]
 }
