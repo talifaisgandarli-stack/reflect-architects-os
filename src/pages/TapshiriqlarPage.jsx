@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useToast } from '../contexts/ToastContext'
 import { useAuth } from '../contexts/AuthContext'
 import { Button, Modal, ConfirmDialog, Skeleton } from '../components/ui'
-import { notify } from '../components/layout/MainLayout'
+import { notify } from '../lib/notify'
 import {
   IconPlus, IconX, IconEdit, IconTrash, IconCheck, IconSend,
   IconLayoutKanban, IconList, IconSearch, IconArchive,

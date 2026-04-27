@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
-import { notify, notifyAll } from '../components/layout/MainLayout'
+import { notify, notifyAll } from '../lib/notify'
 import { useToast } from '../contexts/ToastContext'
 import { PageHeader, Badge, Button, EmptyState, Modal, ConfirmDialog, Skeleton } from '../components/ui'
 import { IconPlus, IconEdit, IconTrash, IconSpeakerphone } from '@tabler/icons-react'

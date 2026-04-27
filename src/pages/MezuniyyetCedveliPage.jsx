@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
-import { notify, notifyAll } from '../components/layout/MainLayout'
+import { notifyAdmins } from '../lib/notify'
 import { PageHeader, Badge, Card, Button, EmptyState, Modal, ConfirmDialog, Skeleton, StatCard } from '../components/ui'
 import { IconPlus, IconEdit, IconTrash, IconUmbrella, IconCheck, IconX, IconSend } from '@tabler/icons-react'
 
