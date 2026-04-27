@@ -73,7 +73,7 @@ export default function EmployeeDashboardPage() {
   const yearsAt   = profile?.joining_date ? Math.floor((new Date() - new Date(profile.joining_date)) / (365.25 * 86400000)) : null
   const now       = new Date()
   const hour      = now.getHours()
-  const greeting  = hour < 12 ? 'Sabahın xeyir' : hour < 17 ? 'Günortanız xeyir' : 'Axşamınız xeyir'
+  const greeting  = firstName
   const dayFmt    = now.toLocaleDateString('az-AZ', { weekday: 'long', day: 'numeric', month: 'long' })
 
   const donePct = data.allTasks.length
@@ -113,8 +113,8 @@ export default function EmployeeDashboardPage() {
             </div>
           )}
 
-          <h1 className="text-2xl font-bold text-white mb-0.5">{greeting},</h1>
-          <h1 className="text-2xl font-bold text-white/90 mb-3">{firstName}.</h1>
+          <h1 className="text-2xl font-bold text-white mb-0.5">{firstName},</h1>
+          <h1 className="text-2xl font-bold text-white/90 mb-3">xoş gördük.</h1>
           <p className="text-sm text-white/40 capitalize">{dayFmt}</p>
 
           {/* Promotion badge */}
