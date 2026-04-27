@@ -630,65 +630,102 @@ function KanbanCard({ task, projects, members, checkCounts, commentCounts, onCli
   const cmt = commentCounts[task.id] || 0
 
   return (
-    <div onClick={() => onClick(task)}
-      className="bg-white rounded-xl border border-[#e8e8e4] p-3 cursor-pointer hover:border-[#0f172a]/40 hover:shadow-md transition-all duration-150 group relative overflow-hidden">
-      <div className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-xl" style={{ background: pr.color }} />
-      <div className="pl-3">
-        <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
-          {project && (
-            <span className="text-[9px] font-bold uppercase tracking-widest" style={{ color: projClr(project.id, projects) }}>
-              {project.name}
-            </span>
-          )}
-          {(task.tags||[]).map(tag => {
-            const tg = TASK_TAGS.find(t=>t.key===tag)
-            return tg ? (
-              <span key={tag} className="text-[8px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-wide"
-                style={{ background: tg.color, color: 'white' }}>{tg.label}</span>
-            ) : null
-          })}
-          {task.is_hidden && (
-            <span className="text-[8px] font-bold px-1.5 py-0.5 rounded-full bg-[#0f172a] text-white/60">🔒</span>
-          )}
-        </div>
-        <p className={`text-[11px] font-semibold leading-snug mb-2.5 ${isDone ? 'line-through text-[#bbb]' : 'text-[#0f172a]'}`}>
-          {task.title}
-        </p>
-        {cc.total > 0 && (
-          <div className="flex items-center gap-1.5 mb-2.5">
-            <div className="flex-1 h-[3px] bg-[#f0f0ec] rounded-full overflow-hidden">
-              <div className="h-full bg-[#22c55e] rounded-full" style={{ width:`${Math.round(cc.done/cc.total*100)}%` }} />
+    <div className="group relative" style={{ marginBottom: '0' }}>
+      {/* Main card */}
+      <div onClick={() => onClick(task)}
+        className={`bg-white rounded-2xl border cursor-pointer transition-all duration-200 ${
+          overdue
+            ? 'border-red-200 hover:border-red-400 hover:shadow-md'
+            : 'border-[#ebebeb] hover:border-[#c8c8c8] hover:shadow-md'
+        }`}
+        style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}
+      >
+        {/* Priority top bar */}
+        <div className="h-[3px] rounded-t-2xl" style={{ background: pr.color }} />
+
+        <div className="p-3.5">
+          {/* Header: project + tags + hidden */}
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-1.5 flex-wrap flex-1 min-w-0">
+              {project && (
+                <span className="text-[9px] font-bold uppercase tracking-widest truncate"
+                  style={{ color: projClr(project.id, projects) }}>
+                  {project.name}
+                </span>
+              )}
+              {(task.tags||[]).map(tag => {
+                const tg = TASK_TAGS.find(t=>t.key===tag)
+                return tg ? (
+                  <span key={tag} className="text-[8px] font-black px-1.5 py-0.5 rounded-md uppercase tracking-wide flex-shrink-0"
+                    style={{ background: tg.bg, color: tg.text, border: `1px solid ${tg.color}40` }}>
+                    {tg.label}
+                  </span>
+                ) : null
+              })}
+              {task.is_hidden && (
+                <span className="text-[9px] text-[#94a3b8] flex-shrink-0">🔒</span>
+              )}
             </div>
-            <span className="text-[9px] text-[#aaa] font-medium">{cc.done}/{cc.total}</span>
           </div>
-        )}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            {assignee && <Avatar name={assignee.full_name} size={5} />}
-            {cmt > 0 && (
-              <div className="flex items-center gap-0.5 text-[#bbb]">
-                <IconMessage size={10} />
-                <span className="text-[9px]">{cmt}</span>
+
+          {/* Title */}
+          <p className={`text-[12px] font-semibold leading-snug mb-3 ${isDone ? 'line-through text-[#c0c0c0]' : 'text-[#1a1a2e]'}`}>
+            {task.title}
+          </p>
+
+          {/* Checklist bar */}
+          {cc.total > 0 && (
+            <div className="flex items-center gap-2 mb-3">
+              <div className="flex-1 h-1 bg-[#f0f0f0] rounded-full overflow-hidden">
+                <div className="h-full rounded-full transition-all"
+                  style={{ width:`${Math.round(cc.done/cc.total*100)}%`, background: cc.done===cc.total ? '#22c55e' : '#94a3b8' }} />
               </div>
-            )}
-          </div>
-          <div className="flex items-center gap-1.5">
+              <span className="text-[9px] text-[#aaa] font-medium tabular-nums">{cc.done}/{cc.total}</span>
+            </div>
+          )}
+
+          {/* Footer */}
+          <div className="flex items-center justify-between">
+            {/* Left: avatar + comments */}
+            <div className="flex items-center gap-2">
+              {assignee && (
+                <div className="flex items-center gap-1">
+                  <Avatar name={assignee.full_name} size={5} />
+                  <span className="text-[9px] text-[#94a3b8]">{assignee.full_name.split(' ')[0]}</span>
+                </div>
+              )}
+              {cmt > 0 && (
+                <div className="flex items-center gap-0.5 text-[#cbd5e1]">
+                  <IconMessage size={10} />
+                  <span className="text-[9px] font-medium">{cmt}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Right: deadline */}
             {task.due_date && (
-              <span className={`text-[9px] font-semibold flex items-center gap-0.5 ${
-                overdue ? 'text-red-500' : days===0 ? 'text-yellow-600' : days!==null&&days<=3 ? 'text-amber-500' : 'text-[#c0c0c0]'
+              <span className={`text-[9px] font-bold flex items-center gap-0.5 px-1.5 py-0.5 rounded-md ${
+                overdue
+                  ? 'bg-red-50 text-red-500'
+                  : days===0 ? 'bg-yellow-50 text-yellow-600'
+                  : days!==null&&days<=3 ? 'bg-amber-50 text-amber-500'
+                  : 'text-[#c0c0c0]'
               }`}>
                 <IconCalendar size={9} />
                 {overdue ? `${Math.abs(days)}g keçib` : days===0 ? 'Bu gün' : new Date(task.due_date).toLocaleDateString('az-AZ',{day:'numeric',month:'short'})}
               </span>
             )}
-            <button onClick={e => { e.stopPropagation(); onArchive(task) }}
-              className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded text-[#ccc] hover:text-[#888] transition-all"
-              title="Arxivə göndər">
-              <IconArchive size={10} />
-            </button>
           </div>
         </div>
       </div>
+
+      {/* Archive button — always visible on hover, outside overflow-hidden */}
+      <button
+        onClick={e => { e.stopPropagation(); onArchive(task) }}
+        className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-150 w-6 h-6 flex items-center justify-center rounded-lg bg-white border border-[#e8e8e4] text-[#94a3b8] hover:text-[#64748b] hover:border-[#94a3b8] shadow-sm"
+        title="Arxivə göndər">
+        <IconArchive size={11} />
+      </button>
     </div>
   )
 }
@@ -697,20 +734,23 @@ function KanbanCard({ task, projects, members, checkCounts, commentCounts, onCli
 function KanbanColumn({ column, tasks, projects, members, checkCounts, commentCounts, onCardClick, onQuickAdd, onArchive }) {
   const [adding, setAdding] = useState(false)
   return (
-    <div className="flex flex-col w-[272px] flex-shrink-0">
-      <div className="flex items-center justify-between mb-3 px-1">
+    <div className="flex flex-col w-[280px] flex-shrink-0">
+      {/* Column header */}
+      <div className="flex items-center justify-between mb-3 px-0.5">
         <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full" style={{ background: column.color }} />
-          <span className="text-xs font-bold text-[#0f172a]">{column.label}</span>
-          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+          <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: column.color }} />
+          <span className="text-[11px] font-bold text-[#1a1a2e] tracking-wide">{column.label}</span>
+          <span className="text-[10px] font-bold min-w-[20px] h-5 flex items-center justify-center px-1.5 rounded-md"
             style={{ background: column.bg, color: column.color }}>{tasks.length}</span>
         </div>
         <button onClick={() => setAdding(true)}
-          className="w-6 h-6 flex items-center justify-center rounded-lg text-[#bbb] hover:text-[#0f172a] hover:bg-[#f5f5f0] transition-colors">
+          className="w-7 h-7 flex items-center justify-center rounded-lg text-[#aaa] hover:text-[#0f172a] hover:bg-white hover:shadow-sm transition-all border border-transparent hover:border-[#e8e8e4]">
           <IconPlus size={13} />
         </button>
       </div>
-      <div className="flex flex-col gap-2 flex-1">
+
+      {/* Cards area */}
+      <div className="flex flex-col gap-2.5 flex-1 min-h-[80px]">
         {adding && (
           <QuickAdd status={column.key} projects={projects} members={members}
             onSave={data => { onQuickAdd(data); setAdding(false) }}
@@ -718,12 +758,16 @@ function KanbanColumn({ column, tasks, projects, members, checkCounts, commentCo
         )}
         {tasks.map(task => (
           <KanbanCard key={task.id} task={task} projects={projects} members={members}
-            checkCounts={checkCounts} commentCounts={commentCounts} onClick={onCardClick} />
+            checkCounts={checkCounts} commentCounts={commentCounts} onClick={onCardClick} onArchive={onArchive} />
         ))}
         {tasks.length === 0 && !adding && (
           <div onClick={() => setAdding(true)}
-            className="border-2 border-dashed border-[#ebebeb] rounded-xl p-4 text-center cursor-pointer hover:border-[#d0d0d0] hover:bg-[#fafafa] transition-all group">
-            <span className="text-[11px] text-[#d0d0d0] group-hover:text-[#aaa]">+ Əlavə et</span>
+            className="border-2 border-dashed rounded-2xl p-5 text-center cursor-pointer transition-all"
+            style={{ borderColor: column.color + '30' }}
+            onMouseEnter={e => e.currentTarget.style.borderColor = column.color + '60'}
+            onMouseLeave={e => e.currentTarget.style.borderColor = column.color + '30'}>
+            <IconPlus size={16} className="mx-auto mb-1" style={{ color: column.color + '60' }} />
+            <span className="text-[10px] font-medium" style={{ color: column.color + '80' }}>Tapşırıq əlavə et</span>
           </div>
         )}
       </div>
@@ -1019,7 +1063,7 @@ export default function TapshiriqlarPage() {
 
       {/* ── Board ── */}
       {view === 'kanban' ? (
-        <div className="flex-1 overflow-auto p-4 lg:p-6">
+        <div className="flex-1 overflow-auto p-4 lg:p-6" style={{ background: '#f6f7f9' }}>
           <div className="flex gap-4" style={{ minWidth:'max-content', minHeight:'100%' }}>
             {COLUMNS.map(column => (
               <KanbanColumn key={column.key} column={column}
