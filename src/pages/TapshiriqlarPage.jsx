@@ -619,7 +619,7 @@ function DetailPanel({ task, projects, members, onClose, onEdit, onDelete, onSta
 }
 
 // ─── Kanban Card ──────────────────────────────────────────────────────────────
-function KanbanCard({ task, projects, members, checkCounts, commentCounts, onClick, onArchive }) {
+function KanbanCard({ task, projects, members, checkCounts, commentCounts, onClick, onArchive, onDragStart, onDragEnd, isDragging }) {
   const project  = projects.find(p => p.id === task.project_id)
   const assignee = members.find(m => m.id === task.assignee_id)
   const days = daysLeft(task.due_date)
@@ -630,10 +630,25 @@ function KanbanCard({ task, projects, members, checkCounts, commentCounts, onCli
   const cmt = commentCounts[task.id] || 0
 
   return (
-    <div className="group relative" style={{ marginBottom: '0' }}>
+    <div
+      className="group relative translate-x-0"
+      draggable
+      onDragStart={e => {
+        e.dataTransfer.effectAllowed = 'move'
+        e.dataTransfer.setData('taskId', task.id)
+        onDragStart(task.id)
+        // Slight rotation like Trello
+        setTimeout(() => e.target.style.opacity = '0.5', 0)
+      }}
+      onDragEnd={e => {
+        e.target.style.opacity = '1'
+        onDragEnd()
+      }}
+      style={{ cursor: 'grab', marginBottom: '0' }}
+    >
       {/* Main card */}
       <div onClick={() => onClick(task)}
-        className={`bg-white rounded-2xl border cursor-pointer transition-all duration-200 ${
+        className={`bg-white rounded-2xl border transition-all duration-200 ${
           overdue
             ? 'border-red-200 hover:border-red-400 hover:shadow-md'
             : 'border-[#ebebeb] hover:border-[#c8c8c8] hover:shadow-md'
@@ -731,10 +746,11 @@ function KanbanCard({ task, projects, members, checkCounts, commentCounts, onCli
 }
 
 // ─── Kanban Column ────────────────────────────────────────────────────────────
-function KanbanColumn({ column, tasks, projects, members, checkCounts, commentCounts, onCardClick, onQuickAdd, onArchive }) {
+function KanbanColumn({ column, tasks, projects, members, checkCounts, commentCounts, onCardClick, onQuickAdd, onArchive, dragTaskId, onDragStart, onDragEnd, onDrop, onDragOver, isDragOver }) {
   const [adding, setAdding] = useState(false)
+
   return (
-    <div className="flex flex-col w-[280px] flex-shrink-0">
+    <div className="flex flex-col flex-1 min-w-[260px] max-w-[320px]">
       {/* Column header */}
       <div className="flex items-center justify-between mb-3 px-0.5">
         <div className="flex items-center gap-2">
@@ -749,8 +765,18 @@ function KanbanColumn({ column, tasks, projects, members, checkCounts, commentCo
         </button>
       </div>
 
-      {/* Cards area */}
-      <div className="flex flex-col gap-2.5 flex-1 min-h-[80px]">
+      {/* Drop zone */}
+      <div
+        className="flex flex-col gap-2.5 flex-1 rounded-2xl p-2 transition-all duration-150"
+        style={{
+          minHeight: 80,
+          background: isDragOver ? column.bg : 'transparent',
+          border: isDragOver ? `2px dashed ${column.color}` : '2px dashed transparent',
+        }}
+        onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (dragTaskId) onDragOver(column.key) }}
+        onDragEnter={e => { e.preventDefault() }}
+        onDrop={e => { e.preventDefault(); onDrop(column.key) }}
+      >
         {adding && (
           <QuickAdd status={column.key} projects={projects} members={members}
             onSave={data => { onQuickAdd(data); setAdding(false) }}
@@ -758,7 +784,10 @@ function KanbanColumn({ column, tasks, projects, members, checkCounts, commentCo
         )}
         {tasks.map(task => (
           <KanbanCard key={task.id} task={task} projects={projects} members={members}
-            checkCounts={checkCounts} commentCounts={commentCounts} onClick={onCardClick} onArchive={onArchive} />
+            checkCounts={checkCounts} commentCounts={commentCounts}
+            onClick={onCardClick} onArchive={onArchive}
+            onDragStart={onDragStart} onDragEnd={onDragEnd}
+            isDragging={dragTaskId === task.id} />
         ))}
         {!adding && (
           <div onClick={() => setAdding(true)}
@@ -853,6 +882,10 @@ export default function TapshiriqlarPage() {
   const [filterTag,     setFilterTag]     = useState('all')
   const [showHidden,    setShowHidden]    = useState(false)
   const [filterOverdue, setFilterOverdue] = useState(false)
+  // Drag & Drop state
+  const [dragTaskId,   setDragTaskId]   = useState(null)
+  const [dragOverCol,  setDragOverCol]  = useState(null)
+  const [dragOverIdx,  setDragOverIdx]  = useState(null)
 
   useEffect(() => { loadData() }, [])
 
@@ -956,6 +989,25 @@ export default function TapshiriqlarPage() {
     await supabase.from('tasks').update({ archived:false, archived_at:null, archive_year:null }).eq('id', task.id)
     addToast('Tapşırıq geri qaytarıldı','success')
     await loadData()
+  }
+
+  async function handleDrop(targetColKey) {
+    if (!dragTaskId || !targetColKey) return
+    const task = tasks.find(t => t.id === dragTaskId)
+    if (!task || task.status === targetColKey) {
+      setDragTaskId(null); setDragOverCol(null); setDragOverIdx(null)
+      return
+    }
+    // Optimistic update
+    setTasks(prev => prev.map(t => t.id === dragTaskId ? { ...t, status: targetColKey } : t))
+    await supabase.from('tasks').update({ status: targetColKey }).eq('id', dragTaskId)
+    await supabase.from('task_comments').insert({
+      task_id: dragTaskId, author_id: user?.id, type: 'activity',
+      content: 'status dəyişdi',
+      metadata: { old_status: task.status, new_status: targetColKey }
+    })
+    if (detailTask?.id === dragTaskId) setDetailTask(prev => ({ ...prev, status: targetColKey }))
+    setDragTaskId(null); setDragOverCol(null); setDragOverIdx(null)
   }
 
   const { isAdmin } = useAuth()
@@ -1080,7 +1132,8 @@ export default function TapshiriqlarPage() {
       {/* ── Board ── */}
       {view === 'kanban' ? (
         <div className="flex-1 overflow-auto p-4 lg:p-6" style={{ background: '#fafaf8' }}>
-          <div className="flex gap-4" style={{ minWidth:'max-content', minHeight:'100%' }}>
+          <div className="flex gap-3 h-full"
+            style={{ minWidth: COLUMNS.length * 280 + 'px' }}>
             {COLUMNS.map(column => (
               <KanbanColumn key={column.key} column={column}
                 tasks={tasksByCol[column.key]||[]}
@@ -1089,6 +1142,12 @@ export default function TapshiriqlarPage() {
                 onCardClick={t => setDetailTask(t)}
                 onQuickAdd={handleQuickSave}
                 onArchive={handleSingleArchive}
+                dragTaskId={dragTaskId}
+                onDragStart={id => setDragTaskId(id)}
+                onDragEnd={() => { setDragTaskId(null); setDragOverCol(null) }}
+                onDrop={handleDrop}
+                onDragOver={key => setDragOverCol(key)}
+                isDragOver={dragOverCol === column.key}
               />
             ))}
           </div>
