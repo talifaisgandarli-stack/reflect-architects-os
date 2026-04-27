@@ -249,11 +249,9 @@ export default function HadiselerTeqvimiPage() {
           <h1 className="text-base font-bold text-[#0f172a]">Hadisələr Təqvimi</h1>
           <p className="text-xs text-[#888] mt-0.5">{filtered.length} hadisə</p>
         </div>
-        {isAdmin && (
-          <Button onClick={() => { setEditEvent(null); setModalOpen(true) }} size="sm">
-            <IconPlus size={14} /> Yeni hadisə
-          </Button>
-        )}
+        <Button onClick={() => { setEditEvent(null); setModalOpen(true) }} size="sm">
+          <IconPlus size={14} /> Yeni hadisə
+        </Button>
       </div>
 
       {/* Filters */}
@@ -346,7 +344,7 @@ export default function HadiselerTeqvimiPage() {
                     className={`min-h-[80px] p-1.5 border-b border-r border-[#f5f5f0] transition-colors ${
                       day ? 'hover:bg-[#fafaf8] cursor-pointer' : ''
                     } ${isWeekend && day ? 'bg-[#fafaf8]' : ''}`}
-                    onClick={() => { if (day && isAdmin) { setEditEvent(null); setModalOpen(true) } }}
+                    onClick={() => { if (day) { setEditEvent(null); setModalOpen(true) } }}
                   >
                     {day && (
                       <>
