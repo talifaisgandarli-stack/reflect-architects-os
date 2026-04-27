@@ -246,6 +246,7 @@ function TaskForm({ open, onClose, onSave, task, projects, members, defaultStatu
 function DetailPanel({ task, projects, members, onClose, onEdit, onDelete, onStatusChange, onDeadlineChange }) {
   const { user } = useAuth()
   const { addToast } = useToast()
+  const location = useLocation()
   const [checklists, setChecklists] = useState([])
   const [comments,   setComments]   = useState([])
   const [newCheck,   setNewCheck]   = useState('')
@@ -304,7 +305,7 @@ function DetailPanel({ task, projects, members, onClose, onEdit, onDelete, onSta
     // Mention olunanlara bildiriş
     for (const mid of mentions) {
       if (mid !== user?.id) {
-        await notify(mid, task.title + ' — yeni şərh', newComment.trim().slice(0, 80), 'info', '/tapshiriqlar')
+        await notify(mid, task.title + ' — yeni şərh', newComment.trim().slice(0, 80), 'info', '/tapshiriqlar?task=' + task.id)
       }
     }
     setNewComment('')
@@ -869,6 +870,7 @@ function ArchiveModal({ open, onClose, tasks, projects, members, checkCounts, on
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export default function TapshiriqlarPage() {
   const { addToast } = useToast()
+  const location = useLocation()
   const { user } = useAuth()
   const [tasks,         setTasks]         = useState([])
   const [projects,      setProjects]      = useState([])
@@ -895,6 +897,20 @@ export default function TapshiriqlarPage() {
   const [dragOverIdx,  setDragOverIdx]  = useState(null)
 
   useEffect(() => { loadData() }, [])
+
+  // URL-dəki ?task= parametrinə görə detail panel aç
+  useEffect(() => {
+    const params = new URLSearchParams(location.search)
+    const taskId = params.get('task')
+    if (taskId && tasks.length > 0) {
+      const found = tasks.find(t => t.id === taskId)
+      if (found) {
+        setDetailTask(found)
+        // URL-i təmizlə
+        window.history.replaceState({}, '', '/tapshiriqlar')
+      }
+    }
+  }, [location.search, tasks])
 
   async function loadData() {
     setLoading(true)
@@ -935,7 +951,7 @@ export default function TapshiriqlarPage() {
       }
       // Cavabdeh dəyişibsə yeni cavabdehə bildiriş
       if (data.assignee_id && data.assignee_id !== editTask.assignee_id && data.assignee_id !== user?.id) {
-        await notify(data.assignee_id, 'Tapşırıq sizə təyin edildi', data.title, 'info', '/tapshiriqlar')
+        await notify(data.assignee_id, 'Tapşırıq sizə təyin edildi', data.title, 'info', '/tapshiriqlar?task=' + editTask.id)
       }
       addToast('Tapşırıq yeniləndi','success')
     } else {
@@ -944,7 +960,7 @@ export default function TapshiriqlarPage() {
       await supabase.from('task_comments').insert({ task_id:inserted.id, author_id:user?.id, type:'activity', content:'tapşırıq yaradıldı', metadata:{} })
       // Cavabdehə bildiriş
       if (data.assignee_id && data.assignee_id !== user?.id) {
-        await notify(data.assignee_id, 'Yeni tapşırıq', data.title, 'info', '/tapshiriqlar')
+        await notify(data.assignee_id, 'Yeni tapşırıq', data.title, 'info', '/tapshiriqlar?task=' + inserted.id)
       }
       addToast('Tapşırıq əlavə edildi','success')
     }
@@ -959,7 +975,7 @@ export default function TapshiriqlarPage() {
     await supabase.from('task_comments').insert({ task_id:inserted.id, author_id:user?.id, type:'activity', content:'tapşırıq yaradıldı', metadata:{} })
     // QuickAdd-da da cavabdehə bildiriş
     if (form.assignee_id && form.assignee_id !== user?.id) {
-      await notify(form.assignee_id, 'Yeni tapşırıq', form.title, 'info', '/tapshiriqlar')
+      await notify(form.assignee_id, 'Yeni tapşırıq', form.title, 'info', '/tapshiriqlar?task=' + inserted.id)
     }
     await loadData()
   }
@@ -977,7 +993,7 @@ export default function TapshiriqlarPage() {
     await supabase.from('task_comments').insert({ task_id:task.id, author_id:user?.id, type:'activity', content:'status dəyişdi', metadata:{ old_status:task.status, new_status:newStatus } })
     // Tapşırıq sahibinə bildiriş (özü deyilsə)
     if (task.assignee_id && task.assignee_id !== user?.id && newStatus === 'done') {
-      await notify(task.assignee_id, task.title, 'Tapşırıq tamamlandı kimi işarələndi', 'success', '/tapshiriqlar')
+      await notify(task.assignee_id, task.title, 'Tapşırıq tamamlandı kimi işarələndi', 'success', '/tapshiriqlar?task=' + task.id)
     }
     if (detailTask?.id === task.id) setDetailTask({ ...detailTask, status: newStatus })
     await loadData()
