@@ -185,7 +185,7 @@ export default function MainLayout() {
   // ── Fallback polling — realtime işləməsə ──────────────────────────────────
   useEffect(() => {
     if (!user?.id) return
-    const interval = setInterval(loadNotifs, 30000) // 30s
+    const interval = setInterval(loadNotifs, 10000) // 10s fallback polling
     return () => clearInterval(interval)
   }, [loadNotifs])
 
@@ -295,7 +295,7 @@ export default function MainLayout() {
           {/* Bell */}
           <div ref={bellRef} className="relative">
             <button
-              onClick={() => setNotifOpen(v => !v)}
+              onClick={() => { setNotifOpen(v => !v); if (!notifOpen) loadNotifs() }}
               className={`relative p-1.5 rounded-lg transition-colors ${
                 notifOpen ? 'bg-[#f5f5f0] text-[#0f172a]' : 'text-[#888] hover:text-[#0f172a] hover:bg-[#f5f5f0]'
               }`}
