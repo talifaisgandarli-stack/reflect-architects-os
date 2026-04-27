@@ -454,14 +454,15 @@ export default function PodratIsleriPage() {
                   <th className="text-left px-4 py-3 font-medium text-[#888]">Podratçı</th>
                   <th className="text-left px-4 py-3 font-medium text-[#888]">Layihə</th>
                   <th className="text-left px-4 py-3 font-medium text-[#888]">İş statusu</th>
-                  <th className="text-left px-4 py-3 font-medium text-[#888]">Ödəniş</th>
-                  <th className="text-left px-4 py-3 font-medium text-[#888]">Mərhələlər</th>
+                  <th className="text-left px-4 py-3 font-medium text-[#888]">Deadline</th>
                   {isAdmin && <>
+                    <th className="text-left px-4 py-3 font-medium text-[#888]">Ödəniş</th>
+                    <th className="text-left px-4 py-3 font-medium text-[#888]">Mərhələlər</th>
                     <th className="text-right px-4 py-3 font-medium text-[#888]">Müqavilə</th>
                     <th className="text-right px-4 py-3 font-medium text-[#888]">{filterYear || filterMonth ? 'Dövrdə ödənildi' : 'Ödənildi'}</th>
                     <th className="text-right px-4 py-3 font-medium text-[#888]">Qalıq</th>
+                    <th className="px-4 py-3"></th>
                   </>}
-                  {isAdmin && <th className="px-4 py-3"></th>}
                 </tr>
               </thead>
               <tbody>
@@ -476,29 +477,34 @@ export default function PodratIsleriPage() {
                       <td className="px-4 py-3">
                         <div className="font-medium text-[#0f172a]">{w.name}</div>
                         {w.work_type && <div className="text-[10px] text-[#aaa]">{w.work_type}</div>}
-                        {days !== null && (
-                          <div className={`text-[10px] ${days < 0 ? 'text-red-500' : days <= 7 ? 'text-yellow-600' : 'text-[#aaa]'}`}>
-                            {new Date(w.planned_deadline).toLocaleDateString('az-AZ')}
-                          </div>
-                        )}
                       </td>
                       <td className="px-4 py-3 text-[#555]">{getProject(w.project_id)?.name || '—'}</td>
                       <td className="px-4 py-3"><Badge variant={ws?.color} size="sm">{ws?.label}</Badge></td>
-                      <td className="px-4 py-3"><Badge variant={ps?.color} size="sm">{ps?.label}</Badge></td>
                       <td className="px-4 py-3">
-                        <div className="flex gap-1 flex-wrap">
-                          <span className={`text-[9px] px-1.5 py-0.5 rounded ${w.advance_paid ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
-                            Avans {w.advance_percent || 30}%
-                          </span>
-                          <span className={`text-[9px] px-1.5 py-0.5 rounded ${interimCount > 0 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
-                            Ara×{interimCount}
-                          </span>
-                          <span className={`text-[9px] px-1.5 py-0.5 rounded ${w.final_paid ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
-                            Final
-                          </span>
-                        </div>
+                        {days !== null ? (
+                          <div>
+                            <div className="text-xs text-[#555]">{new Date(w.planned_deadline).toLocaleDateString('az-AZ')}</div>
+                            <div className={`text-[10px] font-medium ${days < 0 ? 'text-red-500' : days <= 7 ? 'text-yellow-600' : 'text-[#aaa]'}`}>
+                              {days < 0 ? `${Math.abs(days)}g keçib` : days === 0 ? 'Bu gün' : `${days}g qalıb`}
+                            </div>
+                          </div>
+                        ) : <span className="text-[#aaa]">—</span>}
                       </td>
                       {isAdmin && <>
+                        <td className="px-4 py-3"><Badge variant={ps?.color} size="sm">{ps?.label}</Badge></td>
+                        <td className="px-4 py-3">
+                          <div className="flex gap-1 flex-wrap">
+                            <span className={`text-[9px] px-1.5 py-0.5 rounded ${w.advance_paid ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
+                              Avans {w.advance_percent || 30}%
+                            </span>
+                            <span className={`text-[9px] px-1.5 py-0.5 rounded ${interimCount > 0 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
+                              Ara×{interimCount}
+                            </span>
+                            <span className={`text-[9px] px-1.5 py-0.5 rounded ${w.final_paid ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
+                              Final
+                            </span>
+                          </div>
+                        </td>
                         <td className="px-4 py-3 text-right font-medium text-[#0f172a]">{fmt(w.contract_amount)}</td>
                         <td className="px-4 py-3 text-right font-bold text-green-600">{fmt(paidInPeriod)}</td>
                         <td className="px-4 py-3 text-right">
@@ -506,13 +512,13 @@ export default function PodratIsleriPage() {
                             ? <span className="font-bold text-red-500">{fmt(w.remaining)}</span>
                             : <span className="text-green-600 font-bold">Bağlandı</span>}
                         </td>
+                        <td className="px-4 py-3">
+                          <div className="flex gap-1">
+                            <button onClick={() => { setEditWork(w); setModalOpen(true) }} className="text-[#aaa] hover:text-[#0f172a] p-1"><IconEdit size={12} /></button>
+                            <button onClick={() => setDeleteWork(w)} className="text-[#aaa] hover:text-red-500 p-1"><IconTrash size={12} /></button>
+                          </div>
+                        </td>
                       </>}
-                      {isAdmin && <td className="px-4 py-3">
-                        <div className="flex gap-1">
-                          <button onClick={() => { setEditWork(w); setModalOpen(true) }} className="text-[#aaa] hover:text-[#0f172a] p-1"><IconEdit size={12} /></button>
-                          <button onClick={() => setDeleteWork(w)} className="text-[#aaa] hover:text-red-500 p-1"><IconTrash size={12} /></button>
-                        </div>
-                      </td>}
                     </tr>
                   )
                 })}
