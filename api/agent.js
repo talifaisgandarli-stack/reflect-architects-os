@@ -5,29 +5,46 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY
 )
 
-const GEMINI_KEY = process.env.GEMINI_API_KEY
-const BOT_TOKEN  = process.env.TELEGRAM_BOT_TOKEN
-const TG_API     = `https://api.telegram.org/bot${BOT_TOKEN}`
-
+const GEMINI_KEY   = process.env.GEMINI_API_KEY
+const BOT_TOKEN    = process.env.TELEGRAM_BOT_TOKEN
+const TG_API       = `https://api.telegram.org/bot${BOT_TOKEN}`
 const ADMIN_EMAILS = ['talifa.isgandarli@gmail.com', 'nusalov.n@reflect.az', 'turkan.a@reflect.az']
 const BD_EMAILS    = ['talifa.isgandarli@gmail.com', 'turkan.a@reflect.az']
+const NICAT_EMAIL  = 'nusalov.n@reflect.az'
 
-// ── Yardımçı funksiyalar ──────────────────────────────────────────────────────
-async function sendTelegram(chat_id, text) {
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+async function tg(chat_id, text) {
   if (!chat_id || !text) return null
-  const r = await fetch(`${TG_API}/sendMessage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: String(chat_id), text, parse_mode: 'HTML' })
-  })
-  const d = await r.json()
-  if (!d.ok) console.log('TG ERROR:', JSON.stringify(d))
-  return d
+  try {
+    // Telegram 4096 char limit
+    const msg = String(text).slice(0, 4000)
+    const r = await fetch(`${TG_API}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: String(chat_id), text: msg, parse_mode: 'HTML' })
+    })
+    const d = await r.json()
+    // If HTML parse fails, retry without parse_mode
+    if (!d.ok && d.description && d.description.includes('parse')) {
+      const r2 = await fetch(`${TG_API}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: String(chat_id), text: msg.replace(/<[^>]+>/g, '') })
+      })
+      return r2.json()
+    }
+    return d
+  } catch (e) {
+    console.error('TG error:', e.message)
+    return null
+  }
 }
 
-async function gemini(prompt) {
+async function ai(prompt) {
+  if (!GEMINI_KEY) return null
   try {
-    const res = await fetch(
+    const r = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`,
       {
         method: 'POST',
@@ -35,596 +52,530 @@ async function gemini(prompt) {
         body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
       }
     )
-    const data = await res.json()
-    return data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null
+    const d = await r.json()
+    return d?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null
   } catch (e) {
-    console.error('Gemini error:', e)
+    console.error('Gemini error:', e.message)
     return null
   }
 }
 
-async function getAllProfiles() {
+async function db(table, query) {
+  try {
+    return query
+  } catch (e) {
+    console.error(`DB error ${table}:`, e.message)
+    return { data: [], error: e }
+  }
+}
+
+async function getProfiles(filter) {
   const { data } = await supabase
     .from('profiles')
     .select('id, full_name, email, telegram_chat_id')
     .eq('is_active', true)
     .not('telegram_chat_id', 'is', null)
-  return data || []
+  const all = data || []
+  if (filter === 'admins') return all.filter(p => ADMIN_EMAILS.includes(p.email))
+  if (filter === 'bd')     return all.filter(p => BD_EMAILS.includes(p.email))
+  if (filter === 'nicat')  return all.filter(p => p.email === NICAT_EMAIL)
+  return all
 }
 
-async function getAdminProfiles() {
-  const all = await getAllProfiles()
-  return all.filter(p => ADMIN_EMAILS.includes(p.email))
+function money(n) {
+  return '₼' + Number(n || 0).toLocaleString('az-AZ', { minimumFractionDigits: 0 })
 }
 
-async function getBDProfiles() {
-  const all = await getAllProfiles()
-  return all.filter(p => BD_EMAILS.includes(p.email))
+function date(d) {
+  return new Date(d).toLocaleDateString('az-AZ', { day: 'numeric', month: 'long' })
 }
 
-function fmt(n)    { return '₼' + Number(n || 0).toLocaleString('az-AZ', { minimumFractionDigits: 0 }) }
-function fmtDate(d){ return new Date(d).toLocaleDateString('az-AZ', { day: 'numeric', month: 'long' }) }
-function daysLeft(due) {
+function days(due) {
   const t = new Date(); t.setHours(0,0,0,0)
   const d = new Date(due); d.setHours(0,0,0,0)
   return Math.floor((d - t) / 86400000)
 }
 
-// ── Ana handler ───────────────────────────────────────────────────────────────
-export default async function handler(req, res) {
-  // GET və POST hər ikisini dəstəklə
-  const type = req.query?.type || req.body?.type
+function today() {
+  return new Date().toISOString().split('T')[0]
+}
 
-  // CORS headers
+function ago(n) {
+  return new Date(Date.now() - n * 86400000).toISOString().split('T')[0]
+}
+
+function future(n) {
+  return new Date(Date.now() + n * 86400000).toISOString().split('T')[0]
+}
+
+// ─── Handler ──────────────────────────────────────────────────────────────────
+
+export default async function handler(req, res) {
   res.setHeader('Content-Type', 'application/json')
 
-  // ── Manual mesaj ─────────────────────────────────────────────────────────────
-  if (type === 'send_manual') {
-    const { chat_id, message } = req.body || {}
-    if (!chat_id || !message) return res.status(400).json({ error: 'chat_id and message required' })
-    const result = await sendTelegram(chat_id, message)
-    return res.status(200).json({ success: result?.ok, result })
-  }
+  const type = req.query?.type || req.body?.type
 
-  // ════════════════════════════════════════════════════════════════════════════
-  // 1. 🌅 İŞÇİ ŞƏXSI BRİFİNQİ — saat 09:00
-  //    Hər işçiyə fərdi: öz tapşırıqları + layihə konteksti + motivasiya
-  // ════════════════════════════════════════════════════════════════════════════
-  if (type === 'morning') {
-    const profiles = await getAllProfiles()
-    const admins   = await getAdminProfiles()
-    const adminIds = admins.map(a => a.id)
-    // Admin brifinqi ayrıca gedir — burada işçilər
-    const workers  = profiles.filter(p => !adminIds.includes(p.id))
-    if (!workers.length) return res.status(200).json({ success: true, count: 0 })
+  if (!type) return res.status(400).json({ error: 'type required' })
 
-    const today    = new Date(); today.setHours(0,0,0,0)
-    const todayStr = today.toISOString().split('T')[0]
-    const in3days  = new Date(today.getTime() + 3 * 86400000).toISOString().split('T')[0]
+  console.log('[agent] type:', type)
 
-    const [tasksRes, projectsRes, eventsRes] = await Promise.all([
-      supabase.from('tasks').select('id, title, due_date, assignee_id, status, project_id').neq('status', 'done').not('due_date', 'is', null),
-      supabase.from('projects').select('id, name, deadline, status').neq('status', 'completed'),
-      supabase.from('events').select('title, start_date, tagged_profiles').eq('start_date', todayStr),
-    ])
-    const allTasks  = tasksRes.data   || []
-    const allProjs  = projectsRes.data|| []
-    const allTodayEvts = eventsRes.data || []
-    // İşçiyə aid hadisələr: ya tag olunub, ya da heç kim tag olunmayıb (ümumi hadisə)
+  try {
 
-    let count = 0
-    for (const profile of workers) {
-      const firstName = profile.full_name.split(' ')[0]
-
-      // Öz tapşırıqları
-      const myToday   = allTasks.filter(t => t.assignee_id === profile.id && t.due_date === todayStr)
-      const myOverdue = allTasks.filter(t => {
-        if (t.assignee_id !== profile.id) return false
-        const d = new Date(t.due_date); d.setHours(0,0,0,0)
-        return d < today
-      })
-      const myCritical = myOverdue.filter(t => Math.abs(daysLeft(t.due_date)) > 3)
-      const myWarn    = allTasks.filter(t => {
-        if (t.assignee_id !== profile.id) return false
-        const d = daysLeft(t.due_date)
-        return d >= 1 && d <= 3
-      })
-
-      // Layihə konteksti
-      const myProjIds = [...new Set(allTasks.filter(t => t.assignee_id === profile.id).map(t => t.project_id).filter(Boolean))]
-      const myProjects = allProjs.filter(p => myProjIds.includes(p.id)).map(p => {
-        const openTasks = allTasks.filter(t => t.project_id === p.id && t.assignee_id === profile.id).length
-        const dl = p.deadline ? daysLeft(p.deadline) : null
-        return { ...p, openTasks, dl }
-      })
-
-      // Gemini ilə fərdi mesaj yaz
-      const context = `
-İşçi: ${profile.full_name}
-Bu günün tapşırıqları: ${myToday.map(t => t.title).join(', ') || 'yoxdur'}
-Gecikmiş tapşırıqlar: ${myOverdue.length > 0 ? myOverdue.map(t => `${t.title} (${Math.abs(daysLeft(t.due_date))}g)`).join(', ') : 'yoxdur'}
-Kritik gecikmə (3+ gün): ${myCritical.length > 0 ? 'var' : 'yoxdur'}
-Yaxın deadline (1-3 gün): ${myWarn.map(t => `${t.title} (${daysLeft(t.due_date)}g)`).join(', ') || 'yoxdur'}
-Layihələr: ${myProjects.map(p => `${p.name} (deadline: ${p.dl !== null ? p.dl + 'g' : 'yoxdur'}, açıq tapşırıq: ${p.openTasks})`).join('; ') || 'yoxdur'}
-Bu günün hadisələri: ${allTodayEvts
-        .filter(e => !e.tagged_profiles?.length || e.tagged_profiles.includes(profile.id))
-        .map(e => e.title).join(', ') || 'yoxdur'}
-`
-
-      const prompt = `Sən Reflect Architects şirkətinin AI köməkçisisən. ${firstName} üçün səhər brifinqi yaz.
-
-Məlumatlar:
-${context}
-
-Tələblər:
-- "Salam ${firstName}!" ilə başla
-- Qısa, birbaşa, yoldaş tonu — rəsmi deyil
-- Bəzən zarafat et, bəzən motivasiya ver (hər gün eyni deyil)
-- Gecikmiş tapşırıq varsa — ciddi, amma incitməyən tonda xatırlat
-- Kritik gecikmə (3+ gün) varsa — ayrıca vurğula
-- Layihənin ümumi vəziyyətini qısa ver
-- Azərbaycan dilinin qrammatikasına və leksikologiyasına tam riayət et
-- Emoji ilə yazılsın
-- 5-8 cümlə
-
-Yalnız mesajı yaz, başqa heç nə əlavə etmə.`
-
-      let text = await gemini(prompt)
-      if (!text) {
-        const lines = [`☀️ Salam, ${firstName}!`, '']
-        if (myToday.length)   lines.push(`📋 Bu gün ${myToday.length} tapşırığın var.`)
-        if (myOverdue.length) lines.push(`🔴 ${myOverdue.length} gecikmiş tapşırıq var!`)
-        if (myCritical.length)lines.push(`🚨 Kritik gecikmə: ${myCritical.length} tapşırıq 3 gündən çoxdur gözləyir.`)
-        if (myWarn.length)    lines.push(`⏰ Yaxın deadline: ${myWarn.map(t => t.title).join(', ')}`)
-        myProjects.forEach(p => lines.push(`🏗 ${p.name}: ${p.openTasks} açıq tapşırıq${p.dl !== null ? `, ${p.dl} gün qalıb` : ''}`))
-        text = lines.join('\n')
-      }
-
-      const r = await sendTelegram(profile.telegram_chat_id, text)
-      if (r?.ok) count++
+    // ══════════════════════════════════════════════════════════════════════════
+    // MANUAL MESAJ
+    // ══════════════════════════════════════════════════════════════════════════
+    if (type === 'send_manual') {
+      const { chat_id, message } = req.body || {}
+      if (!chat_id || !message) return res.status(400).json({ error: 'chat_id and message required' })
+      const r = await tg(chat_id, message)
+      return res.json({ success: r?.ok === true, result: r })
     }
-    return res.status(200).json({ success: true, count })
-  }
 
-  // ════════════════════════════════════════════════════════════════════════════
-  // 2. 📊 ADMİN SABAH BRİFİNQİ — saat 09:00
-  //    Nicat/Talifa/Türkan: komanda + maliyyə + BD (Talifa+Türkan)
-  // ════════════════════════════════════════════════════════════════════════════
-  if (type === 'morning_admin') {
-    const admins  = await getAdminProfiles()
-    const bdAdmins = await getBDProfiles()
-    if (!admins.length) return res.status(200).json({ success: true, count: 0 })
+    // ══════════════════════════════════════════════════════════════════════════
+    // 1. İŞÇİ ŞƏXSI BRİFİNQ — 09:00
+    // ══════════════════════════════════════════════════════════════════════════
+    if (type === 'morning') {
+      const all     = await getProfiles()
+      const admins  = await getProfiles('admins')
+      const adminIds= new Set(admins.map(a => a.id))
+      const workers = all.filter(p => !adminIds.has(p.id))
 
-    const today     = new Date(); today.setHours(0,0,0,0)
-    const todayStr  = today.toISOString().split('T')[0]
-    const in7days   = new Date(today.getTime() + 7 * 86400000).toISOString().split('T')[0]
-    const yesterday = new Date(today.getTime() - 86400000).toISOString()
-    const monthStart= new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0]
+      if (!workers.length) return res.json({ success: true, count: 0, note: 'no workers' })
 
-    const [
-      tasksRes, membersRes, deadlineChanges,
-      incomesRes, expensesRes, debtorsRes,
-      outsourceRes, proposalsRes, contractsRes, pipelineRes
-    ] = await Promise.all([
-      supabase.from('tasks').select('id, title, due_date, assignee_id, status, tags, archived').neq('status', 'done'),
-      supabase.from('profiles').select('id, full_name').eq('is_active', true),
-      supabase.from('task_comments')
-        .select('task_id, author_id, metadata, created_at, tasks(title), profiles(full_name)')
-        .eq('type', 'activity').like('content', '%deadline%')
-        .gte('created_at', yesterday).order('created_at', { ascending: false }),
-      supabase.from('incomes').select('amount, payment_date, payment_method').gte('payment_date', monthStart),
-      supabase.from('expenses').select('amount, expense_date').gte('expense_date', monthStart),
-      supabase.from('debtor_records').select('client_name, amount, expected_date, status').neq('status', 'paid').order('expected_date'),
-      supabase.from('outsource_works').select('name, planned_deadline, project_id, remaining, projects(name)').neq('status', 'completed').not('planned_deadline', 'is', null),
-      supabase.from('proposals').select('client_name, amount, status').in('status', ['sent', 'negotiating']),
-      supabase.from('contracts').select('client_name, status, signed_date').in('status', ['pending', 'negotiating']),
-      supabase.from('pipeline').select('company_name, stage, estimated_value').order('created_at', { ascending: false }).limit(10),
-    ])
+      const td = today()
 
-    const allTasks  = (tasksRes.data || []).filter(t => !t.archived)
-    const members   = membersRes.data || []
-    const getName   = (id) => members.find(m => m.id === id)?.full_name || '—'
+      const [tRes, pRes, eRes] = await Promise.all([
+        supabase.from('tasks').select('id,title,due_date,assignee_id,status,project_id')
+          .neq('status', 'done').not('due_date', 'is', null),
+        supabase.from('projects').select('id,name,deadline').neq('status', 'completed'),
+        supabase.from('events').select('title,tagged_profiles').eq('start_date', td),
+      ])
 
-    // Maliyyə hesablamaları
-    const totalIncome  = (incomesRes.data  || []).reduce((s,i) => s + Number(i.amount || 0), 0)
-    const totalExpense = (expensesRes.data || []).reduce((s,e) => s + Number(e.amount || 0), 0)
-    const balance      = totalIncome - totalExpense
-    const overdueDebts = (debtorsRes.data || []).filter(d => d.expected_date && d.expected_date < todayStr)
-    const criticalDebts= overdueDebts.filter(d => {
-      const days = Math.abs(daysLeft(d.expected_date))
-      return days > 7
-    })
-    const totalDebt    = (debtorsRes.data || []).reduce((s,d) => s + Number(d.amount || 0), 0)
+      const tasks    = tRes.data || []
+      const projects = pRes.data || []
+      const events   = eRes.data || []
 
-    // Tapşırıq statistikası
-    const overdueAll   = allTasks.filter(t => { const d = new Date(t.due_date); d.setHours(0,0,0,0); return d < today && t.due_date })
-    const critical3    = overdueAll.filter(t => Math.abs(daysLeft(t.due_date)) > 3)
-    const todayTasks   = allTasks.filter(t => t.due_date === todayStr)
-    const weekTasks    = allTasks.filter(t => t.due_date > todayStr && t.due_date <= in7days)
-    const dlChanges    = deadlineChanges.data || []
+      let count = 0
+      for (const p of workers) {
+        try {
+          const name  = p.full_name.split(' ')[0]
+          const myT   = tasks.filter(t => t.assignee_id === p.id)
+          const td0   = myT.filter(t => t.due_date === td)
+          const over  = myT.filter(t => days(t.due_date) < 0)
+          const crit  = over.filter(t => Math.abs(days(t.due_date)) > 3)
+          const warn  = myT.filter(t => { const d = days(t.due_date); return d >= 1 && d <= 3 })
+          const myEvt = events.filter(e => !e.tagged_profiles?.length || e.tagged_profiles.includes(p.id))
 
-    // BD məlumatları
-    const bdTasks      = allTasks.filter(t => (t.tags || []).includes('BD'))
-    const outsourceDue = (outsourceRes.data || []).filter(o => {
-      const d = daysLeft(o.planned_deadline)
-      return d >= 0 && d <= 7
-    })
+          const myProjIds = [...new Set(myT.map(t => t.project_id).filter(Boolean))]
+          const myProj = projects.filter(p2 => myProjIds.includes(p2.id)).map(p2 => {
+            const open = myT.filter(t => t.project_id === p2.id).length
+            const dl   = p2.deadline ? days(p2.deadline) : null
+            return { name: p2.name, open, dl }
+          })
 
-    for (const admin of admins) {
-      const firstName = admin.full_name.split(' ')[0]
-      const isBD = bdAdmins.some(b => b.id === admin.id)
+          const ctx = [
+            `İşçi: ${p.full_name}`,
+            `Bu günün tapşırıqları: ${td0.map(t => t.title).join(', ') || 'yoxdur'}`,
+            `Gecikmiş: ${over.length > 0 ? over.map(t => t.title + ' (' + Math.abs(days(t.due_date)) + 'g)').join(', ') : 'yoxdur'}`,
+            `Kritik gecikmə (3+g): ${crit.length > 0 ? 'var' : 'yoxdur'}`,
+            `1-3 gün deadline: ${warn.map(t => t.title + ' (' + days(t.due_date) + 'g)').join(', ') || 'yoxdur'}`,
+            `Layihələr: ${myProj.map(p2 => p2.name + ' (' + p2.open + ' tapşırıq' + (p2.dl !== null ? ', ' + p2.dl + 'g' : '') + ')').join('; ') || 'yoxdur'}`,
+            `Bu günün hadisələri: ${myEvt.map(e => e.title).join(', ') || 'yoxdur'}`,
+          ].join('\n')
 
-      const context = `
-Admin: ${admin.full_name}
+          const prompt = 'Sən Reflect Architects AI koməkçisisən. ' + name + ' ucun sehər brifinqi yaz.\n\n' + ctx + '\n\nTələblər:\n- "Salam ' + name + '!" ile başla\n- Qısa, birbaşa, yoldaş tonu\n- Gecikmiş varsa ciddi amma incitməyən tonda xatırlat\n- Kritik gecikmə varsa ayrıca vurğula\n- Layihə vəziyyətini qısa ver\n- Bəzən zarafat, bəzən motivasiya\n- Azərbaycan dilinin qrammatikasına riayət et\n- Emoji ile, 4-7 cümlə\n- Yalnız mesajı yaz'
 
-KOMANDA VƏZİYYƏTİ:
-- Bu gün deadline: ${todayTasks.length} tapşırıq (${todayTasks.map(t => `${t.title} - ${getName(t.assignee_id)}`).join('; ')})
-- Gecikmiş: ${overdueAll.length} tapşırıq
-- Kritik gecikmə (3+ gün): ${critical3.length} tapşırıq (${critical3.map(t => `${t.title} - ${getName(t.assignee_id)} - ${Math.abs(daysLeft(t.due_date))}g`).join('; ')})
-- Bu həftə deadline: ${weekTasks.length} tapşırıq
-- Son 24 saatda deadline dəyişdirildi: ${dlChanges.length > 0 ? dlChanges.map(c => `${c.tasks?.title} - ${c.profiles?.full_name} (${c.metadata?.old_due || '?'} → ${c.metadata?.new_due || '?'})`).join('; ') : 'yoxdur'}
+          let text = await ai(prompt)
+          if (!text) {
+            const lines = ['☀️ Salam, ' + name + '!']
+            if (td0.length)   lines.push('📋 Bu gün ' + td0.length + ' tapşırığın var.')
+            if (crit.length)  lines.push('🚨 Kritik gecikmə: ' + crit.length + ' tapşırıq 3+ gün gözləyir!')
+            else if (over.length) lines.push('🔴 ' + over.length + ' gecikmiş tapşırıq var.')
+            if (warn.length)  lines.push('⏰ Yaxın deadline: ' + warn.map(t => t.title).join(', '))
+            myProj.forEach(p2 => lines.push('🏗 ' + p2.name + ': ' + p2.open + ' tapşırıq' + (p2.dl !== null ? ', ' + p2.dl + ' gün qalıb' : '')))
+            if (myEvt.length) lines.push('📅 Bugün: ' + myEvt.map(e => e.title).join(', '))
+            text = lines.join('\n')
+          }
 
-MALİYYƏ (Bu ay):
-- Daxilolma: ${fmt(totalIncome)}
-- Xərc: ${fmt(totalExpense)}
-- Balans: ${fmt(balance)}
-- Ümumi debitor borcu: ${fmt(totalDebt)}
-- Gecikmiş ödənişlər: ${overdueDebts.length} (${fmt(overdueDebts.reduce((s,d) => s + Number(d.amount||0), 0))})
-- Kritik gecikmiş (7+ gün): ${criticalDebts.length > 0 ? criticalDebts.map(d => `${d.client_name} ${fmt(d.amount)}`).join(', ') : 'yoxdur'}
-
-${isBD ? `BD MƏLUMATLARİ:
-- Aktiv BD tapşırıqları: ${bdTasks.length} (${bdTasks.map(t => t.title).join(', ') || 'yoxdur'})
-- Pipeline: ${(pipelineRes.data || []).map(p => `${p.company_name} (${p.stage})`).join(', ') || 'yoxdur'}
-- Göndərilmiş kommersiya təklifləri: ${(proposalsRes.data || []).length} (${(proposalsRes.data || []).map(p => p.client_name).join(', ')})
-- İmzalanma gözlənilən müqavilələr: ${(contractsRes.data || []).length > 0 ? (contractsRes.data || []).map(c => c.client_name).join(', ') : 'yoxdur'}
-- Bu həftə deadline olan podratçı işləri: ${outsourceDue.map(o => `${o.name} - ${o.projects?.name}`).join(', ') || 'yoxdur'}` : ''}
-`
-
-      const prompt = `Sən Reflect Architects şirkətinin AI köməkçisisən. ${firstName} üçün admin səhər brifinqi yaz.
-
-Məlumatlar:
-${context}
-
-Tələblər:
-- "Salam ${firstName}!" ilə başla
-- Qısa, birbaşa, professional amma yoldaş tonu
-- Kritik məlumatları (gecikmiş tapşırıqlar, ödənilməmiş borclar, deadline dəyişiklikləri) aydın vurğula
-- Maliyyə vəziyyətini qısa xülasə et — həm ümumi mənzərəni, həm kritik olanları göstər
-- ${isBD ? 'BD məlumatlarını da daxil et — pipeline, təkliflər, müqavilələr' : ''}
-- Bəzən motivasiya ver, bəzən zarafat et
-- Azərbaycan dilinin qrammatikasına və leksikologiyasına tam riayət et
-- Emoji ilə yazılsın
-- 8-12 cümlə
-
-Yalnız mesajı yaz, başqa heç nə əlavə etmə.`
-
-      let text = await gemini(prompt)
-      if (!text) {
-        const lines = [`📊 Salam, ${firstName}! Sabahın xeyir.`, '']
-        lines.push(`👥 Bu gün ${todayTasks.length} tapşırıq deadline, ${overdueAll.length} gecikmiş.`)
-        if (critical3.length) lines.push(`🚨 Kritik: ${critical3.length} tapşırıq 3+ gün gecikib.`)
-        if (dlChanges.length) lines.push(`⚠️ Son 24 saatda ${dlChanges.length} deadline dəyişdirildi.`)
-        lines.push(`💰 Bu ay: Daxilolma ${fmt(totalIncome)} | Xərc ${fmt(totalExpense)} | Balans ${fmt(balance)}`)
-        if (criticalDebts.length) lines.push(`🔴 Kritik debitor: ${criticalDebts.map(d => `${d.client_name} ${fmt(d.amount)}`).join(', ')}`)
-        if (isBD) {
-          lines.push(`📈 BD: ${bdTasks.length} aktiv tapşırıq, ${(proposalsRes.data||[]).length} gözləyən təklif`)
-        }
-        text = lines.join('\n')
-      }
-
-      await sendTelegram(admin.telegram_chat_id, text)
-    }
-    return res.status(200).json({ success: true, count: admins.length })
-  }
-
-  // ════════════════════════════════════════════════════════════════════════════
-  // 3. ⏰ PODRATÇI DEADLİNE XƏBƏRDARLIQ — 5, 3, 1 gün əvvəl
-  //    Nicat/Talifa/Türkan + layihənin memarına
-  // ════════════════════════════════════════════════════════════════════════════
-  if (type === 'outsource_deadline') {
-    const admins   = await getAdminProfiles()
-    const allProfiles = await getAllProfiles()
-
-    const { data: outsource } = await supabase
-      .from('outsource_works')
-      .select('id, name, planned_deadline, project_id, projects(name, assignee_id)')
-      .neq('status', 'completed')
-      .not('planned_deadline', 'is', null)
-
-    const targets = [1, 3, 5]
-    let count = 0
-
-    for (const work of (outsource || [])) {
-      const d = daysLeft(work.planned_deadline)
-      if (!targets.includes(d)) continue
-
-      const projName = work.projects?.name || '—'
-      const emoji    = d === 1 ? '🔴' : d === 3 ? '🟡' : '🟠'
-      const dayText  = d === 1 ? 'sabah deadline!' : `${d} gün qalıb`
-
-      const msg = `${emoji} <b>Podratçı deadline xəbərdarlığı</b>\n\n🔧 <b>${work.name}</b>\n🏗 Layihə: ${projName}\n⏰ Deadline: ${fmtDate(work.planned_deadline)} — <b>${dayText}</b>`
-
-      // Adminlərə göndər
-      for (const admin of admins) {
-        const r = await sendTelegram(admin.telegram_chat_id, msg)
-        if (r?.ok) count++
-      }
-
-      // Layihənin memarına da göndər (admin deyilsə)
-      if (work.projects?.assignee_id) {
-        const architect = allProfiles.find(p => p.id === work.projects.assignee_id && !ADMIN_EMAILS.includes(p.email))
-        if (architect) {
-          const r = await sendTelegram(architect.telegram_chat_id, msg)
+          const r = await tg(p.telegram_chat_id, text)
           if (r?.ok) count++
+        } catch (e) {
+          console.error('morning worker error:', p.full_name, e.message)
         }
       }
-    }
-    return res.status(200).json({ success: true, count })
-  }
-
-  // ════════════════════════════════════════════════════════════════════════════
-  // 4b. 📅 NİCAT ÜÇÜN GÜNÜN GÖRÜŞ XÜLASƏSİ — saat 09:30
-  // ════════════════════════════════════════════════════════════════════════════
-  if (type === 'nicat_events') {
-    const all = await getAllProfiles()
-    const nicat = all.find(p => p.email === 'nusalov.n@reflect.az')
-    if (!nicat) return res.status(200).json({ success: false, note: 'Nicat not found' })
-
-    const todayStr = new Date().toISOString().split('T')[0]
-
-    const { data: events } = await supabase
-      .from('events')
-      .select('title, start_date, end_date, notes, event_type, tagged_profiles')
-      .eq('start_date', todayStr)
-      .order('created_at')
-
-    const todayEvents = events || []
-
-    if (!todayEvents.length) {
-      await sendTelegram(nicat.telegram_chat_id,
-        '📅 <b>Bu günün görüşləri</b>\n\nBu gün üçün planlaşdırılmış görüş və hadisə yoxdur. Serbest günün olsun! 🏗')
-      return res.status(200).json({ success: true, count: 0 })
+      return res.json({ success: true, count })
     }
 
-    const TYPE_LABELS = {
-      meeting:  '🤝 Görüş',
-      deadline: '🔴 Deadline',
-      holiday:  '🎉 Bayram/Tətil',
-      birthday: '🎂 Ad günü',
-      event:    '📅 Tədbir',
-      other:    '📌 Digər',
-    }
+    // ══════════════════════════════════════════════════════════════════════════
+    // 2. ADMİN SƏHƏR BRİFİNQİ — 09:00
+    // ══════════════════════════════════════════════════════════════════════════
+    if (type === 'morning_admin') {
+      const admins = await getProfiles('admins')
+      if (!admins.length) return res.json({ success: true, count: 0 })
 
-    const allProfiles = await getAllProfiles()
-    const getName = (id) => allProfiles.find(p => p.id === id)?.full_name?.split(' ')[0] || '—'
+      const td   = today()
+      const in7  = future(7)
+      const yest = new Date(Date.now() - 86400000).toISOString()
+      const mon  = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]
 
-    const eventDetails = todayEvents.map(e => {
-      const typeLabel = TYPE_LABELS[e.event_type] || '📌'
-      const tagged = (e.tagged_profiles || []).map(id => getName(id)).filter(Boolean)
-      return {
-        title: e.title,
-        type: typeLabel,
-        notes: e.notes,
-        tagged,
+      const [tRes, mRes, dlRes, incRes, expRes, debRes, outRes, propRes] = await Promise.all([
+        supabase.from('tasks').select('id,title,due_date,assignee_id,status,tags').neq('status', 'done'),
+        supabase.from('profiles').select('id,full_name').eq('is_active', true),
+        supabase.from('task_comments')
+          .select('metadata,created_at,tasks(title),profiles(full_name)')
+          .eq('type', 'activity').ilike('content', '%deadline%')
+          .gte('created_at', yest).order('created_at', { ascending: false }),
+        supabase.from('incomes').select('amount').gte('payment_date', mon),
+        supabase.from('expenses').select('amount').gte('expense_date', mon),
+        supabase.from('receivables').select('client_name,expected_amount,expected_date').eq('paid', false),
+        supabase.from('outsource_works').select('name,planned_deadline,projects(name)').neq('status', 'completed').not('planned_deadline', 'is', null),
+        supabase.from('proposals').select('client_name,status').neq('status', 'signed').neq('status', 'rejected'),
+      ])
+
+      const allT   = tRes.data || []
+      const membs  = mRes.data || []
+      const name_  = (id) => membs.find(m => m.id === id)?.full_name || '—'
+
+      const inc    = (incRes.data || []).reduce((s,i) => s + Number(i.amount || 0), 0)
+      const exp    = (expRes.data || []).reduce((s,e) => s + Number(e.amount || 0), 0)
+      const debs   = debRes.data || []
+      const overDeb= debs.filter(d => d.expected_date && d.expected_date < td)
+      const totalD = debs.reduce((s,d) => s + Number(d.expected_amount || 0), 0)
+
+      const overT  = allT.filter(t => t.due_date && days(t.due_date) < 0)
+      const crit3  = overT.filter(t => Math.abs(days(t.due_date)) > 3)
+      const todayT = allT.filter(t => t.due_date === td)
+      const weekT  = allT.filter(t => t.due_date > td && t.due_date <= in7)
+      const dlCh   = dlRes.data || []
+      const outsoon= (outRes.data || []).filter(o => { const d = days(o.planned_deadline); return d >= 0 && d <= 7 })
+
+      const bdAdmins = await getProfiles('bd')
+      const bdIds    = new Set(bdAdmins.map(b => b.id))
+
+      let count = 0
+      for (const admin of admins) {
+        try {
+          const nm   = admin.full_name.split(' ')[0]
+          const isBD = bdIds.has(admin.id)
+
+          const ctx = [
+            'KOMANDA:',
+            'Bu gun deadline: ' + todayT.length + ' tapshiriq',
+            todayT.slice(0,4).map(t => '  - ' + t.title + ' (' + name_(t.assignee_id) + ')').join('\n'),
+            'Gecikmiş: ' + overT.length,
+            'Kritik (3+g): ' + crit3.length + (crit3.length ? ' - ' + crit3.slice(0,3).map(t => t.title + ' ' + name_(t.assignee_id)).join(', ') : ''),
+            'Bu həftə deadline: ' + weekT.length,
+            dlCh.length ? 'Deadline dəyişikliyi (24s): ' + dlCh.slice(0,3).map(c => (c.tasks?.title || '?') + ' - ' + (c.profiles?.full_name || '?') + ' (' + (c.metadata?.old_due || '?') + ' -> ' + (c.metadata?.new_due || '?') + ')').join('; ') : '',
+            '',
+            'MALİYYƏ (bu ay):',
+            'Daxilolma: ' + money(inc),
+            'Xərc: ' + money(exp),
+            'Balans: ' + money(inc - exp),
+            'Debitor borc: ' + money(totalD),
+            'Gecikmiş odənişlər: ' + overDeb.length + (overDeb.length ? ' - ' + overDeb.slice(0,3).map(d => d.client_name + ' ' + money(d.expected_amount)).join(', ') : ''),
+            outsoon.length ? 'Podratchi deadline (7g): ' + outsoon.map(o => o.name + (o.projects?.name ? ' (' + o.projects.name + ')' : '')).join(', ') : '',
+            isBD ? ('\nBD: ' + allT.filter(t => (t.tags||[]).includes('BD') && t.status !== 'done').length + ' aktiv tapshiriq, ' + (propRes.data||[]).length + ' goyleyen tekllif') : '',
+          ].filter(Boolean).join('\n')
+
+          const prompt = 'Sen Reflect Architects AI koməkçisisən. ' + nm + ' ucun admin sehər brifinqi yaz.\n\n' + ctx + '\n\nTələblər:\n- "Salam ' + nm + '!" ile başla\n- Qısa, professional amma yoldaş tonu\n- Kritik məlumatları vurğula\n- ' + (isBD ? 'BD məlumatlarını da qeyd et' : '') + '\n- Azərbaycan dilinin qrammatikasına riayət et\n- Emoji ile, 6-10 cümlə\n- Yalnız mesajı yaz'
+
+          let text = await ai(prompt)
+          if (!text) {
+            text = '📊 Salam, ' + nm + '!\n\n' +
+              '👥 Bu gün ' + todayT.length + ' deadline, ' + overT.length + ' gecikmiş tapşırıq.\n' +
+              (crit3.length ? '🚨 Kritik: ' + crit3.length + ' tapşırıq 3+ gün gecikib.\n' : '') +
+              '💰 Bu ay: ' + money(inc) + ' gəlir | ' + money(exp) + ' xərc | ' + money(inc - exp) + ' balans\n' +
+              (overDeb.length ? '🔴 Gecikmiş borclar: ' + overDeb.length + ' müştəri\n' : '')
+          }
+
+          const r = await tg(admin.telegram_chat_id, text)
+          if (r?.ok) count++
+        } catch (e) {
+          console.error('morning_admin error:', admin.full_name, e.message)
+        }
       }
-    })
-
-    const prompt = \`Sən Reflect Architects şirkətinin AI köməkçisisən.
-Nicat üçün bu günün görüşlərinin qısa xülasəsini yaz.
-
-Bu günün hadisələri:
-\${eventDetails.map((e, i) => \`\${i+1}. \${e.type}: \${e.title}\${e.notes ? \` — \${e.notes}\` : ''}\${e.tagged.length ? \` (İştirakçılar: \${e.tagged.join(', ')})\` : ''}\`).join('\n')}
-
-Tələblər:
-- "Salam Nicat! Bu günün proqramı:" ilə başla
-- Hər hadisəni qısa, aydın şəkildə qeyd et
-- İştirakçılar varsa — onları da xatırlat
-- Standupdan əvvəl hazırlıq tonu — qısa, birbaşa
-- Azərbaycan dilinin qrammatikasına riayət et
-- Emoji ilə, 4-6 cümlə
-Yalnız mesajı yaz.\`
-
-    let text = await gemini(prompt)
-    if (!text) {
-      const lines = ['📅 <b>Bu günün proqramı, Nicat:</b>', '']
-      todayEvents.forEach(e => {
-        const typeLabel = TYPE_LABELS[e.event_type] || '📌'
-        lines.push(\`\${typeLabel} <b>\${e.title}</b>\`)
-        if (e.notes) lines.push(\`   <i>\${e.notes}</i>\`)
-      })
-      text = lines.join('\n')
+      return res.json({ success: true, count })
     }
 
-    const r = await sendTelegram(nicat.telegram_chat_id, text)
-    return res.status(200).json({ success: r?.ok, count: r?.ok ? 1 : 0 })
-  }
+    // ══════════════════════════════════════════════════════════════════════════
+    // 3. PODRATÇI DEADLINE — 09:00, 5/3/1 gün əvvəl
+    // ══════════════════════════════════════════════════════════════════════════
+    if (type === 'outsource_deadline') {
+      const admins = await getProfiles('admins')
+      const all    = await getProfiles()
 
-  // ════════════════════════════════════════════════════════════════════════════
-  // 5. 🌆 AXŞAM MEMARLIQ SİTATI — saat 18:00
-  //    Bütün komandaya — 4 tonlu Gemini
-  // ════════════════════════════════════════════════════════════════════════════
-  if (type === 'evening') {
-    const profiles = await getAllProfiles()
-    if (!profiles.length) return res.status(200).json({ success: true, count: 0 })
+      const { data: works } = await supabase
+        .from('outsource_works')
+        .select('id,name,planned_deadline,project_id,projects(name,assignee_id)')
+        .neq('status', 'completed')
+        .not('planned_deadline', 'is', null)
 
-    const tones    = ['philosophical', 'sarcastic', 'emotional', 'thoughtful']
-    const dayOfYear= Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0)) / 86400000)
-    const tone     = tones[dayOfYear % 4]
+      let count = 0
+      for (const w of (works || [])) {
+        try {
+          const d = days(w.planned_deadline)
+          if (![1, 3, 5].includes(d)) continue
 
-    const tonePrompts = {
-      philosophical: `Dərin fəlsəfi ton. Rem Koolhaas, Louis Kahn, Peter Zumtor, Tadao Ando kimi ustadların düşüncə tərzindən ilham al. Memarlığın insan həyatı, zaman, məkan və cəmiyyətlə dərin əlaqəsini araşdıran orijinal bir fikir yaz. Nümunə: "Rem Koolhaas yazırdı: Bir binanın iki ömrü var — memarın xəyal etdiyi və insanların yaşatdığı. Bu iki ömür heç vaxt üst-üstə düşmür."`,
-      sarcastic: `Ağır, düşündürücü, gülümsədən sarkazm tonu — Koolhaas-ın kəskin, lakin intellektual üslubu. Sifarişçilər, büdcə, reviziyalar, "sadə bir şey istəyirəm" kimi vəziyyətlər haqqında ağıllı, zarafatlı, eyni zamanda dərin bir müşahidə yaz. Nümunə: "'Sadəlik mürəkkəbliyin ən yüksək ifadəsidir' — Leonardo da Vinci. Bunu sifarişçiyə anlatmaq isə ondan da mürəkkəb bir məsələdir."`,
-      emotional: `İlhamverici, emosional ton. Zaha Hədid, Tadao Ando, Alvaro Siza kimi memarların həyat hekayələrindən ilham al. Yaradıcılığın çətinliyi, gözəlliyin dəyəri, əsər yaratmağın sevinci haqqında içdən bir söz. Nümunə: "Zaha Hədidin lüğətində 'mümkün deyil' ifadəsi yox idi. O, sadəcə başqalarının hələ görə bilmədiyi şeyləri əvvəlcədən görürdü."`,
-      thoughtful: `Düşündürücü, gözlənilməz ton. Memarlıq haqqında qeyri-standart bir müşahidə — paradoksal həqiqətlər, gözlənilməz analogiyalar. Nümunə: "Koolhaas demişdi: 'Bəzən infrastruktur memarlıqdan daha vacibdir.' Bəzən yaxşı düşünülmüş bir dəhliz bütün binadan daha çox şey söyləyir."`,
-    }
+          const emoji   = d === 1 ? '🔴' : d === 3 ? '🟡' : '🟠'
+          const dayText = d === 1 ? 'sabah deadline!' : d + ' gun qalıb'
+          const msg = emoji + ' <b>Podratçı deadline</b>\n\n🔧 <b>' + w.name + '</b>\n🏗 ' + (w.projects?.name || '—') + '\n⏰ ' + date(w.planned_deadline) + ' — ' + dayText
 
-    const intro = 'Yaxşı memar üçün iş günü heç vaxt tam bitmir — o, sadəcə başqa bir formaya keçir.'
+          for (const a of admins) {
+            const r = await tg(a.telegram_chat_id, msg)
+            if (r?.ok) count++
+          }
 
-    const prompt = `Sən Reflect Architects şirkətinin AI köməkçisisən. Axşam saatı bütün komandaya ilham vermək üçün bir mesaj yazırsan.
-
-Ton: ${tonePrompts[tone]}
-
-Tələblər:
-- Azərbaycan dilinin qrammatikasına və leksikologiyasına tam riayət et
-- Memarların gündəlik həyatına aid, real hiss doğuran məzmun
-- Heç bir emoji, heç bir başlıq — sadə, gözəl mətn
-- 3-5 cümlə, bütöv bir fikir
-Yalnız mətni yaz.`
-
-    let quote = await gemini(prompt)
-    if (!quote || quote.length < 20) {
-      const fallbacks = {
-        philosophical: 'Rem Koolhaas yazırdı: bir binanın iki ömrü var — memarın xəyal etdiyi və insanların yaşatdığı. Bu iki ömür heç vaxt üst-üstə düşmür. Bəlkə bu, memarlığın ən dərin həqiqətidir.',
-        sarcastic: '"Sadəlik mürəkkəbliyin ən yüksək ifadəsidir" — Leonardo da Vinci. Bunu sifarişçiyə anlatmaq isə ondan da mürəkkəb bir məsələdir. Amma siz hər gün cəhd edirsiniz — bu özü böyük bir bacarıqdır.',
-        emotional: 'Zaha Hədidin lüğətində "mümkün deyil" ifadəsi yox idi. O, sadəcə başqalarının hələ görə bilmədiyi şeyləri əvvəlcədən görürdü. Hər əsər, əvvəlcə cəsarətli bir xəyal idi.',
-        thoughtful: 'Koolhaas demişdi: "Bəzən infrastruktur memarlıqdan daha vacibdir." Bəzən yaxşı düşünülmüş bir dəhliz bütün binadan daha çox şey söyləyir. Böyük ideyalar həmişə böyük formalarda gizlənmir.',
+          if (w.projects?.assignee_id) {
+            const arch = all.find(p => p.id === w.projects.assignee_id && !ADMIN_EMAILS.includes(p.email))
+            if (arch) {
+              const r = await tg(arch.telegram_chat_id, msg)
+              if (r?.ok) count++
+            }
+          }
+        } catch (e) {
+          console.error('outsource error:', w.name, e.message)
+        }
       }
-      quote = fallbacks[tone]
+      return res.json({ success: true, count })
     }
 
-    const message = `🌆 <i>${intro}</i>\n\n${quote}`
-    let count = 0
-    for (const p of profiles) {
-      const r = await sendTelegram(p.telegram_chat_id, message)
-      if (r?.ok) count++
-    }
-    return res.status(200).json({ success: true, count, tone })
-  }
+    // ══════════════════════════════════════════════════════════════════════════
+    // 4. NİCAT GÜNÜN GÖRÜŞÜ — 09:30
+    // ══════════════════════════════════════════════════════════════════════════
+    if (type === 'nicat_events') {
+      const nicats = await getProfiles('nicat')
+      const nicat  = nicats[0]
+      if (!nicat) return res.json({ success: false, note: 'Nicat not found or no Telegram' })
 
-  // ════════════════════════════════════════════════════════════════════════════
-  // 6. 📈 HƏFTƏLİK HESABAT — Cümə 17:00, yalnız adminlərə
-  // ════════════════════════════════════════════════════════════════════════════
-  if (type === 'weekly_report') {
-    const admins   = await getAdminProfiles()
-    const bdAdmins = await getBDProfiles()
-    if (!admins.length) return res.status(200).json({ success: true, count: 0 })
+      const td = today()
+      const { data: events } = await supabase
+        .from('events')
+        .select('title,notes,event_type,tagged_profiles')
+        .eq('start_date', td)
+        .order('created_at')
 
-    const today     = new Date(); today.setHours(0,0,0,0)
-    const todayStr  = today.toISOString().split('T')[0]
-    const weekAgo   = new Date(today.getTime() - 7 * 86400000).toISOString().split('T')[0]
-    const in7days   = new Date(today.getTime() + 7 * 86400000).toISOString().split('T')[0]
-    const monthStart= new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0]
+      if (!events?.length) {
+        await tg(nicat.telegram_chat_id, '📅 <b>Bu gunun proqramı, Nicat!</b>\n\nBu gün planlaşdırılmış görüş yoxdur. Yaxşı iş günü! 🏗')
+        return res.json({ success: true, count: 0 })
+      }
 
-    const [
-      tasksRes, membersRes, dlChanges,
-      incomesMonth, expensesMonth, incomesWeek, expensesWeek,
-      debtorsRes, outsourceRes, proposalsRes, contractsRes
-    ] = await Promise.all([
-      supabase.from('tasks').select('id, title, due_date, assignee_id, status, tags, archived, updated_at'),
-      supabase.from('profiles').select('id, full_name').eq('is_active', true),
-      supabase.from('task_comments')
-        .select('task_id, author_id, metadata, created_at, tasks(title), profiles(full_name)')
-        .eq('type', 'activity').like('content', '%deadline%')
-        .gte('created_at', new Date(today.getTime() - 7 * 86400000).toISOString())
-        .order('created_at', { ascending: false }),
-      supabase.from('incomes').select('amount, payment_date, payment_method').gte('payment_date', monthStart),
-      supabase.from('expenses').select('amount, expense_date, description').gte('expense_date', monthStart),
-      supabase.from('incomes').select('amount').gte('payment_date', weekAgo),
-      supabase.from('expenses').select('amount').gte('expense_date', weekAgo),
-      supabase.from('debtor_records').select('client_name, amount, expected_date, status').neq('status', 'paid'),
-      supabase.from('outsource_works').select('name, planned_deadline, status, projects(name)').neq('status', 'completed').not('planned_deadline', 'is', null),
-      supabase.from('proposals').select('client_name, amount, status').in('status', ['sent', 'negotiating']),
-      supabase.from('contracts').select('client_name, status').in('status', ['pending', 'negotiating']),
-    ])
+      const TYPE_MAP = { meeting: '🤝', deadline: '🔴', holiday: '🎉', birthday: '🎂', event: '📅', other: '📌' }
+      const all = await getProfiles()
+      const nm_ = (id) => all.find(p => p.id === id)?.full_name?.split(' ')[0] || '?'
 
-    const allTasks  = tasksRes.data || []
-    const members   = membersRes.data || []
-    const getName   = (id) => members.find(m => m.id === id)?.full_name || '—'
+      const list = events.map((e, i) => {
+        const em = TYPE_MAP[e.event_type] || '📌'
+        const tagged = (e.tagged_profiles || []).map(id => nm_(id)).filter(Boolean)
+        return (i + 1) + '. ' + em + ' ' + e.title +
+          (e.notes ? ' — ' + e.notes : '') +
+          (tagged.length ? ' (İştirakçı: ' + tagged.join(', ') + ')' : '')
+      }).join('\n')
 
-    // Maliyyə
-    const weekIncome  = (incomesWeek.data  || []).reduce((s,i) => s + Number(i.amount || 0), 0)
-    const weekExpense = (expensesWeek.data || []).reduce((s,e) => s + Number(e.amount || 0), 0)
-    const monthIncome = (incomesMonth.data || []).reduce((s,i) => s + Number(i.amount || 0), 0)
-    const monthExpense= (expensesMonth.data|| []).reduce((s,e) => s + Number(e.amount || 0), 0)
-    const totalDebt   = (debtorsRes.data   || []).reduce((s,d) => s + Number(d.amount || 0), 0)
-    const overdueDebt = (debtorsRes.data   || []).filter(d => d.expected_date && d.expected_date < todayStr)
+      const prompt = 'Sen Reflect Architects AI koməkçisisən. Nicat ucun bu gunun goruşlərini xulasele.\n\nHadisələr:\n' + list + '\n\nTələblər:\n- "Salam Nicat! Bu gunun proqramı:" ile başla\n- Hər hadisəni qısa, aydın qeyd et\n- İştirakçılar varsa xatırlat\n- Standup hazırlıq tonu — qısa, birbaşa\n- Azərbaycan dilinin qrammatikasına riayət et\n- Emoji ile, 3-5 cümlə\n- Yalnız mesajı yaz'
 
-    // Tapşırıq statistikası
-    const doneTasks    = allTasks.filter(t => t.status === 'done' && t.updated_at >= weekAgo && !t.archived)
-    const overdueNow   = allTasks.filter(t => { if (t.status === 'done' || t.archived || !t.due_date) return false; const d = new Date(t.due_date); d.setHours(0,0,0,0); return d < today })
-    const critical3    = overdueNow.filter(t => Math.abs(daysLeft(t.due_date)) > 3)
-    const nextWeekDL   = allTasks.filter(t => t.due_date > todayStr && t.due_date <= in7days && t.status !== 'done' && !t.archived)
-    const bdTasks      = allTasks.filter(t => (t.tags || []).includes('BD') && t.status !== 'done')
-    const dlChangesArr = dlChanges.data || []
-
-    // Podratçı
-    const outsourceSoon= (outsourceRes.data || []).filter(o => { const d = daysLeft(o.planned_deadline); return d >= 0 && d <= 14 })
-
-    for (const admin of admins) {
-      const firstName = admin.full_name.split(' ')[0]
-      const isBD = bdAdmins.some(b => b.id === admin.id)
-
-      const context = `
-Admin: ${admin.full_name}
-Tarix: ${new Date().toLocaleDateString('az-AZ', { weekday:'long', day:'numeric', month:'long', year:'numeric' })}
-
-MALİYYƏ:
-Bu həftə:
-- Daxilolma: ${fmt(weekIncome)}
-- Xərc: ${fmt(weekExpense)}  
-- Balans: ${fmt(weekIncome - weekExpense)}
-
-Bu ay (${new Date().toLocaleDateString('az-AZ', { month:'long' })}):
-- Daxilolma: ${fmt(monthIncome)}
-- Xərc: ${fmt(monthExpense)}
-- Balans: ${fmt(monthIncome - monthExpense)}
-
-Debitor borclar:
-- Ümumi: ${fmt(totalDebt)}
-- Gecikmiş ödənişlər: ${overdueDebt.length} müştəri (${fmt(overdueDebt.reduce((s,d)=>s+Number(d.amount||0),0))})
-${overdueDebt.slice(0,4).map(d => `  • ${d.client_name}: ${fmt(d.amount)}`).join('\n')}
-
-TAPŞIRIQLAR:
-- Bu həftə tamamlanan: ${doneTasks.length} (${doneTasks.map(t => `${t.title} - ${getName(t.assignee_id)}`).slice(0,5).join('; ')})
-- Gecikmiş: ${overdueNow.length} tapşırıq
-- Kritik gecikmə (3+ gün): ${critical3.length} (${critical3.map(t => `${t.title} - ${getName(t.assignee_id)} - ${Math.abs(daysLeft(t.due_date))}g`).slice(0,4).join('; ')})
-- Deadline dəyişiklikləri: ${dlChangesArr.length} (${dlChangesArr.map(c => `${c.tasks?.title} - ${c.profiles?.full_name}`).slice(0,4).join('; ')})
-- Gələn həftə deadline: ${nextWeekDL.length} tapşırıq (${nextWeekDL.map(t => `${t.title} - ${getName(t.assignee_id)} - ${daysLeft(t.due_date)}g`).slice(0,5).join('; ')})
-
-PODRATÇI İŞLƏRİ:
-- 2 həftə içində deadline: ${outsourceSoon.map(o => `${o.name} (${o.projects?.name}, ${daysLeft(o.planned_deadline)}g)`).join(', ') || 'yoxdur'}
-
-${isBD ? `BD MƏLUMATLARİ:
-- Aktiv BD tapşırıqları: ${bdTasks.length} (${bdTasks.map(t => t.title).join(', ')})
-- Gözləyən kommersiya təklifləri: ${(proposalsRes.data||[]).length} (${(proposalsRes.data||[]).map(p => p.client_name).join(', ')})
-- İmzalanma gözlənilən müqavilələr: ${(contractsRes.data||[]).length > 0 ? (contractsRes.data||[]).map(c => c.client_name).join(', ') : 'yoxdur'}` : ''}
-`
-
-      const prompt = `Sən Reflect Architects şirkətinin AI köməkçisisən. ${firstName} üçün həftəlik hesabat yaz.
-
-Məlumatlar:
-${context}
-
-Tələblər:
-- "Salam ${firstName}! Cümə axşamı hesabatı 📊" ilə başla
-- Maliyyə nəticələrini həm bu həftə, həm bu ay üzrə göstər
-- Gecikmiş borcları, kritik tapşırıqları aydın vurğula
-- Uğurları da qeyd et (tamamlanan tapşırıqlar)
-- ${isBD ? 'BD məlumatlarını ayrıca blokda göstər' : ''}
-- Gələn həftənin prioritetlərini qısa xülasə et
-- Azərbaycan dilinin qrammatikasına və leksikologiyasına tam riayət et
-- Professional amma yoldaş tonu, emoji ilə
-- 12-18 cümlə, bölümlər üzrə strukturlu
-
-Yalnız mesajı yaz.`
-
-      let text = await gemini(prompt)
+      let text = await ai(prompt)
       if (!text) {
-        const lines = [`📈 Salam, ${firstName}! Cümə axşamı hesabatı.`, '']
-        lines.push(`💰 Bu həftə: Daxilolma ${fmt(weekIncome)} | Xərc ${fmt(weekExpense)} | Balans ${fmt(weekIncome-weekExpense)}`)
-        lines.push(`📅 Bu ay: Daxilolma ${fmt(monthIncome)} | Xərc ${fmt(monthExpense)}`)
-        if (overdueDebt.length) lines.push(`🔴 Gecikmiş borclar: ${overdueDebt.length} müştəri, ${fmt(overdueDebt.reduce((s,d)=>s+Number(d.amount||0),0))}`)
-        lines.push(`✅ Bu həftə tamamlanan tapşırıqlar: ${doneTasks.length}`)
-        if (critical3.length) lines.push(`🚨 Kritik gecikmiş tapşırıqlar: ${critical3.length}`)
-        if (dlChangesArr.length) lines.push(`⚠️ Deadline dəyişiklikləri: ${dlChangesArr.length}`)
-        lines.push(`📋 Gələn həftə: ${nextWeekDL.length} tapşırıq deadline`)
-        text = lines.join('\n')
+        text = '📅 <b>Bu gunun proqramı, Nicat!</b>\n\n' + events.map(e => (TYPE_MAP[e.event_type] || '📌') + ' <b>' + e.title + '</b>' + (e.notes ? '\n   <i>' + e.notes + '</i>' : '')).join('\n')
       }
 
-      await sendTelegram(admin.telegram_chat_id, text)
+      const r = await tg(nicat.telegram_chat_id, text)
+      return res.json({ success: r?.ok === true, count: r?.ok ? 1 : 0 })
     }
-    return res.status(200).json({ success: true, count: admins.length })
-  }
 
-  return res.status(400).json({ error: 'Bilinməyən type: ' + type })
+    // ══════════════════════════════════════════════════════════════════════════
+    // 5. DEADLINE XƏBƏRDARLIQ — 14:00, 1/3/5 gün
+    // ══════════════════════════════════════════════════════════════════════════
+    if (type === 'deadline_warning') {
+      const all = await getProfiles()
+
+      const { data: tasks } = await supabase
+        .from('tasks')
+        .select('title,due_date,assignee_id,projects(name)')
+        .neq('status', 'done')
+        .not('due_date', 'is', null)
+
+      // Group by assignee
+      const byUser = {}
+      for (const t of (tasks || [])) {
+        const d = days(t.due_date)
+        if (![1, 3, 5].includes(d) || !t.assignee_id) continue
+        if (!byUser[t.assignee_id]) byUser[t.assignee_id] = []
+        byUser[t.assignee_id].push({ ...t, d })
+      }
+
+      let count = 0
+      for (const [uid, myTasks] of Object.entries(byUser)) {
+        try {
+          const p = all.find(p => p.id === uid)
+          if (!p) continue
+          const nm = p.full_name.split(' ')[0]
+          const sorted = myTasks.sort((a, b) => a.d - b.d)
+
+          const list = sorted.map(t => {
+            const em = t.d === 1 ? '🔴' : t.d === 3 ? '🟡' : '🟠'
+            return em + ' ' + t.title + (t.projects?.name ? ' (' + t.projects.name + ')' : '') + ' — ' + (t.d === 1 ? 'sabah!' : t.d + ' gun')
+          }).join('\n')
+
+          const prompt = 'Sen Reflect Architects AI koməkçisisən. ' + nm + ' ucun deadline xəbərdarlığı yaz.\n\nYaxınlaşan deadlinelər:\n' + list + '\n\nTələblər:\n- "' + nm + '," ile başla\n- Qısa, 2-3 cümlə\n- 1 gün qalanı ayrıca vurğula\n- İncitməyən amma ciddi ton\n- Bəzən zarafat, bəzən motivasiya\n- Azərbaycan dilinin qrammatikasına riayət et\n- Emoji ile\n- Yalnız mesajı yaz'
+
+          let text = await ai(prompt)
+          if (!text) {
+            text = '⏰ ' + nm + ', yaxınlaşan deadlinelər!\n\n' + list
+          }
+
+          const r = await tg(p.telegram_chat_id, text)
+          if (r?.ok) count++
+        } catch (e) {
+          console.error('deadline_warning user error:', uid, e.message)
+        }
+      }
+      return res.json({ success: true, count })
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // 6. AXŞAM SİTATI — 18:00
+    // ══════════════════════════════════════════════════════════════════════════
+    if (type === 'evening') {
+      const all = await getProfiles()
+      if (!all.length) return res.json({ success: true, count: 0 })
+
+      const tones = ['philosophical', 'sarcastic', 'emotional', 'thoughtful']
+      const doy   = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0)) / 86400000)
+      const tone  = tones[doy % 4]
+
+      const toneDesc = {
+        philosophical: 'Dərin fəlsəfi ton. Rem Koolhaas, Louis Kahn, Peter Zumtor kimi ustadlardan ilham al. Memarlığın insan həyatı, zaman, məkanla dərin əlaqəsini araşdıran orijinal bir fikir.',
+        sarcastic: 'Düşündürücü, ağıllı sarkazm — Koolhaas tərzi. Sifarişçilər, büdcə, reviziyalar haqqında zarafatlı amma dərin müşahidə.',
+        emotional: 'İlhamverici, emosional ton. Zaha Hədid, Tadao Ando, Alvaro Siza həyat hekayələrindən ilham. Yaradıcılığın çətinliyi, gözəlliyin dəyəri.',
+        thoughtful: 'Düşündürücü, gözlənilməz ton. Memarlıq haqqında paradoksal həqiqətlər, qeyri-standart müşahidələr.',
+      }
+
+      const intro  = 'Yaxşı memar ucun iş gunu heç vaxt tam bitmir — o, sadəcə başqa bir formaya keçir.'
+      const prompt = 'Sen Reflect Architects AI koməkçisisən. Axşam komandaya ilham mesajı yaz.\n\nTon: ' + toneDesc[tone] + '\n\nTələblər:\n- Azərbaycan dilinin qrammatikasına və leksikologiyasına tam riayət et\n- Memarların gündəlik həyatına aid, real hiss doğuran məzmun\n- Emoji yoxdur, başlıq yoxdur — sadə, gözəl mətn\n- 3-5 cümlə\n- Yalnız mətni yaz'
+
+      const fallbacks = {
+        philosophical: 'Rem Koolhaas yazırdı: bir binanın iki ömrü var — memarın xəyal etdiyi və insanların yaşatdığı. Bu iki ömür heç vaxt üst-üstə düşmür.',
+        sarcastic: '"Sadəlik mürəkkəbliyin ən yüksək ifadəsidir" — Leonardo da Vinci. Bunu sifarişçiyə anlatmaq isə ondan da mürəkkəb bir məsələdir.',
+        emotional: 'Zaha Hədidin lüğətində "mümkün deyil" ifadəsi yox idi. O, sadəcə başqalarının hələ görə bilmədiyi şeyləri əvvəlcədən görürdü.',
+        thoughtful: 'Koolhaas demişdi: "Bəzən infrastruktur memarlıqdan daha vacibdir." Bəzən yaxşı düşünülmüş bir dəhliz bütün binadan daha çox şey söyləyir.',
+      }
+
+      const quote = await ai(prompt) || fallbacks[tone]
+      const msg   = '🌆 <i>' + intro + '</i>\n\n' + quote
+
+      let count = 0
+      for (const p of all) {
+        try {
+          const r = await tg(p.telegram_chat_id, msg)
+          if (r?.ok) count++
+        } catch (e) {
+          console.error('evening user error:', p.full_name, e.message)
+        }
+      }
+      return res.json({ success: true, count, tone })
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // 7. HƏFTƏLİK HESABAT — Cümə 17:00
+    // ══════════════════════════════════════════════════════════════════════════
+    if (type === 'weekly_report') {
+      const admins = await getProfiles('admins')
+      if (!admins.length) return res.json({ success: true, count: 0 })
+
+      const td   = today()
+      const w7   = ago(7)
+      const in7  = future(7)
+      const mon  = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]
+
+      const [tRes, mRes, dlRes, incM, expM, incW, expW, debRes, outRes, propRes] = await Promise.all([
+        supabase.from('tasks').select('id,title,due_date,assignee_id,status,tags,archived,updated_at'),
+        supabase.from('profiles').select('id,full_name').eq('is_active', true),
+        supabase.from('task_comments')
+          .select('metadata,tasks(title),profiles(full_name)')
+          .eq('type', 'activity').ilike('content', '%deadline%')
+          .gte('created_at', new Date(Date.now() - 7 * 86400000).toISOString())
+          .order('created_at', { ascending: false }),
+        supabase.from('incomes').select('amount').gte('payment_date', mon),
+        supabase.from('expenses').select('amount').gte('expense_date', mon),
+        supabase.from('incomes').select('amount').gte('payment_date', w7),
+        supabase.from('expenses').select('amount').gte('expense_date', w7),
+        supabase.from('receivables').select('client_name,expected_amount,expected_date').eq('paid', false),
+        supabase.from('outsource_works').select('name,planned_deadline,projects(name)').neq('status', 'completed').not('planned_deadline', 'is', null),
+        supabase.from('proposals').select('client_name').neq('status', 'signed').neq('status', 'rejected'),
+      ])
+
+      const allT   = tRes.data || []
+      const membs  = mRes.data || []
+      const nm_    = (id) => membs.find(m => m.id === id)?.full_name || '—'
+
+      const wInc   = (incW.data || []).reduce((s,i) => s + Number(i.amount || 0), 0)
+      const wExp   = (expW.data || []).reduce((s,e) => s + Number(e.amount || 0), 0)
+      const mInc   = (incM.data || []).reduce((s,i) => s + Number(i.amount || 0), 0)
+      const mExp   = (expM.data || []).reduce((s,e) => s + Number(e.amount || 0), 0)
+      const debs   = debRes.data || []
+      const totD   = debs.reduce((s,d) => s + Number(d.expected_amount || 0), 0)
+      const overD  = debs.filter(d => d.expected_date && d.expected_date < td)
+
+      const done   = allT.filter(t => t.status === 'done' && t.updated_at >= w7 && !t.archived)
+      const over   = allT.filter(t => { if (t.status === 'done' || t.archived || !t.due_date) return false; return days(t.due_date) < 0 })
+      const crit   = over.filter(t => Math.abs(days(t.due_date)) > 3)
+      const next   = allT.filter(t => t.due_date > td && t.due_date <= in7 && t.status !== 'done' && !t.archived)
+      const dlCh   = dlRes.data || []
+      const bdT    = allT.filter(t => (t.tags || []).includes('BD') && t.status !== 'done')
+      const outs   = (outRes.data || []).filter(o => { const d = days(o.planned_deadline); return d >= 0 && d <= 14 })
+
+      const bdAdmins = await getProfiles('bd')
+      const bdIds    = new Set(bdAdmins.map(b => b.id))
+
+      let count = 0
+      for (const admin of admins) {
+        try {
+          const nm   = admin.full_name.split(' ')[0]
+          const isBD = bdIds.has(admin.id)
+
+          const ctx = [
+            new Date().toLocaleDateString('az-AZ', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
+            '',
+            'MALİYYƏ:',
+            'Bu həftə: gəlir ' + money(wInc) + ' | xərc ' + money(wExp) + ' | balans ' + money(wInc - wExp),
+            'Bu ay: gəlir ' + money(mInc) + ' | xərc ' + money(mExp) + ' | balans ' + money(mInc - mExp),
+            'Debitor borc: ' + money(totD) + (overD.length ? ' (gecikmiş: ' + overD.length + ' - ' + overD.slice(0,3).map(d => d.client_name + ' ' + money(d.expected_amount)).join(', ') + ')' : ''),
+            '',
+            'TAPŞIRIQLAR:',
+            'Tamamlanan (bu həftə): ' + done.length + (done.length ? ' - ' + done.slice(0,4).map(t => t.title + ' (' + nm_(t.assignee_id) + ')').join(', ') : ''),
+            'Gecikmiş: ' + over.length + (crit.length ? ' (kritik 3+g: ' + crit.length + ')' : ''),
+            'Deadline dəyişikliyi: ' + dlCh.length + (dlCh.length ? ' - ' + dlCh.slice(0,3).map(c => (c.tasks?.title || '?') + ' (' + (c.profiles?.full_name || '?') + ')').join(', ') : ''),
+            'Gələn həftə deadline: ' + next.length + (next.length ? ' - ' + next.slice(0,4).map(t => t.title + ' (' + nm_(t.assignee_id) + ', ' + days(t.due_date) + 'g)').join(', ') : ''),
+            outs.length ? 'Podratçı (2həftə): ' + outs.map(o => o.name + (o.projects?.name ? ' (' + o.projects.name + ')' : '') + ' ' + days(o.planned_deadline) + 'g').join(', ') : '',
+            isBD ? ('BD: ' + bdT.length + ' aktiv tapşırıq, ' + (propRes.data || []).length + ' gözləyən təklif') : '',
+          ].filter(Boolean).join('\n')
+
+          const prompt = 'Sen Reflect Architects AI koməkçisisən. ' + nm + ' ucun həftəlik hesabat yaz.\n\n' + ctx + '\n\nTələblər:\n- "Salam ' + nm + '! Cümə hesabatı" ile başla\n- Maliyyəni həm bu həftə həm bu ay göstər\n- Gecikmiş borcları, kritik tapşırıqları vurğula\n- Uğurları da qeyd et\n- ' + (isBD ? 'BD məlumatlarını ayrıca göstər' : '') + '\n- Gələn həftə prioritetlərini xulasele\n- Azərbaycan dilinin qrammatikasına riayət et\n- Professional amma yoldaş tonu, emoji ile\n- 10-15 cümlə\n- Yalnız mesajı yaz'
+
+          let text = await ai(prompt)
+          if (!text) {
+            text = '📈 Salam, ' + nm + '! Cümə hesabatı.\n\n' +
+              '💰 Bu həftə: ' + money(wInc) + ' gəlir | ' + money(wExp) + ' xərc\n' +
+              '📅 Bu ay: ' + money(mInc) + ' | ' + money(mExp) + '\n' +
+              (overD.length ? '🔴 Gecikmiş borclar: ' + overD.length + ' müştəri\n' : '') +
+              '✅ Tamamlanan: ' + done.length + '\n' +
+              (crit.length ? '🚨 Kritik gecikmiş: ' + crit.length + '\n' : '') +
+              '📋 Gələn həftə: ' + next.length + ' tapşırıq'
+          }
+
+          const r = await tg(admin.telegram_chat_id, text)
+          if (r?.ok) count++
+        } catch (e) {
+          console.error('weekly_report error:', admin.full_name, e.message)
+        }
+      }
+      return res.json({ success: true, count })
+    }
+
+    return res.status(400).json({ error: 'Unknown type: ' + type })
+
+  } catch (e) {
+    console.error('[agent] fatal error:', e.message, e.stack)
+    return res.status(500).json({ error: 'Internal error', detail: e.message })
+  }
 }
