@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import { notify, notifyAll } from '../components/layout/MainLayout'
 import { useToast } from '../contexts/ToastContext'
 import { PageHeader, Badge, Button, EmptyState, Modal, ConfirmDialog, Skeleton } from '../components/ui'
 import { IconPlus, IconEdit, IconTrash, IconSpeakerphone } from '@tabler/icons-react'
@@ -335,18 +336,15 @@ export default function ElanlarLovhesiPage() {
 
   return (
     <div className="p-4 lg:p-6 fade-in">
-      <PageHeader
-        title="Elanlar Lövhəsi"
-        subtitle={`${elanlar.length} elan`}
-        action={isAdmin && (
-          <Button
-            onClick={() => { setEditElan(null); setModalOpen(true) }}
-            size="sm"
-          >
-            <IconPlus size={14} /> Yeni elan
-          </Button>
-        )}
-      />
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <h1 className="text-base font-bold text-[#0f172a]">Elanlar Lövhəsi</h1>
+          <p className="text-xs text-[#888] mt-0.5">{elanlar.length} elan</p>
+        </div>
+        <Button onClick={() => { setEditElan(null); setModalOpen(true) }} size="sm">
+          <IconPlus size={14} /> Yeni elan
+        </Button>
+      </div>
 
       {elanlar.length === 0 ? (
         <EmptyState icon={IconSpeakerphone} title="Hələ elan yoxdur"

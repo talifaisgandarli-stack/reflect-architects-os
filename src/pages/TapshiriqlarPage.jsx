@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useToast } from '../contexts/ToastContext'
 import { useAuth } from '../contexts/AuthContext'
 import { Button, Modal, ConfirmDialog, Skeleton } from '../components/ui'
+import { notify } from '../components/layout/MainLayout'
 import {
   IconPlus, IconX, IconEdit, IconTrash, IconCheck, IconSend,
   IconLayoutKanban, IconList, IconSearch, IconArchive,
@@ -300,6 +301,12 @@ function DetailPanel({ task, projects, members, onClose, onEdit, onDelete, onSta
       task_id: task.id, author_id: user?.id, content: newComment.trim(),
       type: 'comment', metadata: mentions.length ? { mentions } : null
     })
+    // Mention olunanlara bildiriş
+    for (const mid of mentions) {
+      if (mid !== user?.id) {
+        await notify(mid, task.title + ' — yeni şərh', newComment.trim().slice(0, 80), 'info', '/tapshiriqlar')
+      }
+    }
     setNewComment('')
     loadComments()
     setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100)
@@ -931,6 +938,10 @@ export default function TapshiriqlarPage() {
       const { data:inserted, error } = await supabase.from('tasks').insert(data).select().single()
       if (error) { addToast('Xəta: '+error.message,'error'); return }
       await supabase.from('task_comments').insert({ task_id:inserted.id, author_id:user?.id, type:'activity', content:'tapşırıq yaradıldı', metadata:{} })
+      // Cavabdehə bildiriş
+      if (data.assignee_id && data.assignee_id !== user?.id) {
+        await notify(data.assignee_id, 'Yeni tapşırıq', data.title, 'info', '/tapshiriqlar')
+      }
       addToast('Tapşırıq əlavə edildi','success')
     }
     setModalOpen(false); setEditTask(null)
@@ -956,6 +967,10 @@ export default function TapshiriqlarPage() {
   async function handleStatusChange(task, newStatus) {
     await supabase.from('tasks').update({ status: newStatus }).eq('id', task.id)
     await supabase.from('task_comments').insert({ task_id:task.id, author_id:user?.id, type:'activity', content:'status dəyişdi', metadata:{ old_status:task.status, new_status:newStatus } })
+    // Tapşırıq sahibinə bildiriş (özü deyilsə)
+    if (task.assignee_id && task.assignee_id !== user?.id && newStatus === 'done') {
+      await notify(task.assignee_id, task.title, 'Tapşırıq tamamlandı kimi işarələndi', 'success', '/tapshiriqlar')
+    }
     if (detailTask?.id === task.id) setDetailTask({ ...detailTask, status: newStatus })
     await loadData()
   }
