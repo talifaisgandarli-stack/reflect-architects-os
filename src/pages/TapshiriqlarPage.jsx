@@ -22,6 +22,10 @@ const PRIORITIES = [
   { key: 'medium', label: 'Orta',   color: '#f59e0b', bg: '#fffbeb' },
   { key: 'low',    label: 'Aşağı',  color: '#94a3b8', bg: '#f8fafc' },
 ]
+
+const TASK_TAGS = [
+  { key: 'BD', label: 'BD', color: '#1a3040', bg: '#e8f4ff', text: '#1a3040' },
+]
 const PROJECT_COLORS = ['#0f172a','#1d4ed8','#059669','#d97706','#7c3aed','#db2777','#0891b2','#16a34a']
 
 const prio    = k => PRIORITIES.find(p => p.key === k) || PRIORITIES[1]
@@ -128,10 +132,11 @@ function QuickAdd({ status, projects, members, onSave, onCancel }) {
 
 // ─── Task Form (full) ─────────────────────────────────────────────────────────
 function TaskForm({ open, onClose, onSave, task, projects, members, defaultStatus }) {
-  const [form, setForm] = useState({ title:'', description:'', project_id:'', assignee_id:'', status: defaultStatus||'not_started', priority:'medium', due_date:'' })
+  const { isAdmin } = useAuth()
+  const [form, setForm] = useState({ title:'', description:'', project_id:'', assignee_id:'', status: defaultStatus||'not_started', priority:'medium', due_date:'', tags:[], is_hidden:false })
   useEffect(() => {
-    if (task) setForm({ title:task.title||'', description:task.description||'', project_id:task.project_id||'', assignee_id:task.assignee_id||'', status:task.status||'not_started', priority:task.priority||'medium', due_date:task.due_date||'' })
-    else setForm({ title:'', description:'', project_id:'', assignee_id:'', status:defaultStatus||'not_started', priority:'medium', due_date:'' })
+    if (task) setForm({ title:task.title||'', description:task.description||'', project_id:task.project_id||'', assignee_id:task.assignee_id||'', status:task.status||'not_started', priority:task.priority||'medium', due_date:task.due_date||'', tags:task.tags||[], is_hidden:task.is_hidden||false })
+    else setForm({ title:'', description:'', project_id:'', assignee_id:'', status:defaultStatus||'not_started', priority:'medium', due_date:'', tags:[], is_hidden:false })
   }, [task, open, defaultStatus])
   const set = (k,v) => setForm(f => ({...f,[k]:v}))
   return (
@@ -162,6 +167,35 @@ function TaskForm({ open, onClose, onSave, task, projects, members, defaultStatu
               className="w-full px-2.5 py-2 border border-[#e8e8e4] rounded-lg text-xs focus:outline-none focus:border-[#0f172a]" />
           </div>
         </div>
+        {/* Tags */}
+        <div>
+          <label className="block text-[10px] font-semibold text-[#888] uppercase tracking-wider mb-1.5">Taglər</label>
+          <div className="flex gap-2 flex-wrap">
+            {TASK_TAGS.map(tag => (
+              <button key={tag.key} type="button"
+                onClick={() => set('tags', form.tags.includes(tag.key) ? form.tags.filter(t=>t!==tag.key) : [...form.tags, tag.key])}
+                className="px-3 py-1.5 rounded-full text-xs font-bold border-2 transition-all"
+                style={form.tags.includes(tag.key)
+                  ? { background: tag.color, color: 'white', borderColor: tag.color }
+                  : { background: tag.bg, color: tag.text, borderColor: tag.color+'44' }}>
+                {tag.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        {/* Gizli tapşırıq — yalnız admin */}
+        {isAdmin && (
+          <div className="flex items-center justify-between px-3 py-2.5 bg-[#f8fafc] rounded-xl border border-[#e8e8e4]">
+            <div>
+              <div className="text-xs font-semibold text-[#0f172a]">Gizli tapşırıq</div>
+              <div className="text-[10px] text-[#888] mt-0.5">Yalnız adminlər görə bilər</div>
+            </div>
+            <button type="button" onClick={() => set('is_hidden', !form.is_hidden)}
+              className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 ${form.is_hidden ? 'bg-[#0f172a]' : 'bg-[#e2e8f0]'}`}>
+              <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${form.is_hidden ? 'translate-x-5' : 'translate-x-0.5'}`} />
+            </button>
+          </div>
+        )}
         <textarea value={form.description} onChange={e => set('description', e.target.value)} rows={3}
           className="w-full px-3 py-2 border border-[#e8e8e4] rounded-xl text-xs focus:outline-none focus:border-[#0f172a] resize-none placeholder-[#ccc]"
           placeholder="Təsvir..." />
@@ -284,6 +318,23 @@ function DetailPanel({ task, projects, members, onClose, onEdit, onDelete, onSta
             </div>
           </div>
 
+          {/* Tags */}
+          {((task.tags||[]).length > 0 || task.is_hidden) && (
+            <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+              {(task.tags||[]).map(tag => {
+                const tg = TASK_TAGS.find(t=>t.key===tag)
+                return tg ? (
+                  <span key={tag} className="text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wide"
+                    style={{ background: tg.color, color: 'white' }}>{tg.label}</span>
+                ) : null
+              })}
+              {task.is_hidden && (
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#0f172a] text-white/70 flex items-center gap-1">
+                  🔒 Gizli tapşırıq
+                </span>
+              )}
+            </div>
+          )}
           {/* Meta row */}
           <div className="flex flex-wrap gap-2 items-center">
             <select value={task.status} onChange={e => onStatusChange(task, e.target.value)}
@@ -550,13 +601,23 @@ function KanbanCard({ task, projects, members, checkCounts, commentCounts, onCli
       className="bg-white rounded-xl border border-[#e8e8e4] p-3 cursor-pointer hover:border-[#0f172a]/40 hover:shadow-md transition-all duration-150 group relative overflow-hidden">
       <div className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-xl" style={{ background: pr.color }} />
       <div className="pl-3">
-        {project && (
-          <div className="flex items-center gap-1 mb-1.5">
+        <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+          {project && (
             <span className="text-[9px] font-bold uppercase tracking-widest" style={{ color: projClr(project.id, projects) }}>
               {project.name}
             </span>
-          </div>
-        )}
+          )}
+          {(task.tags||[]).map(tag => {
+            const tg = TASK_TAGS.find(t=>t.key===tag)
+            return tg ? (
+              <span key={tag} className="text-[8px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-wide"
+                style={{ background: tg.color, color: 'white' }}>{tg.label}</span>
+            ) : null
+          })}
+          {task.is_hidden && (
+            <span className="text-[8px] font-bold px-1.5 py-0.5 rounded-full bg-[#0f172a] text-white/60">🔒</span>
+          )}
+        </div>
         <p className={`text-[11px] font-semibold leading-snug mb-2.5 ${isDone ? 'line-through text-[#bbb]' : 'text-[#0f172a]'}`}>
           {task.title}
         </p>
@@ -695,6 +756,8 @@ export default function TapshiriqlarPage() {
   const [deleteTask,    setDeleteTask]    = useState(null)
   const [detailTask,    setDetailTask]    = useState(null)
   const [archiveOpen,   setArchiveOpen]   = useState(false)
+  const [filterTag,     setFilterTag]     = useState('all')
+  const [showHidden,    setShowHidden]    = useState(false)
 
   useEffect(() => { loadData() }, [])
 
@@ -727,7 +790,7 @@ export default function TapshiriqlarPage() {
 
   async function handleSave(form) {
     if (!form.title.trim()) { addToast('Tapşırıq adı daxil edin', 'error'); return }
-    const data = { title:form.title.trim(), description:form.description||null, project_id:form.project_id||null, assignee_id:form.assignee_id||null, status:form.status, priority:form.priority, due_date:form.due_date||null }
+    const data = { title:form.title.trim(), description:form.description||null, project_id:form.project_id||null, assignee_id:form.assignee_id||null, status:form.status, priority:form.priority, due_date:form.due_date||null, tags:form.tags||[], is_hidden:form.is_hidden||false }
     if (editTask) {
       const { error } = await supabase.from('tasks').update(data).eq('id', editTask.id)
       if (error) { addToast('Xəta: '+error.message,'error'); return }
@@ -786,11 +849,16 @@ export default function TapshiriqlarPage() {
     await loadData()
   }
 
-  const activeTasks = tasks.filter(t => !t.archived)
+  const { isAdmin } = useAuth()
+  const activeTasks = tasks.filter(t => !t.archived && (isAdmin || !t.is_hidden))
   const filtered = activeTasks.filter(t => {
     if (filterProj !== 'all' && t.project_id !== filterProj) return false
     if (filterUser !== 'all' && t.assignee_id !== filterUser) return false
     if (search && !t.title.toLowerCase().includes(search.toLowerCase())) return false
+    if (filterTag !== 'all' && !(t.tags||[]).includes(filterTag)) return false
+    // Gizli tapşırıqlar: showHidden=true olduqda yalnız hidden-lar, default-da hidden-lar gizlənir (non-admin üçün activeTasks-da artıq yoxdur)
+    if (isAdmin && !showHidden && t.is_hidden) return false
+    if (isAdmin && showHidden && !t.is_hidden) return false
     return true
   })
   const tasksByCol = Object.fromEntries(COLUMNS.map(c => [c.key, filtered.filter(t => t.status===c.key)]))
@@ -853,8 +921,28 @@ export default function TapshiriqlarPage() {
             <option value="all">Bütün üzvlər</option>
             {members.map(m => <option key={m.id} value={m.id}>{m.full_name}</option>)}
           </select>
-          {(filterProj !== 'all' || filterUser !== 'all' || search) && (
-            <button onClick={() => { setFilterProj('all'); setFilterUser('all'); setSearch('') }}
+          {/* BD tag filter */}
+          <button onClick={() => setFilterTag(t => t === 'BD' ? 'all' : 'BD')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold border-2 transition-all ${
+              filterTag === 'BD'
+                ? 'bg-[#1a3040] text-white border-[#1a3040]'
+                : 'bg-[#e8f4ff] text-[#1a3040] border-[#1a3040]/30 hover:border-[#1a3040]'
+            }`}>
+            BD
+          </button>
+          {/* Hidden filter — yalnız admin */}
+          {isAdmin && (
+            <button onClick={() => setShowHidden(h => !h)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border transition-all ${
+                showHidden
+                  ? 'bg-[#0f172a] text-white border-[#0f172a]'
+                  : 'text-[#555] border-[#e8e8e4] hover:border-[#0f172a]'
+              }`}>
+              🔒 {showHidden ? 'Gizli görünür' : 'Gizlilər'}
+            </button>
+          )}
+          {(filterProj !== 'all' || filterUser !== 'all' || search || filterTag !== 'all' || showHidden) && (
+            <button onClick={() => { setFilterProj('all'); setFilterUser('all'); setSearch(''); setFilterTag('all'); setShowHidden(false) }}
               className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-[#888] hover:text-red-500 border border-[#e8e8e4] hover:border-red-200 rounded-lg transition-colors">
               <IconX size={11}/> Sıfırla
             </button>
