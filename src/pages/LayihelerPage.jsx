@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
+import { notifyAll } from '../lib/notify'
 import { PageHeader, Badge, Card, Button, EmptyState, Modal, ConfirmDialog, Skeleton } from '../components/ui'
 import { IconBuildings, IconPlus, IconLayoutKanban, IconList, IconEdit, IconTrash, IconAlertTriangle, IconChevronRight } from '@tabler/icons-react'
 
@@ -452,6 +453,7 @@ export default function LayihelerPage() {
     } else {
       const { error } = await supabase.from('projects').insert(data)
       if (error) { addToast('Xəta: ' + error.message, 'error'); console.error('INSERT ERROR:', error); return }
+      await notifyAll('Yeni layihə əlavə edildi', form.name?.trim() || 'Yeni layihə', 'info', '/layiheler')
       addToast('Layihə əlavə edildi', 'success')
     }
 

@@ -306,6 +306,14 @@ export default function ElanlarLovhesiPage() {
       const res = await supabase.from('notices').insert(fullData)
       error = res.error
       if (!error) {
+        // Platform bildirişi
+        if (form.tag_team) {
+          await notifyAll(form.title, form.content?.slice(0, 100) || null, 'info', '/elanlar-lovhesi')
+        } else if ((form.tagged_profiles || []).length > 0) {
+          for (const uid of form.tagged_profiles) {
+            await notify(uid, form.title, form.content?.slice(0, 100) || null, 'info', '/elanlar-lovhesi')
+          }
+        }
         addToast('Elan dərc edildi', 'success')
         // Telegram bildirişi
         if (hasExtraCols && (form.tag_team || (form.tagged_profiles || []).length > 0)) {

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
-import { notifyAdmins } from '../lib/notify'
+import { notify, notifyAdmins } from '../lib/notify'
 import { PageHeader, Badge, Card, Button, EmptyState, Modal, ConfirmDialog, Skeleton, StatCard } from '../components/ui'
 import { IconPlus, IconEdit, IconTrash, IconUmbrella, IconCheck, IconX, IconSend } from '@tabler/icons-react'
 
@@ -187,6 +187,14 @@ export default function MezuniyyetCedveliPage() {
       approved_at: new Date().toISOString()
     }).eq('id', leave.id)
     if (error) { addToast('Xəta: ' + error.message, 'error'); return }
+    // İşçiyə bildiriş göndər
+    if (leave.member_id) {
+      const msg = status === 'approved'
+        ? 'Məzuniyyət sorğunuz təsdiqləndi'
+        : 'Məzuniyyət sorğunuz rədd edildi'
+      const body = leave.start_date + ' – ' + leave.end_date
+      await notify(leave.member_id, msg, body, status === 'approved' ? 'success' : 'error', '/mezuniyyet')
+    }
     addToast(status === 'approved' ? 'Təsdiqləndi ✓' : 'Rədd edildi', status === 'approved' ? 'success' : 'error')
     await loadData()
   }

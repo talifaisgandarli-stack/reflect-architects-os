@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useToast } from '../contexts/ToastContext'
+import { notify } from '../lib/notify'
 import { useAuth } from '../contexts/AuthContext'
 import { Button, Modal, ConfirmDialog, Skeleton } from '../components/ui'
 import { IconPlus, IconEdit, IconTrash, IconChevronLeft, IconChevronRight, IconFilter, IconUser } from '@tabler/icons-react'
@@ -193,6 +194,10 @@ export default function HadiselerTeqvimiPage() {
     } else {
       const { error } = await supabase.from('events').insert(data)
       if (error) { addToast('Xəta: ' + error.message, 'error'); return }
+      // Tag olunan işçilərə bildiriş
+      for (const uid of (form.tagged_profiles || [])) {
+        await notify(uid, form.title, form.start_date + ' tarixli hadisəyə tag oldunuz', 'info', '/hadiseler')
+      }
       addToast('Hadisə əlavə edildi', 'success')
     }
     setModalOpen(false); setEditEvent(null)

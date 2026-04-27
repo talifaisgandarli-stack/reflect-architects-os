@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
+import { notify } from '../lib/notify'
 import { PageHeader, Badge, Card, Button, Modal, ConfirmDialog, Skeleton, StatCard } from '../components/ui'
 import { IconPlus, IconEdit, IconTrash, IconStar, IconTrendingUp } from '@tabler/icons-react'
 
@@ -244,6 +245,10 @@ export default function PerformansPage() {
       // İlk il 4.5+ — hələ eligible deyil amma qeyd et
     }
 
+    // İşçiyə bildiriş
+    if (form.employee_id && form.employee_id !== user?.id) {
+      await notify(form.employee_id, 'Performans qiymətləndirməniz yeniləndi', form.review_year + ' ili üzrə performans qeydiniz əlavə edildi', 'info', '/performans')
+    }
     addToast('Qiymətləndirmə saxlanıldı', 'success')
     setModalOpen(false); setEditReview(null)
     await loadData()
