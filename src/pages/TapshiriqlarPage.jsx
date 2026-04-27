@@ -246,7 +246,6 @@ function TaskForm({ open, onClose, onSave, task, projects, members, defaultStatu
 function DetailPanel({ task, projects, members, onClose, onEdit, onDelete, onStatusChange, onDeadlineChange }) {
   const { user } = useAuth()
   const { addToast } = useToast()
-  const location = useLocation()
   const [checklists, setChecklists] = useState([])
   const [comments,   setComments]   = useState([])
   const [newCheck,   setNewCheck]   = useState('')
