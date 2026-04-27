@@ -22,7 +22,6 @@ const NAV_GROUPS = [
       { to: '/employee-dashboard', icon: IconHome, label: 'Dashboard', exact: true, employeeOnly: true },
       { to: '/layiheler', icon: IconBuildings, label: 'Layihələr' },
       { to: '/tapshiriqlar', icon: IconCheckbox, label: 'Tapşırıqlar' },
-      { to: '/is-ucotu', icon: IconClock, label: 'İş Uçotu', adminOnly: true },
       { to: '/icazeler', icon: IconFileText, label: 'İcazə və Razılaşmalar' },
       { to: '/podrat-isleri', icon: IconHeartHandshake, label: 'Podrat İşləri' },
     ]

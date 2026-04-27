@@ -62,7 +62,6 @@ export default function App() {
               <Route path="employee-dashboard" element={<EmployeeDashboardPage />} />
               <Route path="layiheler" element={<LayihelerPage />} />
               <Route path="tapshiriqlar" element={<TapshiriqlarPage />} />
-              <Route path="is-ucotu" element={<CS t="İş Uçotu" />} />
               <Route path="icazeler" element={<CS t="İcazə və Razılaşmalar" />} />
               <Route path="sifarisci-idareetme" element={<SifarisciIdareetmesiPage />} />
               <Route path="pipeline" element={<PipelinePage />} />
