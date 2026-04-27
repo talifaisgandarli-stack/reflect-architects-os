@@ -57,7 +57,7 @@ const NAV_GROUPS = [
       { to: '/isci-heyeti', icon: IconUsersGroup, label: 'İşçi Heyəti' },
       { to: '/emek-haqqi', icon: IconWallet, label: 'Əmək haqqı' },
       { to: '/performans', icon: IconStar, label: 'Performans' },
-      { to: '/karyera-strukturu', icon: IconSitemap, label: 'Karyera Strukturu' },
+      { to: '/karyera-strukturu', icon: IconSitemap, label: 'Karyera Strukturu', adminOnly: true },
       { to: '/elanlar', icon: IconSpeakerphone, label: 'Elanlar Lövhəsi' },
       { to: '/hadiseler', icon: IconCalendar, label: 'Hadisələr Təqvimi' },
       { to: '/mezuniyyet', icon: IconUmbrella, label: 'Məzuniyyət Cədvəli' },

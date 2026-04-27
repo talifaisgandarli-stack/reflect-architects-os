@@ -369,7 +369,7 @@ export default function EmployeeDashboardPage() {
           {[
             { label: 'Tapşırıqlar', to: '/tapshiriqlar', emoji: '✅' },
             { label: 'Performans',  to: '/performans',   emoji: '⭐' },
-            { label: 'Karyera',     to: '/karyera-strukturu', emoji: '📈' },
+
             { label: 'Hadisələr',   to: '/hadiseler',   emoji: '📅' },
             { label: 'Məzuniyyət',  to: '/mezuniyyet', emoji: '🏖' },
             { label: 'Sənəd Arxivi',to: '/sened-arxivi', emoji: '📁' },
