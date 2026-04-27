@@ -266,10 +266,7 @@ export default function EmployeeDashboardPage() {
                 </div>
               )}
 
-              <button onClick={() => navigate('/karyera-strukturu')}
-                className="w-full py-2.5 text-center text-[10px] font-bold text-[#0f172a]/50 hover:text-[#0f172a] transition-colors border-t border-[#f0f0ec] bg-white">
-                Tam karyera yolu →
-              </button>
+
             </div>
           )}
 
