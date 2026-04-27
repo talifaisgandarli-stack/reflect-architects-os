@@ -224,14 +224,14 @@ export default async function handler(req, res) {
         supabase.from('tasks').select('id,title,due_date,assignee_id,status,tags').neq('status', 'done'),
         supabase.from('profiles').select('id,full_name').eq('is_active', true),
         supabase.from('task_comments')
-          .select('metadata,created_at,tasks(title),profiles(full_name)')
+          .select('task_id,metadata,created_at,author_id,content')
           .eq('type', 'activity').ilike('content', '%deadline%')
           .gte('created_at', yest).order('created_at', { ascending: false }),
         supabase.from('incomes').select('amount').gte('payment_date', mon),
         supabase.from('expenses').select('amount').gte('expense_date', mon),
         supabase.from('receivables').select('client_name,expected_amount,expected_date').eq('paid', false),
-        supabase.from('outsource_works').select('name,planned_deadline,projects(name)').neq('status', 'completed').not('planned_deadline', 'is', null),
-        supabase.from('proposals').select('client_name,status').neq('status', 'signed').neq('status', 'rejected'),
+        supabase.from('outsource_works').select('name,planned_deadline,projects(name)').neq('work_status', 'completed').not('planned_deadline', 'is', null),
+        supabase.from('proposals').select('client_name,status').in('status', ['draft', 'sent']),
       ])
 
       const allT   = tRes.data || []
@@ -267,7 +267,7 @@ export default async function handler(req, res) {
             'Gecikmiş: ' + overT.length,
             'Kritik (3+g): ' + crit3.length + (crit3.length ? ' - ' + crit3.slice(0,3).map(t => t.title + ' ' + name_(t.assignee_id)).join(', ') : ''),
             'Bu həftə deadline: ' + weekT.length,
-            dlCh.length ? 'Deadline dəyişikliyi (24s): ' + dlCh.slice(0,3).map(c => (c.tasks?.title || '?') + ' - ' + (c.profiles?.full_name || '?') + ' (' + (c.metadata?.old_due || '?') + ' -> ' + (c.metadata?.new_due || '?') + ')').join('; ') : '',
+            dlCh.length ? 'Deadline dəyişikliyi (24s): ' + dlCh.slice(0,3).map(c => 'Tapşırıq #' + (c.task_id?.slice(0,6) || '?') + ' (' + (c.metadata?.old_due || '?') + ' -> ' + (c.metadata?.new_due || '?') + ')').join('; ') : '',
             '',
             'MALİYYƏ (bu ay):',
             'Daxilolma: ' + money(inc),
@@ -493,7 +493,7 @@ export default async function handler(req, res) {
         supabase.from('tasks').select('id,title,due_date,assignee_id,status,tags,archived,updated_at'),
         supabase.from('profiles').select('id,full_name').eq('is_active', true),
         supabase.from('task_comments')
-          .select('metadata,tasks(title),profiles(full_name)')
+          .select('task_id,metadata,created_at,author_id,content')
           .eq('type', 'activity').ilike('content', '%deadline%')
           .gte('created_at', new Date(Date.now() - 7 * 86400000).toISOString())
           .order('created_at', { ascending: false }),
@@ -502,8 +502,8 @@ export default async function handler(req, res) {
         supabase.from('incomes').select('amount').gte('payment_date', w7),
         supabase.from('expenses').select('amount').gte('expense_date', w7),
         supabase.from('receivables').select('client_name,expected_amount,expected_date').eq('paid', false),
-        supabase.from('outsource_works').select('name,planned_deadline,projects(name)').neq('status', 'completed').not('planned_deadline', 'is', null),
-        supabase.from('proposals').select('client_name').neq('status', 'signed').neq('status', 'rejected'),
+        supabase.from('outsource_works').select('name,planned_deadline,projects(name)').neq('work_status', 'completed').not('planned_deadline', 'is', null),
+        supabase.from('proposals').select('client_name,status').in('status', ['draft', 'sent']),
       ])
 
       const allT   = tRes.data || []
