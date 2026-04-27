@@ -760,14 +760,14 @@ function KanbanColumn({ column, tasks, projects, members, checkCounts, commentCo
           <KanbanCard key={task.id} task={task} projects={projects} members={members}
             checkCounts={checkCounts} commentCounts={commentCounts} onClick={onCardClick} onArchive={onArchive} />
         ))}
-        {tasks.length === 0 && !adding && (
+        {!adding && (
           <div onClick={() => setAdding(true)}
-            className="border-2 border-dashed rounded-2xl p-5 text-center cursor-pointer transition-all"
-            style={{ borderColor: column.color + '30' }}
-            onMouseEnter={e => e.currentTarget.style.borderColor = column.color + '60'}
-            onMouseLeave={e => e.currentTarget.style.borderColor = column.color + '30'}>
-            <IconPlus size={16} className="mx-auto mb-1" style={{ color: column.color + '60' }} />
-            <span className="text-[10px] font-medium" style={{ color: column.color + '80' }}>Tapşırıq əlavə et</span>
+            className="border-2 border-dashed rounded-2xl px-3 py-2.5 text-center cursor-pointer transition-all flex items-center justify-center gap-1.5"
+            style={{ borderColor: column.color + '25' }}
+            onMouseEnter={e => e.currentTarget.style.borderColor = column.color + '55'}
+            onMouseLeave={e => e.currentTarget.style.borderColor = column.color + '25'}>
+            <IconPlus size={11} style={{ color: column.color + '70' }} />
+            <span className="text-[10px] font-medium" style={{ color: column.color + '90' }}>Əlavə et</span>
           </div>
         )}
       </div>
@@ -776,13 +776,16 @@ function KanbanColumn({ column, tasks, projects, members, checkCounts, commentCo
 }
 
 // ─── Archive Modal ────────────────────────────────────────────────────────────
-function ArchiveModal({ open, onClose, tasks, projects, members, checkCounts }) {
+function ArchiveModal({ open, onClose, tasks, projects, members, checkCounts, onUnarchive }) {
   const [year, setYear] = useState(new Date().getFullYear())
   const years = [...new Set(tasks.map(t => t.archive_year).filter(Boolean))].sort((a,b) => b-a)
   const filtered = tasks.filter(t => t.archived && t.archive_year === year)
   return (
-    <Modal open={open} onClose={onClose} title="Arxiv" size="xl">
+    <Modal open={open} onClose={onClose} title={`Arxiv · ${filtered.length} tapşırıq`} size="xl">
       <div className="flex gap-2 mb-4 flex-wrap">
+        {years.length === 0 && (
+          <span className="text-xs text-[#bbb]">Hələ arxivlənmiş tapşırıq yoxdur</span>
+        )}
         {years.map(y => (
           <button key={y} onClick={() => setYear(y)}
             className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${year===y ? 'bg-[#0f172a] text-white border-[#0f172a]' : 'border-[#e8e8e4] text-[#555]'}`}>
@@ -799,18 +802,25 @@ function ArchiveModal({ open, onClose, tasks, projects, members, checkCounts }) 
             const assignee = members.find(m => m.id === t.assignee_id)
             const cc = checkCounts[t.id] || { done:0, total:0 }
             return (
-              <div key={t.id} className="flex items-center gap-3 px-3 py-2.5 bg-[#fafaf8] rounded-xl border border-[#f0f0ec]">
+              <div key={t.id} className="flex items-center gap-3 px-3 py-2.5 bg-white rounded-xl border border-[#f0f0ec] hover:border-[#e8e8e4] group">
                 <div className="flex-1 min-w-0">
-                  <div className="text-xs font-medium text-[#555] line-through truncate">{t.title}</div>
-                  {project && <div className="text-[10px] text-[#aaa] mt-0.5">{project.name}</div>}
+                  <div className="text-xs font-medium text-[#555] truncate">{t.title}</div>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    {project && <span className="text-[10px] text-[#aaa]">{project.name}</span>}
+                    {t.archived_at && (
+                      <span className="text-[10px] text-[#ccc]">
+                        {new Date(t.archived_at).toLocaleDateString('az-AZ')}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 {assignee && <Avatar name={assignee.full_name} size={5} />}
                 {cc.total > 0 && <span className="text-[10px] text-[#aaa]">{cc.done}/{cc.total}</span>}
-                {t.archived_at && (
-                  <span className="text-[10px] text-[#bbb]">
-                    {new Date(t.archived_at).toLocaleDateString('az-AZ')}
-                  </span>
-                )}
+                <button
+                  onClick={() => onUnarchive(t)}
+                  className="opacity-0 group-hover:opacity-100 flex items-center gap-1 px-2.5 py-1 rounded-lg border border-[#e8e8e4] text-[10px] font-medium text-[#555] hover:bg-[#0f172a] hover:text-white hover:border-[#0f172a] transition-all">
+                  <IconArchive size={10} /> Geri qaytar
+                </button>
               </div>
             )
           })}
@@ -942,6 +952,12 @@ export default function TapshiriqlarPage() {
     await loadData()
   }
 
+  async function handleUnarchive(task) {
+    await supabase.from('tasks').update({ archived:false, archived_at:null, archive_year:null }).eq('id', task.id)
+    addToast('Tapşırıq geri qaytarıldı','success')
+    await loadData()
+  }
+
   const { isAdmin } = useAuth()
   const activeTasks = tasks.filter(t => !t.archived && (isAdmin || !t.is_hidden))
   const filtered = activeTasks.filter(t => {
@@ -1063,7 +1079,7 @@ export default function TapshiriqlarPage() {
 
       {/* ── Board ── */}
       {view === 'kanban' ? (
-        <div className="flex-1 overflow-auto p-4 lg:p-6" style={{ background: '#f6f7f9' }}>
+        <div className="flex-1 overflow-auto p-4 lg:p-6" style={{ background: '#fafaf8' }}>
           <div className="flex gap-4" style={{ minWidth:'max-content', minHeight:'100%' }}>
             {COLUMNS.map(column => (
               <KanbanColumn key={column.key} column={column}
@@ -1146,7 +1162,7 @@ export default function TapshiriqlarPage() {
         message={`"${deleteTask?.title}" tapşırığını silmək istədiyinizə əminsiniz?`}
         onConfirm={handleDelete} onCancel={() => setDeleteTask(null)} danger />
       <ArchiveModal open={archiveOpen} onClose={() => setArchiveOpen(false)}
-        tasks={tasks} projects={projects} members={members} checkCounts={checkCounts} />
+        tasks={tasks} projects={projects} members={members} checkCounts={checkCounts} onUnarchive={handleUnarchive} />
     </div>
   )
 }
