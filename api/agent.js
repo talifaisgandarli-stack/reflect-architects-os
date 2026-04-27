@@ -14,11 +14,13 @@ const NICAT_EMAIL  = 'nusalov.n@reflect.az'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+const SIGNATURE = '\n\n✦ Mirai · Reflect Architects'
+
 async function tg(chat_id, text) {
   if (!chat_id || !text) return null
   try {
-    // Telegram 4096 char limit
-    const msg = String(text).slice(0, 4000)
+    // Telegram 4096 char limit — imza əlavə et
+    const msg = (String(text) + SIGNATURE).slice(0, 4000)
     const r = await fetch(`${TG_API}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
