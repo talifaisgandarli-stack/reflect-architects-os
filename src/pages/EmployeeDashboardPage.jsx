@@ -371,7 +371,7 @@ export default function EmployeeDashboardPage() {
             { label: 'Performans',  to: '/performans',   emoji: '⭐' },
             { label: 'Karyera',     to: '/karyera-strukturu', emoji: '📈' },
             { label: 'Hadisələr',   to: '/hadiseler',   emoji: '📅' },
-            { label: 'Məzuniyyət',  to: '/mezuniyyet-cedveli', emoji: '🏖' },
+            { label: 'Məzuniyyət',  to: '/mezuniyyet', emoji: '🏖' },
             { label: 'Sənəd Arxivi',to: '/sened-arxivi', emoji: '📁' },
           ].map(link => (
             <button key={link.to} onClick={() => navigate(link.to)}
