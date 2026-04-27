@@ -101,11 +101,12 @@ export default async function handler(req, res) {
     const [tasksRes, projectsRes, eventsRes] = await Promise.all([
       supabase.from('tasks').select('id, title, due_date, assignee_id, status, project_id').neq('status', 'done').not('due_date', 'is', null),
       supabase.from('projects').select('id, name, deadline, status').neq('status', 'completed'),
-      supabase.from('events').select('title, start_date').eq('start_date', todayStr),
+      supabase.from('events').select('title, start_date, tagged_profiles').eq('start_date', todayStr),
     ])
     const allTasks  = tasksRes.data   || []
     const allProjs  = projectsRes.data|| []
-    const todayEvts = eventsRes.data  || []
+    const allTodayEvts = eventsRes.data || []
+    // İşçiyə aid hadisələr: ya tag olunub, ya da heç kim tag olunmayıb (ümumi hadisə)
 
     let count = 0
     for (const profile of workers) {
@@ -141,7 +142,9 @@ Gecikmiş tapşırıqlar: ${myOverdue.length > 0 ? myOverdue.map(t => `${t.title
 Kritik gecikmə (3+ gün): ${myCritical.length > 0 ? 'var' : 'yoxdur'}
 Yaxın deadline (1-3 gün): ${myWarn.map(t => `${t.title} (${daysLeft(t.due_date)}g)`).join(', ') || 'yoxdur'}
 Layihələr: ${myProjects.map(p => `${p.name} (deadline: ${p.dl !== null ? p.dl + 'g' : 'yoxdur'}, açıq tapşırıq: ${p.openTasks})`).join('; ') || 'yoxdur'}
-Bu günün hadisələri: ${todayEvts.map(e => e.title).join(', ') || 'yoxdur'}
+Bu günün hadisələri: ${allTodayEvts
+        .filter(e => !e.tagged_profiles?.length || e.tagged_profiles.includes(profile.id))
+        .map(e => e.title).join(', ') || 'yoxdur'}
 `
 
       const prompt = `Sən Reflect Architects şirkətinin AI köməkçisisən. ${firstName} üçün səhər brifinqi yaz.
@@ -356,45 +359,80 @@ Yalnız mesajı yaz, başqa heç nə əlavə etmə.`
   }
 
   // ════════════════════════════════════════════════════════════════════════════
-  // 4. ⏰ TAPŞIRIQ DEADLINE XƏBƏRDARLIQ — saat 14:00
-  //    Sabah deadline olan tapşırıqlar — yalnız cavabdehə
+  // 4b. 📅 NİCAT ÜÇÜN GÜNÜN GÖRÜŞ XÜLASƏSİ — saat 09:30
   // ════════════════════════════════════════════════════════════════════════════
-  if (type === 'deadline_warning') {
-    const profiles = await getAllProfiles()
-    const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0]
+  if (type === 'nicat_events') {
+    const all = await getAllProfiles()
+    const nicat = all.find(p => p.email === 'nusalov.n@reflect.az')
+    if (!nicat) return res.status(200).json({ success: false, note: 'Nicat not found' })
 
-    const { data: tasks } = await supabase.from('tasks')
-      .select('title, due_date, assignee_id, project_id, projects(name)')
-      .eq('due_date', tomorrow)
-      .neq('status', 'done')
+    const todayStr = new Date().toISOString().split('T')[0]
 
-    let count = 0
-    for (const task of (tasks || [])) {
-      const profile = profiles.find(p => p.id === task.assignee_id)
-      if (!profile) continue
-      const firstName = profile.full_name.split(' ')[0]
+    const { data: events } = await supabase
+      .from('events')
+      .select('title, start_date, end_date, notes, event_type, tagged_profiles')
+      .eq('start_date', todayStr)
+      .order('created_at')
 
-      const prompt = `Sən Reflect Architects şirkətinin AI köməkçisisən.
-${firstName} üçün qısa bir deadline xəbərdarlığı yaz. 
-Tapşırıq: "${task.title}"${task.projects?.name ? ` (Layihə: ${task.projects.name})` : ''}
-Deadline: sabah — ${fmtDate(task.due_date)}
+    const todayEvents = events || []
+
+    if (!todayEvents.length) {
+      await sendTelegram(nicat.telegram_chat_id,
+        '📅 <b>Bu günün görüşləri</b>\n\nBu gün üçün planlaşdırılmış görüş və hadisə yoxdur. Serbest günün olsun! 🏗')
+      return res.status(200).json({ success: true, count: 0 })
+    }
+
+    const TYPE_LABELS = {
+      meeting:  '🤝 Görüş',
+      deadline: '🔴 Deadline',
+      holiday:  '🎉 Bayram/Tətil',
+      birthday: '🎂 Ad günü',
+      event:    '📅 Tədbir',
+      other:    '📌 Digər',
+    }
+
+    const allProfiles = await getAllProfiles()
+    const getName = (id) => allProfiles.find(p => p.id === id)?.full_name?.split(' ')[0] || '—'
+
+    const eventDetails = todayEvents.map(e => {
+      const typeLabel = TYPE_LABELS[e.event_type] || '📌'
+      const tagged = (e.tagged_profiles || []).map(id => getName(id)).filter(Boolean)
+      return {
+        title: e.title,
+        type: typeLabel,
+        notes: e.notes,
+        tagged,
+      }
+    })
+
+    const prompt = \`Sən Reflect Architects şirkətinin AI köməkçisisən.
+Nicat üçün bu günün görüşlərinin qısa xülasəsini yaz.
+
+Bu günün hadisələri:
+\${eventDetails.map((e, i) => \`\${i+1}. \${e.type}: \${e.title}\${e.notes ? \` — \${e.notes}\` : ''}\${e.tagged.length ? \` (İştirakçılar: \${e.tagged.join(', ')})\` : ''}\`).join('\n')}
 
 Tələblər:
-- "${firstName}," ilə başla
-- Çox qısa — 2-3 cümlə
-- Xatırlatma tonu — incitməyən, lakin ciddi
-- Bəzən zarafat et, bəzən motivasiya ver
+- "Salam Nicat! Bu günün proqramı:" ilə başla
+- Hər hadisəni qısa, aydın şəkildə qeyd et
+- İştirakçılar varsa — onları da xatırlat
+- Standupdan əvvəl hazırlıq tonu — qısa, birbaşa
 - Azərbaycan dilinin qrammatikasına riayət et
-- Emoji istifadə et
-Yalnız mesajı yaz.`
+- Emoji ilə, 4-6 cümlə
+Yalnız mesajı yaz.\`
 
-      let text = await gemini(prompt)
-      if (!text) text = `⏰ ${firstName}, sabah deadline!\n\n📋 <b>${task.title}</b>${task.projects?.name ? `\n🏗 ${task.projects.name}` : ''}\n\nBu tapşırığı bu gün tamamlamağa çalış. 💪`
-
-      const r = await sendTelegram(profile.telegram_chat_id, text)
-      if (r?.ok) count++
+    let text = await gemini(prompt)
+    if (!text) {
+      const lines = ['📅 <b>Bu günün proqramı, Nicat:</b>', '']
+      todayEvents.forEach(e => {
+        const typeLabel = TYPE_LABELS[e.event_type] || '📌'
+        lines.push(\`\${typeLabel} <b>\${e.title}</b>\`)
+        if (e.notes) lines.push(\`   <i>\${e.notes}</i>\`)
+      })
+      text = lines.join('\n')
     }
-    return res.status(200).json({ success: true, count })
+
+    const r = await sendTelegram(nicat.telegram_chat_id, text)
+    return res.status(200).json({ success: r?.ok, count: r?.ok ? 1 : 0 })
   }
 
   // ════════════════════════════════════════════════════════════════════════════
