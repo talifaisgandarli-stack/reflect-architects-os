@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useToast } from '../contexts/ToastContext'
+import { useAuth } from '../contexts/AuthContext'
 import { PageHeader, Badge, Card, Button, EmptyState, Modal, ConfirmDialog, StatCard } from '../components/ui'
 import { IconPlus, IconEdit, IconTrash, IconTarget, IconCheck } from '@tabler/icons-react'
 

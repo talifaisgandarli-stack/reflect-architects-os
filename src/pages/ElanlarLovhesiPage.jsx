@@ -233,6 +233,7 @@ export default function ElanlarLovhesiPage() {
 
   async function handleSave(form) {
     if (!form.title.trim()) { addToast('Başlıq daxil edin', 'error'); return }
+    // Əvvəl tam data ilə cəhd et, işləməsə sadə variant
     const data = {
       title: form.title.trim(),
       content: form.content || null,
@@ -241,12 +242,19 @@ export default function ElanlarLovhesiPage() {
       tagged_profiles: form.tag_team ? [] : (form.tagged_profiles || []),
       tag_team: form.tag_team || false,
     }
+    const dataSimple = {
+      title: form.title.trim(),
+      content: form.content || null,
+      priority: form.priority,
+    }
     if (editElan) {
-      const { error } = await supabase.from('notices').update(data).eq('id', editElan.id)
+      let { error } = await supabase.from('notices').update(data).eq('id', editElan.id)
+      if (error) { ({ error } = await supabase.from('notices').update(dataSimple).eq('id', editElan.id)) }
       if (error) { addToast('Xəta: ' + error.message, 'error'); return }
       addToast('Elan yeniləndi', 'success')
     } else {
-      const { error } = await supabase.from('notices').insert(data)
+      let { error } = await supabase.from('notices').insert(data)
+      if (error) { ({ error } = await supabase.from('notices').insert(dataSimple)) }
       if (error) { addToast('Xəta: ' + error.message, 'error'); return }
       addToast('Elan dərc edildi', 'success')
 

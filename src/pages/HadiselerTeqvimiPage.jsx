@@ -18,6 +18,8 @@ const MONTH_NAMES = ['Yanvar', 'Fevral', 'Mart', 'Aprel', 'May', 'İyun', 'İyul
 const DAY_NAMES = ['B.e', 'Ç.a', 'Çər', 'C.a', 'Cüm', 'Şən', 'Baz']
 
 function EventForm({ open, onClose, onSave, event, members = [] }) {
+  const [form, setForm] = useState({ title: '', event_type: 'meeting', start_date: '', end_date: '', notes: '', tagged_profiles: [] })
+
   function toggleMember(id) {
     setForm(f => ({
       ...f,
@@ -26,7 +28,6 @@ function EventForm({ open, onClose, onSave, event, members = [] }) {
         : [...f.tagged_profiles, id]
     }))
   }
-  const [form, setForm] = useState({ title: '', event_type: 'meeting', start_date: '', end_date: '', notes: '', tagged_profiles: [] })
 
   useEffect(() => {
     if (event) setForm({ title: event.title || '', event_type: event.event_type || 'meeting', start_date: event.start_date || '', end_date: event.end_date || '', notes: event.notes || '', tagged_profiles: event.tagged_profiles || [] })

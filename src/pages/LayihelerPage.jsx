@@ -533,7 +533,7 @@ export default function LayihelerPage() {
           icon={IconBuildings}
           title="Hələ layihə yoxdur"
           description="İlk layihəni əlavə edin — qrafiklər avtomatik dolacaq"
-          action={<Button onClick={openNew} size="sm"><IconPlus size={14} /> İlk layihəni əlavə et</Button>}
+          action={isAdmin ? <Button onClick={openNew} size="sm"><IconPlus size={14} /> İlk layihəni əlavə et</Button> : null}
         />
       ) : view === 'kanban' ? (
         // KANBAN VIEW
@@ -550,10 +550,12 @@ export default function LayihelerPage() {
                 {(grouped[status.key] || []).map(p => (
                   <KanbanCard key={p.id} project={p} onEdit={openEdit} onDelete={setDeleteProject} isAdmin={isAdmin} />
                 ))}
-                <button onClick={openNew}
-                  className="w-full py-2 text-[11px] text-[#bbb] hover:text-[#555] border border-dashed border-[#e8e8e4] hover:border-[#bbb] rounded-lg transition-colors">
-                  + Əlavə et
-                </button>
+                {isAdmin && (
+                  <button onClick={openNew}
+                    className="w-full py-2 text-[11px] text-[#bbb] hover:text-[#555] border border-dashed border-[#e8e8e4] hover:border-[#bbb] rounded-lg transition-colors">
+                    + Əlavə et
+                  </button>
+                )}
               </div>
             </div>
           ))}
