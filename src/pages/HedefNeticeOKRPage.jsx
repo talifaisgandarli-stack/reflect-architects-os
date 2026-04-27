@@ -76,6 +76,7 @@ function OKRForm({ open, onClose, onSave, okr }) {
 }
 
 export default function HedefNeticeOKRPage() {
+  const { isAdmin, user } = useAuth()
   const { addToast } = useToast()
   const [okrs, setOkrs] = useState([])
   const [modalOpen, setModalOpen] = useState(false)
@@ -86,7 +87,7 @@ export default function HedefNeticeOKRPage() {
 
   function handleSave(form) {
     if (!form.objective.trim()) { addToast('Hədəf daxil edin', 'error'); return }
-    const data = { ...form, key_results: form.key_results.filter(kr => kr.trim()) }
+    const data = { ...form, key_results: form.key_results.filter(kr => kr.trim()), employee_id: user?.id }
     if (editOkr) {
       setOkrs(prev => prev.map(o => o.id === editOkr.id ? { ...o, ...data } : o))
       addToast('Yeniləndi', 'success')
@@ -103,18 +104,18 @@ export default function HedefNeticeOKRPage() {
     setDeleteOkr(null)
   }
 
-  const filtered = okrs.filter(o => o.year === year && (filterQ === 'all' || o.quarter === filterQ))
+  const filtered = okrs.filter(o => o.year === year && (filterQ === 'all' || o.quarter === filterQ) && (isAdmin || o.employee_id === user?.id))
   const avgProgress = filtered.length ? Math.round(filtered.reduce((s, o) => s + Number(o.progress || 0), 0) / filtered.length) : 0
 
   return (
-    <div className="p-6 fade-in">
+    <div className="p-4 lg:p-6 fade-in">
       <PageHeader
         title="Hədəf və Nəticələr (OKR)"
         subtitle={`${year} · ${avgProgress}% ümumi irəliləyiş`}
         action={<Button onClick={() => { setEditOkr(null); setModalOpen(true) }} size="sm"><IconPlus size={14} /> Yeni OKR</Button>}
       />
 
-      <div className="grid grid-cols-4 gap-4 mb-5">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
         <StatCard label="Ümumi OKR" value={filtered.length} />
         <StatCard label="Hədəfdə" value={filtered.filter(o => o.status === 'on_track').length} variant="success" />
         <StatCard label="Risk var" value={filtered.filter(o => o.status === 'at_risk').length} variant="warning" />

@@ -10,14 +10,16 @@ import {
   IconSpeakerphone, IconCalendar, IconUmbrella, IconDeviceLaptop,
   IconTarget, IconBrandInstagram, IconFolder, IconBook,
   IconSettings, IconDatabase, IconChevronDown, IconChevronRight, IconBrandWhatsapp,
-  IconLogout, IconSearch, IconBell, IconHeartHandshake, IconStar, IconSitemap
+  IconLogout, IconSearch, IconBell, IconHeartHandshake, IconStar, IconSitemap,
+  IconHome
 } from '@tabler/icons-react'
 
 const NAV_GROUPS = [
   {
     label: 'Layihə İdarəetməsi',
     items: [
-      { to: '/', icon: IconLayoutDashboard, label: 'Dashboard', exact: true, adminOnly: true },
+      { to: '/', icon: IconLayoutDashboard, label: 'Admin Dashboard', exact: true, adminOnly: true },
+      { to: '/employee-dashboard', icon: IconHome, label: 'Dashboard', exact: true, employeeOnly: true },
       { to: '/layiheler', icon: IconBuildings, label: 'Layihələr' },
       { to: '/tapshiriqlar', icon: IconCheckbox, label: 'Tapşırıqlar' },
       { to: '/is-ucotu', icon: IconClock, label: 'İş Uçotu', adminOnly: true },
@@ -67,13 +69,14 @@ const NAV_GROUPS = [
     label: 'Şirkət',
     items: [
       { to: '/hedef-netice', icon: IconTarget, label: 'Hədəf və Nəticələr' },
-      { to: '/mezmun-planlamasi', icon: IconBrandInstagram, label: 'Məzmun Planlaması' },
+      { to: '/mezmun-planlamasi', icon: IconBrandInstagram, label: 'Məzmun Planlaması', adminOnly: true },
       { to: '/sened-arxivi', icon: IconFolder, label: 'Sənəd Arxivi' },
       { to: '/qaynaqlar', icon: IconBook, label: 'Qaynaqlar' },
     ]
   },
   {
     label: 'Sistem',
+    adminOnly: true,
     items: [
       { to: '/parametrler', icon: IconSettings, label: 'Parametrlər' },
       { to: '/sistem-arxivi', icon: IconDatabase, label: 'Sistem Arxivi' },
@@ -130,85 +133,61 @@ function NavGroup({ group }) {
 }
 
 export default function Sidebar({ onSearch, onClose }) {
-  const { profile, signOut, isAdmin } = useAuth()
   const navigate = useNavigate()
+  const { profile, signOut, isAdmin } = useAuth()
 
-  async function handleSignOut() {
-    await signOut()
-    navigate('/giris')
-  }
+  const initials = profile?.full_name
+    ?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || '??'
+
+  const filteredGroups = NAV_GROUPS
+    .filter(group => isAdmin || !group.adminOnly)
+    .map(group => ({
+      ...group,
+      items: group.items.filter(item => {
+        if (item.adminOnly && !isAdmin) return false
+        if (item.employeeOnly && isAdmin) return false
+        return true
+      })
+    }))
+    .filter(group => group.items.length > 0)
 
   return (
-    <div className="w-52 min-w-52 h-screen bg-white border-r border-[#e8e8e4] flex flex-col">
-
-      {/* Company header */}
-      <div className="p-4 border-b border-[#e8e8e4]">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-[#0f172a] rounded-lg flex items-center justify-center flex-shrink-0">
-            <span className="text-white text-xs font-bold">RA</span>
+    <div className="flex flex-col h-full bg-white border-r border-[#e8e8e4]">
+      {/* Logo */}
+      <div className="px-4 py-4 border-b border-[#f0f0ec] flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          <div className="w-7 h-7 bg-[#0f172a] rounded-lg flex items-center justify-center">
+            <span className="text-white text-[9px] font-black tracking-wider">RA</span>
           </div>
-          <div className="min-w-0 flex-1">
-            <div className="text-xs font-bold text-[#0f172a] truncate">Reflect Architects</div>
-            <div className="text-[10px] text-[#aaa]">Bakı, Azərbaycan</div>
+          <div>
+            <div className="text-xs font-bold text-[#0f172a] leading-tight">Reflect</div>
+            <div className="text-[9px] text-[#aaa] leading-tight">Architects OS</div>
           </div>
-          {onClose && (
-            <button onClick={onClose} className="lg:hidden text-[#aaa] hover:text-[#555] p-1">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
-            </button>
-          )}
         </div>
-      </div>
-
-      {/* Search */}
-      <div className="px-3 py-2.5 border-b border-[#e8e8e4]">
-        <button
-          onClick={onSearch}
-          className="w-full flex items-center gap-2 px-2.5 py-1.5 bg-[#f5f5f0] border border-[#e8e8e4] rounded-md text-[11px] text-[#aaa] hover:border-[#d0d0cc] transition-colors"
-        >
-          <IconSearch size={12} />
-          <span className="flex-1 text-left">Axtar...</span>
-          <span className="text-[10px] opacity-60">⌘K</span>
+        <button onClick={onSearch} className="p-1.5 rounded-md hover:bg-[#f5f5f0] text-[#aaa] hover:text-[#555]">
+          <IconSearch size={14} />
         </button>
       </div>
 
-      {/* Navigation */}
-      <div className="flex-1 overflow-y-auto px-2 py-3">
-        {NAV_GROUPS
-          .filter(group => isAdmin || !group.adminOnly)
-          .map(group => (
-            <NavGroup
-              key={group.label}
-              group={{
-                ...group,
-                items: group.items.filter(item => isAdmin || !item.adminOnly)
-              }}
-            />
-          ))
-        }
+      {/* Nav */}
+      <div className="flex-1 overflow-y-auto px-3 py-3">
+        {filteredGroups.map(group => (
+          <NavGroup key={group.label} group={group} />
+        ))}
       </div>
 
-      {/* User footer */}
-      <div className="p-3 border-t border-[#e8e8e4]">
-        <div className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-[#f5f5f0] group cursor-pointer">
-          <div className="w-6 h-6 bg-[#0f172a] rounded-full flex items-center justify-center flex-shrink-0">
-            <span className="text-white text-[9px] font-bold">
-              {profile?.full_name?.split(' ').map(n => n[0]).join('').slice(0, 2) || 'RA'}
-            </span>
+      {/* User */}
+      <div className="px-3 py-3 border-t border-[#f0f0ec]">
+        <div className="flex items-center gap-2.5 px-2 py-2 rounded-lg hover:bg-[#f5f5f0] cursor-pointer group">
+          <div className="w-7 h-7 rounded-full bg-[#0f172a] flex items-center justify-center flex-shrink-0">
+            <span className="text-white text-[10px] font-bold">{initials}</span>
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-[11px] font-medium text-[#0f172a] truncate">
-              {profile?.full_name || 'İstifadəçi'}
-            </div>
-            <div className="text-[9px] text-[#aaa] truncate">
-              {profile?.roles?.title || 'Əməkdaş'}
-            </div>
+            <div className="text-xs font-medium text-[#0f172a] truncate">{profile?.full_name || 'İstifadəçi'}</div>
+            <div className="text-[10px] text-[#aaa] truncate">{isAdmin ? 'Admin' : 'İşçi'}</div>
           </div>
-          <button
-            onClick={handleSignOut}
-            className="opacity-0 group-hover:opacity-100 transition-opacity"
-            title="Çıxış"
-          >
-            <IconLogout size={14} className="text-[#aaa] hover:text-red-500" />
+          <button onClick={signOut} className="opacity-0 group-hover:opacity-100 p-1 text-[#aaa] hover:text-red-500 transition-opacity">
+            <IconLogout size={13} />
           </button>
         </div>
       </div>

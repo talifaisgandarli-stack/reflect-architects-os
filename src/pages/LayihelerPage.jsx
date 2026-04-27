@@ -504,9 +504,11 @@ export default function LayihelerPage() {
                 <IconList size={14} />
               </button>
             </div>
-            <Button onClick={openNew} size="sm">
-              <IconPlus size={14} /> Yeni layihə
-            </Button>
+            {isAdmin && (
+              <Button onClick={openNew} size="sm">
+                <IconPlus size={14} /> Yeni layihə
+              </Button>
+            )}
           </div>
         }
       />
@@ -586,13 +588,13 @@ export default function LayihelerPage() {
                       <td className="px-4 py-3 text-[#555]">{p.clients?.name || '—'}</td>
                       <td className="px-4 py-3">{statusBadge(p.status)}</td>
                       <td className="px-4 py-3">{phaseBadge(p.phases && p.phases.length > 0 ? p.phases : p.phase)}</td>
-                      <td className="px-4 py-3 text-right">
+                      {isAdmin && <td className="px-4 py-3 text-right">
                         <div className="font-medium text-[#0f172a]">{fmt(p.contract_value)}</div>
                         {p.payment_method === 'transfer' && (
                           <div className="text-[10px] text-green-600">{fmt(withEdvCalc(p.contract_value))} (ƏDV daxil)</div>
                         )}
-                      </td>
-                      <td className="px-4 py-3 text-right text-[#555]">{fmt(p.advance_paid)}</td>
+                      </td>}
+                      {isAdmin && <td className="px-4 py-3 text-right text-[#555]">{fmt(p.advance_paid)}</td>}
                       <td className="px-4 py-3">
                         {p.deadline ? (
                           <div>

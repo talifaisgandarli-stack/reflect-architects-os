@@ -59,6 +59,7 @@ export default function App() {
               </ProtectedRoute>
             }>
               <Route index element={<RoleBasedDashboard />} />
+              <Route path="employee-dashboard" element={<EmployeeDashboardPage />} />
               <Route path="layiheler" element={<LayihelerPage />} />
               <Route path="tapshiriqlar" element={<TapshiriqlarPage />} />
               <Route path="is-ucotu" element={<CS t="İş Uçotu" />} />

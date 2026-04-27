@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useToast } from '../contexts/ToastContext'
+import { useAuth } from '../contexts/AuthContext'
 import { PageHeader, Badge, Card, Button, EmptyState, Modal, ConfirmDialog, Skeleton } from '../components/ui'
 import { IconPlus, IconEdit, IconTrash, IconCalendar, IconChevronLeft, IconChevronRight } from '@tabler/icons-react'
 
@@ -8,18 +9,28 @@ const EVENT_TYPES = [
   { key: 'meeting', label: 'Görüş', color: 'info' },
   { key: 'deadline', label: 'Deadline', color: 'danger' },
   { key: 'holiday', label: 'Bayram/Tətil', color: 'success' },
+  { key: 'birthday', label: 'Ad günü', color: 'warning' },
+  { key: 'event', label: 'Tədbir', color: 'default' },
   { key: 'other', label: 'Digər', color: 'default' },
 ]
 
 const MONTH_NAMES = ['Yanvar', 'Fevral', 'Mart', 'Aprel', 'May', 'İyun', 'İyul', 'Avqust', 'Sentyabr', 'Oktyabr', 'Noyabr', 'Dekabr']
 const DAY_NAMES = ['B.e', 'Ç.a', 'Çər', 'C.a', 'Cüm', 'Şən', 'Baz']
 
-function EventForm({ open, onClose, onSave, event }) {
-  const [form, setForm] = useState({ title: '', event_type: 'meeting', start_date: '', end_date: '', notes: '' })
+function EventForm({ open, onClose, onSave, event, members = [] }) {
+  function toggleMember(id) {
+    setForm(f => ({
+      ...f,
+      tagged_profiles: f.tagged_profiles.includes(id)
+        ? f.tagged_profiles.filter(x => x !== id)
+        : [...f.tagged_profiles, id]
+    }))
+  }
+  const [form, setForm] = useState({ title: '', event_type: 'meeting', start_date: '', end_date: '', notes: '', tagged_profiles: [] })
 
   useEffect(() => {
-    if (event) setForm({ title: event.title || '', event_type: event.event_type || 'meeting', start_date: event.start_date || '', end_date: event.end_date || '', notes: event.notes || '' })
-    else setForm({ title: '', event_type: 'meeting', start_date: new Date().toISOString().split('T')[0], end_date: '', notes: '' })
+    if (event) setForm({ title: event.title || '', event_type: event.event_type || 'meeting', start_date: event.start_date || '', end_date: event.end_date || '', notes: event.notes || '', tagged_profiles: event.tagged_profiles || [] })
+    else setForm({ title: '', event_type: 'meeting', start_date: new Date().toISOString().split('T')[0], end_date: '', notes: '', tagged_profiles: [] })
   }, [event, open])
 
   function set(k, v) { setForm(f => ({ ...f, [k]: v })) }
@@ -58,6 +69,21 @@ function EventForm({ open, onClose, onSave, event }) {
           <textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={2}
             className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a] resize-none" />
         </div>
+        <div>
+          <label className="block text-xs font-medium text-[#555] mb-1">İşçiləri tag et (isteğe bağlı)</label>
+          <div className="flex flex-wrap gap-1.5 p-2 border border-[#e8e8e4] rounded-lg max-h-24 overflow-y-auto">
+            {members.map(m => (
+              <button key={m.id} type="button" onClick={() => toggleMember(m.id)}
+                className={`text-xs px-2 py-1 rounded-full border transition-colors ${
+                  form.tagged_profiles.includes(m.id)
+                    ? 'bg-[#0f172a] text-white border-[#0f172a]'
+                    : 'border-[#e8e8e4] text-[#555] hover:border-[#0f172a]'
+                }`}>
+                {m.full_name}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="flex gap-2 pt-2 border-t border-[#f0f0ec]">
           <Button variant="secondary" onClick={onClose}>Ləğv et</Button>
           <Button onClick={() => onSave(form)} className="ml-auto">{event ? 'Yadda saxla' : 'Əlavə et'}</Button>
@@ -69,7 +95,9 @@ function EventForm({ open, onClose, onSave, event }) {
 
 export default function HadiselerTeqvimiPage() {
   const { addToast } = useToast()
+  const { isAdmin } = useAuth()
   const [events, setEvents] = useState([])
+  const [members, setMembers] = useState([])
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
   const [editEvent, setEditEvent] = useState(null)
@@ -265,7 +293,7 @@ export default function HadiselerTeqvimiPage() {
         </div>
       </div>
 
-      <EventForm open={modalOpen} onClose={() => { setModalOpen(false); setEditEvent(null) }} onSave={handleSave} event={editEvent} />
+      <EventForm open={modalOpen} onClose={() => { setModalOpen(false); setEditEvent(null) }} members={members} onSave={handleSave} event={editEvent} />
       <ConfirmDialog open={!!deleteEvent} title="Hadisəni sil" message={`"${deleteEvent?.title}" silmək istədiyinizə əminsiniz?`}
         onConfirm={handleDelete} onCancel={() => setDeleteEvent(null)} danger />
     </div>
