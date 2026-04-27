@@ -397,7 +397,7 @@ export default function HadiselerTeqvimiPage() {
                   const tp = typeOf(e.event_type)
                   const days = Math.floor((new Date(e.start_date) - new Date(today.toDateString())) / 86400000)
                   const tagged = (e.tagged_profiles || [])
-                    .map(id => members.find(m => m.id === id)?.full_name?.split(' ')[0])
+                    .map(id => members.find(m => m.id === id)?.full_name)
                     .filter(Boolean)
                   return (
                     <div key={e.id}
