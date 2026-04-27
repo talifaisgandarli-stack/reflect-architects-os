@@ -24,7 +24,7 @@ const PRIORITIES = [
 ]
 
 const TASK_TAGS = [
-  { key: 'BD', label: 'BD', color: '#1a3040', bg: '#e8f4ff', text: '#1a3040' },
+  { key: 'BD', label: 'BD', color: '#0369a1', bg: '#dbeafe', text: '#0369a1' },
 ]
 const PROJECT_COLORS = ['#0f172a','#1d4ed8','#059669','#d97706','#7c3aed','#db2777','#0891b2','#16a34a']
 
@@ -94,28 +94,44 @@ function MentionInput({ value, onChange, members, placeholder, rows=1, className
 
 // ─── Inline Quick-Add (Trello style) ─────────────────────────────────────────
 function QuickAdd({ status, projects, members, onSave, onCancel }) {
-  const [title, setTitle]   = useState('')
-  const [projId, setProjId] = useState('')
+  const [title,    setTitle]    = useState('')
+  const [projId,   setProjId]   = useState('')
+  const [assignee, setAssignee] = useState('')
+  const [due,      setDue]      = useState('')
+  const [errors,   setErrors]   = useState({})
   const ref = useRef(null)
   useEffect(() => { ref.current?.focus() }, [])
 
   function save() {
-    if (!title.trim()) return
+    const errs = {}
+    if (!title.trim())  errs.title    = true
+    if (!assignee)      errs.assignee = true
+    if (!due)           errs.due      = true
+    if (Object.keys(errs).length) { setErrors(errs); return }
     onSave({ title: title.trim(), status, project_id: projId || null,
-      assignee_id: null, priority: 'medium', due_date: null, description: null })
+      assignee_id: assignee, priority: 'medium', due_date: due, description: null })
   }
 
   return (
-    <div className="bg-white rounded-xl border border-[#0f172a] shadow-sm p-2.5 space-y-2">
-      <textarea ref={ref} value={title} onChange={e => setTitle(e.target.value)}
-        onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); save() } if (e.key === 'Escape') onCancel() }}
+    <div className="bg-white rounded-xl border-2 border-[#0f172a] shadow-lg p-3 space-y-2">
+      <textarea ref={ref} value={title} onChange={e => { setTitle(e.target.value); setErrors(v=>({...v,title:false})) }}
+        onKeyDown={e => { if (e.key==='Enter'&&!e.shiftKey){e.preventDefault();save()} if(e.key==='Escape')onCancel() }}
         rows={2} placeholder="Tapşırıq adı..."
-        className="w-full text-xs text-[#0f172a] outline-none resize-none placeholder-[#bbb] leading-relaxed" />
+        className={`w-full text-xs text-[#0f172a] outline-none resize-none leading-relaxed placeholder-[#ccc] ${errors.title?'placeholder-red-400':''}`} />
       <select value={projId} onChange={e => setProjId(e.target.value)}
-        className="w-full text-[10px] px-2 py-1 border border-[#f0f0ec] rounded-lg outline-none text-[#888]">
+        className="w-full text-[10px] px-2 py-1.5 border border-[#f0f0ec] rounded-lg outline-none text-[#888] bg-[#fafafa]">
         <option value="">Layihə seçin...</option>
         {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
       </select>
+      <select value={assignee} onChange={e => { setAssignee(e.target.value); setErrors(v=>({...v,assignee:false})) }}
+        className={`w-full text-[10px] px-2 py-1.5 border rounded-lg outline-none bg-[#fafafa] ${errors.assignee ? 'border-red-400 text-red-500' : 'border-[#f0f0ec] text-[#888]'}`}>
+        <option value="">{errors.assignee ? '⚠ Cavabdeh seçin!' : 'Cavabdeh seçin...'}</option>
+        {members.map(m => <option key={m.id} value={m.id}>{m.full_name}</option>)}
+      </select>
+      <input type="date" value={due} onChange={e => { setDue(e.target.value); setErrors(v=>({...v,due:false})) }}
+        className={`w-full text-[10px] px-2 py-1.5 border rounded-lg outline-none ${errors.due ? 'border-red-400 bg-red-50 text-red-600' : 'border-[#f0f0ec] bg-[#fafafa] text-[#888]'}`}
+        placeholder={errors.due ? 'Deadline məcburidir!' : ''} />
+      {errors.due && <p className="text-[10px] text-red-500 -mt-1">⚠ Deadline məcburidir</p>}
       <div className="flex gap-1.5">
         <button onClick={save}
           className="flex-1 py-1.5 bg-[#0f172a] text-white text-[10px] font-semibold rounded-lg hover:bg-[#1e293b] transition-colors">
@@ -138,6 +154,7 @@ function TaskForm({ open, onClose, onSave, task, projects, members, defaultStatu
     if (task) setForm({ title:task.title||'', description:task.description||'', project_id:task.project_id||'', assignee_id:task.assignee_id||'', status:task.status||'not_started', priority:task.priority||'medium', due_date:task.due_date||'', tags:task.tags||[], is_hidden:task.is_hidden||false })
     else setForm({ title:'', description:'', project_id:'', assignee_id:'', status:defaultStatus||'not_started', priority:'medium', due_date:'', tags:[], is_hidden:false })
   }, [task, open, defaultStatus])
+  const [formErrors, setFormErrors] = useState([])
   const set = (k,v) => setForm(f => ({...f,[k]:v}))
   return (
     <Modal open={open} onClose={onClose} title={task ? 'Tapşırığı redaktə et' : 'Yeni tapşırıq'}>
@@ -148,7 +165,7 @@ function TaskForm({ open, onClose, onSave, task, projects, members, defaultStatu
         <div className="grid grid-cols-2 gap-2">
           {[
             ['Layihə','project_id', projects.map(p=>({v:p.id,l:p.name}))],
-            ['Cavabdeh','assignee_id', members.map(m=>({v:m.id,l:m.full_name}))],
+            ['Cavabdeh *','assignee_id', members.map(m=>({v:m.id,l:m.full_name}))],
             ['Status','status', COLUMNS.map(c=>({v:c.key,l:c.label}))],
             ['Prioritet','priority', PRIORITIES.map(p=>({v:p.key,l:p.label}))],
           ].map(([label, key, opts]) => (
@@ -162,9 +179,11 @@ function TaskForm({ open, onClose, onSave, task, projects, members, defaultStatu
             </div>
           ))}
           <div className="col-span-2">
-            <label className="block text-[10px] font-semibold text-[#888] uppercase tracking-wider mb-1">Deadline</label>
-            <input type="date" value={form.due_date} onChange={e => set('due_date', e.target.value)}
-              className="w-full px-2.5 py-2 border border-[#e8e8e4] rounded-lg text-xs focus:outline-none focus:border-[#0f172a]" />
+            <label className="block text-[10px] font-semibold text-[#888] uppercase tracking-wider mb-1">
+              Deadline <span className="text-red-400">*</span>
+            </label>
+            <input type="date" value={form.due_date} onChange={e => { set('due_date', e.target.value); setFormErrors([]) }}
+              className={`w-full px-2.5 py-2 border rounded-lg text-xs focus:outline-none focus:border-[#0f172a] ${!form.due_date && formErrors.length ? 'border-red-400 bg-red-50' : 'border-[#e8e8e4]'}`} />
           </div>
         </div>
         {/* Tags */}
@@ -201,8 +220,22 @@ function TaskForm({ open, onClose, onSave, task, projects, members, defaultStatu
           placeholder="Təsvir..." />
         <div className="flex gap-2 pt-1 border-t border-[#f0f0ec]">
           <Button variant="secondary" onClick={onClose}>Ləğv et</Button>
-          <Button onClick={() => onSave(form)} className="ml-auto">{task ? 'Yadda saxla' : 'Əlavə et'}</Button>
+          <Button onClick={() => {
+            const errs = []
+            if (!form.assignee_id) errs.push('Cavabdeh seçilməlidir')
+            if (!form.due_date)    errs.push('Deadline məcburidir')
+            if (errs.length) { setFormErrors(errs); return }
+            setFormErrors([])
+            onSave(form)
+          }} className="ml-auto">{task ? 'Yadda saxla' : 'Əlavə et'}</Button>
         </div>
+        {formErrors.length > 0 && (
+          <div className="space-y-1">
+            {formErrors.map((e,i) => (
+              <p key={i} className="text-[11px] text-red-500 flex items-center gap-1">⚠ {e}</p>
+            ))}
+          </div>
+        )}
       </div>
     </Modal>
   )
@@ -586,7 +619,7 @@ function DetailPanel({ task, projects, members, onClose, onEdit, onDelete, onSta
 }
 
 // ─── Kanban Card ──────────────────────────────────────────────────────────────
-function KanbanCard({ task, projects, members, checkCounts, commentCounts, onClick }) {
+function KanbanCard({ task, projects, members, checkCounts, commentCounts, onClick, onArchive }) {
   const project  = projects.find(p => p.id === task.project_id)
   const assignee = members.find(m => m.id === task.assignee_id)
   const days = daysLeft(task.due_date)
@@ -639,14 +672,21 @@ function KanbanCard({ task, projects, members, checkCounts, commentCounts, onCli
               </div>
             )}
           </div>
-          {task.due_date && (
-            <span className={`text-[9px] font-semibold flex items-center gap-0.5 ${
-              overdue ? 'text-red-500' : days===0 ? 'text-yellow-600' : days!==null&&days<=3 ? 'text-amber-500' : 'text-[#c0c0c0]'
-            }`}>
-              <IconCalendar size={9} />
-              {overdue ? `${Math.abs(days)}g keçib` : days===0 ? 'Bu gün' : new Date(task.due_date).toLocaleDateString('az-AZ',{day:'numeric',month:'short'})}
-            </span>
-          )}
+          <div className="flex items-center gap-1.5">
+            {task.due_date && (
+              <span className={`text-[9px] font-semibold flex items-center gap-0.5 ${
+                overdue ? 'text-red-500' : days===0 ? 'text-yellow-600' : days!==null&&days<=3 ? 'text-amber-500' : 'text-[#c0c0c0]'
+              }`}>
+                <IconCalendar size={9} />
+                {overdue ? `${Math.abs(days)}g keçib` : days===0 ? 'Bu gün' : new Date(task.due_date).toLocaleDateString('az-AZ',{day:'numeric',month:'short'})}
+              </span>
+            )}
+            <button onClick={e => { e.stopPropagation(); onArchive(task) }}
+              className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded text-[#ccc] hover:text-[#888] transition-all"
+              title="Arxivə göndər">
+              <IconArchive size={10} />
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -654,7 +694,7 @@ function KanbanCard({ task, projects, members, checkCounts, commentCounts, onCli
 }
 
 // ─── Kanban Column ────────────────────────────────────────────────────────────
-function KanbanColumn({ column, tasks, projects, members, checkCounts, commentCounts, onCardClick, onQuickAdd }) {
+function KanbanColumn({ column, tasks, projects, members, checkCounts, commentCounts, onCardClick, onQuickAdd, onArchive }) {
   const [adding, setAdding] = useState(false)
   return (
     <div className="flex flex-col w-[272px] flex-shrink-0">
@@ -758,6 +798,7 @@ export default function TapshiriqlarPage() {
   const [archiveOpen,   setArchiveOpen]   = useState(false)
   const [filterTag,     setFilterTag]     = useState('all')
   const [showHidden,    setShowHidden]    = useState(false)
+  const [filterOverdue, setFilterOverdue] = useState(false)
 
   useEffect(() => { loadData() }, [])
 
@@ -811,7 +852,7 @@ export default function TapshiriqlarPage() {
   }
 
   async function handleQuickSave(form) {
-    const { data:inserted, error } = await supabase.from('tasks').insert({ title:form.title, status:form.status, project_id:form.project_id||null, assignee_id:null, priority:'medium', due_date:null, description:null }).select().single()
+    const { data:inserted, error } = await supabase.from('tasks').insert({ title:form.title, status:form.status, project_id:form.project_id||null, assignee_id:form.assignee_id||null, priority:'medium', due_date:form.due_date||null, description:null }).select().single()
     if (error) { addToast('Xəta','error'); return }
     await supabase.from('task_comments').insert({ task_id:inserted.id, author_id:user?.id, type:'activity', content:'tapşırıq yaradıldı', metadata:{} })
     await loadData()
@@ -849,6 +890,14 @@ export default function TapshiriqlarPage() {
     await loadData()
   }
 
+  async function handleSingleArchive(task) {
+    const now = new Date()
+    await supabase.from('tasks').update({ archived:true, archived_at:now.toISOString(), archive_year:now.getFullYear() }).eq('id', task.id)
+    addToast('Tapşırıq arxivləndi','success')
+    if (detailTask?.id === task.id) setDetailTask(null)
+    await loadData()
+  }
+
   const { isAdmin } = useAuth()
   const activeTasks = tasks.filter(t => !t.archived && (isAdmin || !t.is_hidden))
   const filtered = activeTasks.filter(t => {
@@ -859,6 +908,7 @@ export default function TapshiriqlarPage() {
     // Gizli tapşırıqlar: showHidden=true olduqda yalnız hidden-lar, default-da hidden-lar gizlənir (non-admin üçün activeTasks-da artıq yoxdur)
     if (isAdmin && !showHidden && t.is_hidden) return false
     if (isAdmin && showHidden && !t.is_hidden) return false
+    if (filterOverdue) { const d=daysLeft(t.due_date); if (t.status==='done'||d===null||d>=0) return false }
     return true
   })
   const tasksByCol = Object.fromEntries(COLUMNS.map(c => [c.key, filtered.filter(t => t.status===c.key)]))
@@ -921,6 +971,15 @@ export default function TapshiriqlarPage() {
             <option value="all">Bütün üzvlər</option>
             {members.map(m => <option key={m.id} value={m.id}>{m.full_name}</option>)}
           </select>
+          {/* Gecikmiş filter */}
+          <button onClick={() => setFilterOverdue(v => !v)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border font-medium transition-all ${
+              filterOverdue
+                ? 'bg-red-500 text-white border-red-500'
+                : 'text-[#888] border-[#e8e8e4] hover:border-red-300 hover:text-red-500'
+            }`}>
+            <IconAlertCircle size={12} /> Gecikmiş
+          </button>
           {/* BD tag filter */}
           <button onClick={() => setFilterTag(t => t === 'BD' ? 'all' : 'BD')}
             className={`px-3 py-1.5 rounded-lg text-xs font-bold border-2 transition-all ${
@@ -941,8 +1000,8 @@ export default function TapshiriqlarPage() {
               🔒 {showHidden ? 'Gizli görünür' : 'Gizlilər'}
             </button>
           )}
-          {(filterProj !== 'all' || filterUser !== 'all' || search || filterTag !== 'all' || showHidden) && (
-            <button onClick={() => { setFilterProj('all'); setFilterUser('all'); setSearch(''); setFilterTag('all'); setShowHidden(false) }}
+          {(filterProj !== 'all' || filterUser !== 'all' || search || filterTag !== 'all' || showHidden || filterOverdue) && (
+            <button onClick={() => { setFilterProj('all'); setFilterUser('all'); setSearch(''); setFilterTag('all'); setShowHidden(false); setFilterOverdue(false) }}
               className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-[#888] hover:text-red-500 border border-[#e8e8e4] hover:border-red-200 rounded-lg transition-colors">
               <IconX size={11}/> Sıfırla
             </button>
@@ -969,6 +1028,7 @@ export default function TapshiriqlarPage() {
                 checkCounts={checkCounts} commentCounts={commentCounts}
                 onCardClick={t => setDetailTask(t)}
                 onQuickAdd={handleQuickSave}
+                onArchive={handleSingleArchive}
               />
             ))}
           </div>
