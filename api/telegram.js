@@ -67,12 +67,35 @@ export default async function handler(req, res) {
 
       if (pending?.step === 'waiting_name') {
         const name = text.trim()
-        // Profildə tap
-        const { data: profile } = await supabase
+
+        // Bütün aktiv profilləri al
+        const { data: allProfiles } = await supabase
           .from('profiles')
           .select('id, full_name')
-          .ilike('full_name', `%${name.split(' ')[0]}%`)
-          .single()
+          .eq('is_active', true)
+
+        // 1. Tam uyğunluq (case-insensitive)
+        let profile = allProfiles?.find(p =>
+          p.full_name.toLowerCase() === name.toLowerCase()
+        )
+
+        // 2. Hər iki söz ayrı-ayrı yoxla (ad + soyad sırası fərqli ola bilər)
+        if (!profile) {
+          const words = name.toLowerCase().split(/\s+/).filter(Boolean)
+          profile = allProfiles?.find(p => {
+            const pWords = p.full_name.toLowerCase().split(/\s+/)
+            return words.every(w => pWords.some(pw => pw.startsWith(w)))
+          })
+        }
+
+        // 3. Yalnız ilk söz ilə axtarış — unique olarsa qəbul et
+        if (!profile) {
+          const firstWord = name.toLowerCase().split(/\s+/)[0]
+          const matches = allProfiles?.filter(p =>
+            p.full_name.toLowerCase().split(/\s+/).some(w => w.startsWith(firstWord))
+          )
+          if (matches?.length === 1) profile = matches[0]
+        }
 
         if (profile) {
           await supabase.from('profiles').update({
@@ -83,7 +106,18 @@ export default async function handler(req, res) {
 
           await sendMessage(chat_id, `✅ <b>${profile.full_name}</b> kimi qeydiyyat tamamlandı!\n\n🔔 Bundan sonra deadline xatırlatmaları, tapşırıqlar və bildirişlər sizə göndəriləcək.`)
         } else {
-          await sendMessage(chat_id, `❌ "<b>${name}</b>" adı sistemdə tapılmadı.\n\nZəhmət olmasa sistemdəki adınızı dəqiq yazın:`)
+          // Oxşar adları göstər
+          const words = name.toLowerCase().split(/\s+/).filter(Boolean)
+          const similar = allProfiles?.filter(p =>
+            words.some(w => p.full_name.toLowerCase().includes(w))
+          ).slice(0, 5)
+
+          let hint = ''
+          if (similar?.length > 0) {
+            hint = '\n\nBəlkə bunlardan birisiniz?\n' + similar.map(p => `• <i>${p.full_name}</i>`).join('\n')
+          }
+
+          await sendMessage(chat_id, `❌ "<b>${name}</b>" adı sistemdə tapılmadı.${hint}\n\nZəhmət olmasa sistemdəki tam adınızı yazın:`)
         }
         return res.status(200).json({ ok: true })
       }
