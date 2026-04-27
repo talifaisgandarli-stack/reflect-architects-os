@@ -933,6 +933,10 @@ export default function TapshiriqlarPage() {
       if (editTask.status !== data.status) {
         await supabase.from('task_comments').insert({ task_id:editTask.id, author_id:user?.id, type:'activity', content:'status dəyişdi', metadata:{ old_status:editTask.status, new_status:data.status } })
       }
+      // Cavabdeh dəyişibsə yeni cavabdehə bildiriş
+      if (data.assignee_id && data.assignee_id !== editTask.assignee_id && data.assignee_id !== user?.id) {
+        await notify(data.assignee_id, 'Tapşırıq sizə təyin edildi', data.title, 'info', '/tapshiriqlar')
+      }
       addToast('Tapşırıq yeniləndi','success')
     } else {
       const { data:inserted, error } = await supabase.from('tasks').insert(data).select().single()
@@ -953,6 +957,10 @@ export default function TapshiriqlarPage() {
     const { data:inserted, error } = await supabase.from('tasks').insert({ title:form.title, status:form.status, project_id:form.project_id||null, assignee_id:form.assignee_id||null, priority:'medium', due_date:form.due_date||null, description:null }).select().single()
     if (error) { addToast('Xəta','error'); return }
     await supabase.from('task_comments').insert({ task_id:inserted.id, author_id:user?.id, type:'activity', content:'tapşırıq yaradıldı', metadata:{} })
+    // QuickAdd-da da cavabdehə bildiriş
+    if (form.assignee_id && form.assignee_id !== user?.id) {
+      await notify(form.assignee_id, 'Yeni tapşırıq', form.title, 'info', '/tapshiriqlar')
+    }
     await loadData()
   }
 

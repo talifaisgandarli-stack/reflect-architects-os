@@ -1,53 +1,78 @@
 import { supabase } from './supabase'
 
-const ADMIN_EMAILS = ['talifa.isgandarli@gmail.com', 'nusalov.n@reflect.az', 'turkan.a@reflect.az']
+const ADMIN_EMAILS = [
+  'talifa.isgandarli@gmail.com',
+  'nusalov.n@reflect.az',
+  'turkan.a@reflect.az'
+]
 
 /**
  * Bir istifadəçiyə bildiriş göndər
  */
 export async function notify(user_id, title, body = null, type = 'info', link = null) {
-  if (!user_id) return
+  if (!user_id) {
+    console.warn('[notify] user_id yoxdur, bildiriş göndərilmir')
+    return
+  }
+
+  const payload = {
+    user_id,
+    title: String(title).slice(0, 200),
+    body: body ? String(body).slice(0, 500) : null,
+    type: type || 'info',
+    link: link || null,
+    read: false,
+  }
+
+  console.log('[notify] göndərilir:', payload)
+
   try {
-    const { error } = await supabase.from('notifications').insert({
-      user_id,
-      title: String(title).slice(0, 200),
-      body: body ? String(body).slice(0, 500) : null,
-      type,
-      link,
-      read: false,
-    })
-    if (error) console.error('notify insert error:', error.message)
+    const { data, error } = await supabase
+      .from('notifications')
+      .insert(payload)
+      .select()
+      .single()
+
+    if (error) {
+      console.error('[notify] INSERT xətası:', error.message, error.code, error.details)
+    } else {
+      console.log('[notify] uğurlu:', data?.id)
+    }
+    return data
   } catch (e) {
-    console.error('notify error:', e.message)
+    console.error('[notify] exception:', e.message)
   }
 }
 
 /**
- * Bütün aktiv istifadəçilərə bildiriş göndər (exclude_id istisna)
+ * Bütün aktiv istifadəçilərə bildiriş göndər
  */
 export async function notifyAll(title, body = null, type = 'info', link = null, exclude_id = null) {
   try {
-    const { data: profiles } = await supabase
+    const { data: profiles, error: pErr } = await supabase
       .from('profiles')
       .select('id')
       .eq('is_active', true)
 
-    const targets = (profiles || []).filter(p => p.id !== exclude_id)
-    if (!targets.length) return
+    if (pErr) { console.error('[notifyAll] profiles xətası:', pErr.message); return }
 
-    const { error } = await supabase.from('notifications').insert(
-      targets.map(p => ({
-        user_id: p.id,
-        title: String(title).slice(0, 200),
-        body: body ? String(body).slice(0, 500) : null,
-        type,
-        link,
-        read: false,
-      }))
-    )
-    if (error) console.error('notifyAll insert error:', error.message)
+    const targets = (profiles || []).filter(p => p.id !== exclude_id)
+    if (!targets.length) { console.warn('[notifyAll] hədəf yoxdur'); return }
+
+    const rows = targets.map(p => ({
+      user_id: p.id,
+      title: String(title).slice(0, 200),
+      body: body ? String(body).slice(0, 500) : null,
+      type: type || 'info',
+      link: link || null,
+      read: false,
+    }))
+
+    const { error } = await supabase.from('notifications').insert(rows)
+    if (error) console.error('[notifyAll] INSERT xətası:', error.message)
+    else console.log('[notifyAll] göndərildi:', targets.length, 'nəfərə')
   } catch (e) {
-    console.error('notifyAll error:', e.message)
+    console.error('[notifyAll] exception:', e.message)
   }
 }
 
@@ -56,26 +81,28 @@ export async function notifyAll(title, body = null, type = 'info', link = null, 
  */
 export async function notifyAdmins(title, body = null, type = 'info', link = null) {
   try {
-    const { data: admins } = await supabase
+    const { data: admins, error: aErr } = await supabase
       .from('profiles')
-      .select('id')
+      .select('id, email')
       .in('email', ADMIN_EMAILS)
       .eq('is_active', true)
 
-    if (!admins?.length) return
+    if (aErr) { console.error('[notifyAdmins] profiles xətası:', aErr.message); return }
+    if (!admins?.length) { console.warn('[notifyAdmins] admin tapılmadı'); return }
 
-    const { error } = await supabase.from('notifications').insert(
-      admins.map(p => ({
-        user_id: p.id,
-        title: String(title).slice(0, 200),
-        body: body ? String(body).slice(0, 500) : null,
-        type,
-        link,
-        read: false,
-      }))
-    )
-    if (error) console.error('notifyAdmins error:', error.message)
+    const rows = admins.map(p => ({
+      user_id: p.id,
+      title: String(title).slice(0, 200),
+      body: body ? String(body).slice(0, 500) : null,
+      type: type || 'info',
+      link: link || null,
+      read: false,
+    }))
+
+    const { error } = await supabase.from('notifications').insert(rows)
+    if (error) console.error('[notifyAdmins] INSERT xətası:', error.message)
+    else console.log('[notifyAdmins] göndərildi:', admins.length, 'adminə')
   } catch (e) {
-    console.error('notifyAdmins error:', e.message)
+    console.error('[notifyAdmins] exception:', e.message)
   }
 }
