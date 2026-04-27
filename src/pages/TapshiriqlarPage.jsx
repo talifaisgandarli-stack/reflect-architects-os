@@ -57,33 +57,56 @@ function MentionInput({ value, onChange, members, placeholder, rows=1, className
   const [query, setQuery] = useState('')
   const ref = useRef(null)
 
-  function handleKey(e) {
+  function handleChange(e) {
     const v = e.target.value
     onChange(v)
+    // @ işarəsinin sonundakı hərflər — hər dil üçün işləyir
     const lastAt = v.lastIndexOf('@')
-    if (lastAt !== -1 && lastAt === v.length - 1) { setShow(true); setQuery('') }
-    else if (lastAt !== -1 && v.slice(lastAt).match(/^@\w*/)) {
-      setShow(true); setQuery(v.slice(lastAt+1))
-    } else setShow(false)
+    if (lastAt === -1) { setShow(false); return }
+    const afterAt = v.slice(lastAt + 1)
+    // @ yazıldı — dropdown aç
+    if (lastAt === v.length - 1) { setShow(true); setQuery(''); return }
+    // @ sonrası boşluq yoxdursa — hərflər yazılır
+    if (!afterAt.includes(' ') || afterAt.length < 30) {
+      setShow(true)
+      setQuery(afterAt)
+    } else {
+      setShow(false)
+    }
   }
 
   function pick(m) {
     const lastAt = value.lastIndexOf('@')
-    onChange(value.slice(0, lastAt) + `@${m.full_name} `)
+    onChange(value.slice(0, lastAt) + '@' + m.full_name + ' ')
     setShow(false)
+    setQuery('')
+    ref.current?.focus()
   }
 
-  const filtered = members.filter(m => m.full_name.toLowerCase().includes(query.toLowerCase())).slice(0,5)
+  // Members siyahısını query ilə filtrləmə — Azərbaycan hərflərini dəstəkləyir
+  const filtered = query.length === 0
+    ? members.slice(0, 6)
+    : members.filter(m => m.full_name.toLowerCase().includes(query.toLowerCase())).slice(0, 6)
 
   return (
     <div className="relative flex-1">
-      <textarea ref={ref} value={value} onChange={handleKey} rows={rows} placeholder={placeholder}
-        className={`w-full px-3 py-2 border border-[#e8e8e4] rounded-xl text-xs focus:outline-none focus:border-[#0f172a] resize-none leading-relaxed ${className}`} />
+      <textarea
+        ref={ref}
+        value={value}
+        onChange={handleChange}
+        onKeyDown={e => { if (e.key === 'Escape') setShow(false) }}
+        rows={rows}
+        placeholder={placeholder}
+        className={`w-full px-3 py-2 border border-[#e8e8e4] rounded-xl text-xs focus:outline-none focus:border-[#0f172a] resize-none leading-relaxed ${className}`}
+      />
       {show && filtered.length > 0 && (
-        <div className="absolute bottom-full mb-1 left-0 bg-white border border-[#e8e8e4] rounded-xl shadow-lg overflow-hidden z-50 min-w-[180px]">
+        <div className="absolute bottom-full mb-1 left-0 bg-white border border-[#e8e8e4] rounded-xl shadow-lg overflow-hidden z-50 w-56">
+          <div className="px-3 py-1.5 border-b border-[#f0f0ec]">
+            <span className="text-[10px] text-[#aaa] font-medium">Komanda üzvü seçin</span>
+          </div>
           {filtered.map(m => (
             <button key={m.id} onClick={() => pick(m)} type="button"
-              className="flex items-center gap-2 w-full px-3 py-2 hover:bg-[#f5f5f0] text-left">
+              className="flex items-center gap-2 w-full px-3 py-2 hover:bg-[#f5f5f0] text-left transition-colors">
               <Avatar name={m.full_name} size={5} />
               <span className="text-xs text-[#333]">{m.full_name}</span>
             </button>
@@ -289,14 +312,12 @@ function DetailPanel({ task, projects, members, onClose, onEdit, onDelete, onSta
 
   async function sendComment() {
     if (!newComment.trim()) return
-    // Parse @mentions
+    // @AdSoyad formatında mention-ları tap — hər dil üçün işləyir
     const mentions = []
-    const re = /@([\w\s]+?)(?= |$|@)/g
-    let m
-    const text = newComment
-    while ((m = re.exec(text)) !== null) {
-      const found = members.find(mb => mb.full_name.toLowerCase() === m[1].trim().toLowerCase())
-      if (found) mentions.push(found.id)
+    for (const mb of members) {
+      if (newComment.includes('@' + mb.full_name)) {
+        if (!mentions.includes(mb.id)) mentions.push(mb.id)
+      }
     }
     await supabase.from('task_comments').insert({
       task_id: task.id, author_id: user?.id, content: newComment.trim(),
