@@ -960,7 +960,9 @@ function KanbanColumn({ column, tasks, projects, members, checkCounts, commentCo
             checkCounts={checkCounts} commentCounts={commentCounts}
             onClick={onCardClick} onArchive={onArchive}
             onDragStart={onDragStart} onDragEnd={onDragEnd}
-            isDragging={dragTaskId === task.id} />
+            isDragging={dragTaskId === task.id}
+            filterUser={filterUser}
+            mySubtasks={mySubtasksMap?.[task.id] || null} />
         ))}
         {!adding && (
           <div onClick={() => setAdding(true)}
@@ -1299,15 +1301,19 @@ export default function TapshiriqlarPage() {
   })
   const tasksByCol = Object.fromEntries(COLUMNS.map(c => [c.key, filtered.filter(t => t.status===c.key)]))
   const overdueCount = activeTasks.filter(t => { const d=daysLeft(t.due_date); return t.status!=='done'&&d!==null&&d<0 }).length
+  const overdueSubtaskCount = activeTasks.reduce((s,t) => s + ((checkCounts[t.id]?.overdueItems||[]).length), 0)
   // filterUser seçildiyi halda hər task üçün onun subtask-ları
-  const mySubtasksMap = filterUser !== 'all'
-    ? Object.fromEntries(
-        activeTasks.map(t => [
-          t.id,
-          allChecklists.filter(item => item.task_id === t.id && item.assignee_id === filterUser)
-        ]).filter(([, items]) => items.length > 0)
-      )
-    : {}
+  const mySubtasksMap = (() => {
+    if (filterUser === 'all') return {}
+    const map = {}
+    for (const item of allChecklists) {
+      if (item.assignee_id === filterUser) {
+        if (!map[item.task_id]) map[item.task_id] = []
+        map[item.task_id].push(item)
+      }
+    }
+    return map
+  })()
   // Seçilmiş üzvün gecikmiş subtask-ları
   const myOverdueSubtasks = filterUser !== 'all'
     ? activeTasks.flatMap(t => {
@@ -1339,14 +1345,11 @@ export default function TapshiriqlarPage() {
                   🔴 {overdueCount} gecikmiş task
                 </span>
               )}
-              {(() => {
-                const n = activeTasks.reduce((s,t) => s + ((checkCounts[t.id]?.overdueItems||[]).length), 0)
-                return n > 0 ? (
-                  <span className="text-[10px] font-bold text-orange-500 bg-orange-50 px-2 py-0.5 rounded-full">
-                    🟠 {n} gecikmiş subtask
-                  </span>
-                ) : null
-              })()}
+              {overdueSubtaskCount > 0 && (
+                <span className="text-[10px] font-bold text-orange-500 bg-orange-50 px-2 py-0.5 rounded-full">
+                  🟠 {overdueSubtaskCount} gecikmiş subtask
+                </span>
+              )}
               {tasks.filter(t=>t.archived).length > 0 && (
                 <span className="text-[10px] text-[#bbb] bg-[#f5f5f0] px-2 py-0.5 rounded-full">
                   {tasks.filter(t=>t.archived).length} arxivdə
