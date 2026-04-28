@@ -985,20 +985,36 @@ export default function TapshiriqlarPage() {
       }
       addToast('Tapşırıq əlavə edildi','success')
     }
-    setModalOpen(false); setEditTask(null)
-    if (detailTask?.id === editTask?.id) setDetailTask(null)
+    // Yeni tapşırıq — loadData çağır
     await loadData()
+    setModalOpen(false); setEditTask(null)
   }
 
   async function handleQuickSave(form) {
-    const { data:inserted, error } = await supabase.from('tasks').insert({ title:form.title, status:form.status, project_id:form.project_id||null, assignee_id:form.assignee_id||null, priority:'medium', due_date:form.due_date||null, description:null }).select().single()
-    if (error) { addToast('Xəta','error'); return }
-    await supabase.from('task_comments').insert({ task_id:inserted.id, author_id:user?.id, type:'activity', content:'tapşırıq yaradıldı', metadata:{} })
-    // QuickAdd-da da cavabdehə bildiriş
-    if (form.assignee_id && form.assignee_id !== user?.id) {
-      await notify(form.assignee_id, 'Yeni tapşırıq', form.title, 'info', '/tapshiriqlar?task=' + inserted.id)
+    const payload = {
+      title: form.title,
+      status: form.status,
+      project_id: form.project_id || null,
+      assignee_id: form.assignee_id || null,
+      priority: 'medium',
+      due_date: form.due_date || null,
+      description: null,
+      tags: [],
+      is_hidden: false,
+      archived: false,
     }
-    await loadData()
+    const { data:inserted, error } = await supabase.from('tasks').insert(payload).select().single()
+    if (error) { addToast('Xəta: ' + error.message, 'error'); return }
+    // Optimistic — yeni tapşırığı dərhal state-ə əlavə et
+    setTasks(prev => [inserted, ...prev])
+    // Activity + bildiriş (fire and forget)
+    supabase.from('task_comments').insert({ task_id:inserted.id, author_id:user?.id, type:'activity', content:'tapşırıq yaradıldı', metadata:{} })
+    if (form.assignee_id && form.assignee_id !== user?.id) {
+      notify(form.assignee_id, 'Yeni tapşırıq', form.title, 'info', '/tapshiriqlar?task=' + inserted.id)
+    }
+    // checkCounts yenilə
+    setCheckCounts(prev => ({ ...prev, [inserted.id]: { done:0, total:0 } }))
+    setCommentCounts(prev => ({ ...prev, [inserted.id]: 0 }))
   }
 
   async function handleDelete() {
@@ -1010,20 +1026,34 @@ export default function TapshiriqlarPage() {
   }
 
   async function handleStatusChange(task, newStatus) {
-    await supabase.from('tasks').update({ status: newStatus }).eq('id', task.id)
-    await supabase.from('task_comments').insert({ task_id:task.id, author_id:user?.id, type:'activity', content:'status dəyişdi', metadata:{ old_status:task.status, new_status:newStatus } })
-    // Tapşırıq sahibinə bildiriş (özü deyilsə)
-    if (task.assignee_id && task.assignee_id !== user?.id && newStatus === 'done') {
-      await notify(task.assignee_id, task.title, 'Tapşırıq tamamlandı kimi işarələndi', 'success', '/tapshiriqlar?task=' + task.id)
+    if (task.status === newStatus) return
+    // 1. Optimistic update — UI dərhal cavab verir
+    setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: newStatus } : t))
+    if (detailTask?.id === task.id) setDetailTask(prev => ({ ...prev, status: newStatus }))
+    // 2. Supabase update
+    const { error } = await supabase.from('tasks').update({ status: newStatus }).eq('id', task.id)
+    if (error) {
+      // Rollback
+      setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: task.status } : t))
+      if (detailTask?.id === task.id) setDetailTask(prev => ({ ...prev, status: task.status }))
+      addToast('Xəta: ' + error.message, 'error')
+      return
     }
-    if (detailTask?.id === task.id) setDetailTask({ ...detailTask, status: newStatus })
-    await loadData()
+    // 3. Activity log
+    supabase.from('task_comments').insert({ task_id:task.id, author_id:user?.id, type:'activity', content:'status dəyişdi', metadata:{ old_status:task.status, new_status:newStatus } })
+    // 4. Bildiriş
+    if (task.assignee_id && task.assignee_id !== user?.id && newStatus === 'done') {
+      notify(task.assignee_id, task.title, 'Tapşırıq tamamlandı kimi işarələndi', 'success', '/tapshiriqlar?task=' + task.id)
+    }
+    // 5. loadData yoxdur — optimistic kifayətdir
   }
 
   async function handleDeadlineChange(task, newDue) {
-    await supabase.from('tasks').update({ due_date: newDue || null }).eq('id', task.id)
-    if (detailTask?.id === task.id) setDetailTask({ ...detailTask, due_date: newDue })
-    await loadData()
+    // Optimistic
+    setTasks(prev => prev.map(t => t.id === task.id ? { ...t, due_date: newDue || null } : t))
+    if (detailTask?.id === task.id) setDetailTask(prev => ({ ...prev, due_date: newDue }))
+    const { error } = await supabase.from('tasks').update({ due_date: newDue || null }).eq('id', task.id)
+    if (error) addToast('Xəta: ' + error.message, 'error')
   }
 
   async function archiveDone() {
@@ -1058,16 +1088,25 @@ export default function TapshiriqlarPage() {
       setDragTaskId(null); setDragOverCol(null); setDragOverIdx(null)
       return
     }
+    const oldStatus = task.status
     // Optimistic update
     setTasks(prev => prev.map(t => t.id === dragTaskId ? { ...t, status: targetColKey } : t))
-    await supabase.from('tasks').update({ status: targetColKey }).eq('id', dragTaskId)
-    await supabase.from('task_comments').insert({
-      task_id: dragTaskId, author_id: user?.id, type: 'activity',
-      content: 'status dəyişdi',
-      metadata: { old_status: task.status, new_status: targetColKey }
-    })
     if (detailTask?.id === dragTaskId) setDetailTask(prev => ({ ...prev, status: targetColKey }))
     setDragTaskId(null); setDragOverCol(null); setDragOverIdx(null)
+    // Supabase update
+    const { error } = await supabase.from('tasks').update({ status: targetColKey }).eq('id', dragTaskId)
+    if (error) {
+      // Rollback
+      setTasks(prev => prev.map(t => t.id === dragTaskId ? { ...t, status: oldStatus } : t))
+      addToast('Xəta: ' + error.message, 'error')
+      return
+    }
+    // Activity log (fire and forget)
+    supabase.from('task_comments').insert({
+      task_id: dragTaskId, author_id: user?.id, type: 'activity',
+      content: 'status dəyişdi',
+      metadata: { old_status: oldStatus, new_status: targetColKey }
+    })
   }
 
   const { isAdmin } = useAuth()
