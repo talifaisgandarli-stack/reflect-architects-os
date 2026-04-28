@@ -860,17 +860,15 @@ function KanbanCard({ task, projects, members, checkCounts, commentCounts, onCli
               )}
             </div>
 
-            {/* Right: deadline */}
-            {task.due_date && (
+            {/* Right: deadline — gecikmiş olarsa yuxarıdakı badge göstərir, burada yalnız gələcək tarix */}
+            {task.due_date && !overdue && (
               <span className={`text-[9px] font-bold flex items-center gap-0.5 px-1.5 py-0.5 rounded-md ${
-                overdue
-                  ? 'bg-red-50 text-red-500'
-                  : days===0 ? 'bg-yellow-50 text-yellow-600'
-                  : days!==null&&days<=3 ? 'bg-amber-50 text-amber-500'
-                  : 'text-[#c0c0c0]'
+                days===0 ? 'bg-yellow-50 text-yellow-600'
+                : days!==null&&days<=3 ? 'bg-amber-50 text-amber-500'
+                : 'text-[#c0c0c0]'
               }`}>
                 <IconCalendar size={9} />
-                {overdue ? `${Math.abs(days)}g keçib` : days===0 ? 'Bu gün' : new Date(task.due_date).toLocaleDateString('az-AZ',{day:'numeric',month:'short'})}
+                {days===0 ? 'Bu gün' : new Date(task.due_date).toLocaleDateString('az-AZ',{day:'numeric',month:'short'})}
               </span>
             )}
           </div>
@@ -1246,11 +1244,11 @@ export default function TapshiriqlarPage() {
   const filtered = activeTasks.filter(t => {
     if (filterProj !== 'all' && t.project_id !== filterProj) return false
     if (filterUser !== 'all') {
-      const inIds    = (t.assignee_ids||[]).includes(filterUser)
-      const inOld    = t.assignee_id === filterUser
-      // Checklist subtask-ında bu üzv var?
-      const cc = checkCounts[t.id]
-      const inCheck  = cc?.assigneeItems?.[filterUser] !== undefined
+      const inIds   = (t.assignee_ids||[]).includes(filterUser)
+      const inOld   = t.assignee_id === filterUser
+      // Checklist subtask-ında bu üzv var? (total > 0 şərti ilə)
+      const cc      = checkCounts[t.id]
+      const inCheck = cc?.assigneeItems?.[filterUser]?.total > 0
       if (!inIds && !inOld && !inCheck) return false
     }
     if (search && !t.title.toLowerCase().includes(search.toLowerCase())) return false
