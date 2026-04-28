@@ -343,8 +343,18 @@ function DetailPanel({ task, projects, members, onClose, onEdit, onDelete, onSta
 
   async function addChecklist() {
     if (!newCheck.trim()) return
-    await supabase.from('task_checklists').insert({ task_id: task.id, title: newCheck.trim(), completed: false, position: checklists.length })
-    setNewCheck(''); loadChecklists()
+    await supabase.from('task_checklists').insert({
+      task_id:     task.id,
+      title:       newCheck.trim(),
+      completed:   false,
+      position:    checklists.length,
+      assignee_id: checkAssignee || null,
+      due_date:    checkDue     || null,
+    })
+    setNewCheck('')
+    setCheckAssignee('')
+    setCheckDue('')
+    loadChecklists()
   }
   async function toggleCheck(item) {
     await supabase.from('task_checklists').update({ completed: !item.completed }).eq('id', item.id)
