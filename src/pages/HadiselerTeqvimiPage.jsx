@@ -811,7 +811,7 @@ export default function HadiselerTeqvimiPage() {
                   const isWeekend = i%7>=5
                   const ds = day ? dayStr(day) : null
                   const hasPending = dayEvs.some(e=>needsRSVP(e.event_type)&&(e.tagged_profiles||[]).includes(user?.id)&&!(e.rsvp||{})[user?.id])
-                  const isQuick = quickDay===ds
+                  const isQuick = !!quickDay && quickDay===ds
 
                   return (
                     <div key={i} className="relative" style={{zIndex: quickDay===ds ? 20 : 'auto'}}>
