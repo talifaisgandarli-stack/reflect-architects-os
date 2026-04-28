@@ -174,10 +174,10 @@ function QuickAdd({ status, projects, members, onSave, onCancel }) {
 // ─── Task Form (full) ─────────────────────────────────────────────────────────
 function TaskForm({ open, onClose, onSave, task, projects, members, defaultStatus }) {
   const { isAdmin } = useAuth()
-  const [form, setForm] = useState({ title:'', description:'', project_id:'', assignee_id:'', status: defaultStatus||'not_started', priority:'medium', due_date:'', tags:[], is_hidden:false })
+  const [form, setForm] = useState({ title:'', description:'', project_id:'', assignee_ids:[], status: defaultStatus||'not_started', priority:'medium', due_date:'', tags:[], is_hidden:false })
   useEffect(() => {
-    if (task) setForm({ title:task.title||'', description:task.description||'', project_id:task.project_id||'', assignee_id:task.assignee_id||'', status:task.status||'not_started', priority:task.priority||'medium', due_date:task.due_date||'', tags:task.tags||[], is_hidden:task.is_hidden||false })
-    else setForm({ title:'', description:'', project_id:'', assignee_id:'', status:defaultStatus||'not_started', priority:'medium', due_date:'', tags:[], is_hidden:false })
+    if (task) setForm({ title:task.title||'', description:task.description||'', project_id:task.project_id||'', assignee_ids:task.assignee_ids||[], status:task.status||'not_started', priority:task.priority||'medium', due_date:task.due_date||'', tags:task.tags||[], is_hidden:task.is_hidden||false })
+    else setForm({ title:'', description:'', project_id:'', assignee_ids:[], status:defaultStatus||'not_started', priority:'medium', due_date:'', tags:[], is_hidden:false })
   }, [task, open, defaultStatus])
   const [formErrors, setFormErrors] = useState([])
   const set = (k,v) => setForm(f => ({...f,[k]:v}))
@@ -190,7 +190,6 @@ function TaskForm({ open, onClose, onSave, task, projects, members, defaultStatu
         <div className="grid grid-cols-2 gap-2">
           {[
             ['Layihə','project_id', projects.map(p=>({v:p.id,l:p.name}))],
-            ['Cavabdeh *','assignee_id', members.map(m=>({v:m.id,l:m.full_name}))],
             ['Status','status', COLUMNS.map(c=>({v:c.key,l:c.label}))],
             ['Prioritet','priority', PRIORITIES.map(p=>({v:p.key,l:p.label}))],
           ].map(([label, key, opts]) => (
@@ -203,6 +202,24 @@ function TaskForm({ open, onClose, onSave, task, projects, members, defaultStatu
               </select>
             </div>
           ))}
+          <div className="col-span-2">
+            <label className="block text-[10px] font-semibold text-[#888] uppercase tracking-wider mb-1">Cavabdeh şəxslər <span className="text-red-400">*</span></label>
+            <div className="flex flex-wrap gap-1.5 p-2 border border-[#e8e8e4] rounded-lg max-h-24 overflow-y-auto">
+              {members.map(m => {
+                const sel = (form.assignee_ids||[]).includes(m.id)
+                return (
+                  <button key={m.id} type="button"
+                    onClick={() => set('assignee_ids', sel ? (form.assignee_ids||[]).filter(x=>x!==m.id) : [...(form.assignee_ids||[]), m.id])}
+                    className={`flex items-center gap-1 text-[10px] px-2 py-1 rounded-full border font-medium transition-all ${sel ? 'bg-[#0f172a] text-white border-[#0f172a]' : 'border-[#e8e8e4] text-[#555] hover:border-[#0f172a]'}`}>
+                    {m.full_name.split(' ')[0]}
+                  </button>
+                )
+              })}
+            </div>
+            {(form.assignee_ids||[]).length > 0 && (
+              <p className="text-[10px] text-[#888] mt-1">{(form.assignee_ids||[]).length} nəfər seçildi</p>
+            )}
+          </div>
           <div className="col-span-2">
             <label className="block text-[10px] font-semibold text-[#888] uppercase tracking-wider mb-1">
               Deadline <span className="text-red-400">*</span>
@@ -247,7 +264,7 @@ function TaskForm({ open, onClose, onSave, task, projects, members, defaultStatu
           <Button variant="secondary" onClick={onClose}>Ləğv et</Button>
           <Button onClick={() => {
             const errs = []
-            if (!form.assignee_id) errs.push('Cavabdeh seçilməlidir')
+            if (!(form.assignee_ids||[]).length) errs.push('Ən azı bir cavabdeh seçin')
             if (!form.due_date)    errs.push('Deadline məcburidir')
             if (errs.length) { setFormErrors(errs); return }
             setFormErrors([])
@@ -272,7 +289,9 @@ function DetailPanel({ task, projects, members, onClose, onEdit, onDelete, onSta
   const { addToast } = useToast()
   const [checklists, setChecklists] = useState([])
   const [comments,   setComments]   = useState([])
-  const [newCheck,   setNewCheck]   = useState('')
+  const [newCheck,     setNewCheck]     = useState('')
+  const [checkAssignee, setCheckAssignee] = useState('')
+  const [checkDue,      setCheckDue]      = useState('')
   const [newComment, setNewComment] = useState('')
   const [tab, setTab]               = useState('checklist')
   const [editingDue, setEditingDue] = useState(false)
@@ -288,7 +307,7 @@ function DetailPanel({ task, projects, members, onClose, onEdit, onDelete, onSta
   useEffect(() => { setNewDue(task.due_date || '') }, [task.due_date])
 
   async function loadChecklists() {
-    const { data } = await supabase.from('task_checklists').select('*').eq('task_id', task.id).order('position')
+    const { data } = await supabase.from('task_checklists').select('id,task_id,title,completed,position,assignee_id,due_date').eq('task_id', task.id).order('position')
     setChecklists(data || [])
   }
   async function loadComments() {
@@ -405,12 +424,18 @@ function DetailPanel({ task, projects, members, onClose, onEdit, onDelete, onSta
               {COLUMNS.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
             </select>
 
-            {assignee && (
-              <div className="flex items-center gap-1.5 px-2 py-1 bg-[#f8fafc] rounded-lg">
-                <Avatar name={assignee.full_name} size={5} />
-                <span className="text-[11px] text-[#555] font-medium">{assignee.full_name.split(' ')[0]}</span>
-              </div>
-            )}
+            {/* Cavabdeh şəxslər */}
+            <div className="flex flex-wrap gap-1.5">
+              {((task.assignee_ids||[]).length > 0
+                ? (task.assignee_ids||[]).map(id => members.find(m=>m.id===id)).filter(Boolean)
+                : assignee ? [assignee] : []
+              ).map(m => (
+                <div key={m.id} className="flex items-center gap-1.5 px-2 py-1 bg-[#f8fafc] rounded-lg">
+                  <Avatar name={m.full_name} size={5} />
+                  <span className="text-[11px] text-[#555] font-medium">{m.full_name.split(' ')[0]}</span>
+                </div>
+              ))}
+            </div>
 
             {/* Deadline — klik edib dəyiş */}
             <div>
@@ -482,16 +507,39 @@ function DetailPanel({ task, projects, members, onClose, onEdit, onDelete, onSta
               )}
               <div className="space-y-1 mb-4">
                 {checklists.map(item => (
-                  <div key={item.id} className="flex items-center gap-2.5 group py-1 px-2 rounded-lg hover:bg-[#f8fafc] transition-colors">
+                  <div key={item.id} className="flex items-start gap-2 group py-1.5 px-2 rounded-lg hover:bg-[#f8fafc] transition-colors">
                     <button onClick={() => toggleCheck(item)}
-                      className={`w-4 h-4 rounded border-2 flex-shrink-0 flex items-center justify-center transition-all ${
+                      className={`w-4 h-4 mt-0.5 rounded border-2 flex-shrink-0 flex items-center justify-center transition-all ${
                         item.completed ? 'bg-[#22c55e] border-[#22c55e]' : 'border-[#d1d5db] hover:border-[#0f172a]'
                       }`}>
                       {item.completed && <IconCheck size={9} className="text-white" strokeWidth={3} />}
                     </button>
-                    <span className={`text-xs flex-1 leading-relaxed transition-colors ${
-                      item.completed ? 'line-through text-[#bbb]' : 'text-[#333]'
-                    }`}>{item.title}</span>
+                    <div className="flex-1 min-w-0">
+                      <span className={`text-xs leading-relaxed transition-colors block ${
+                        item.completed ? 'line-through text-[#bbb]' : 'text-[#333]'
+                      }`}>{item.title}</span>
+                      {(item.assignee_id || item.due_date) && (
+                        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                          {item.assignee_id && (() => {
+                            const m = members.find(mb=>mb.id===item.assignee_id)
+                            return m ? (
+                              <span className="text-[10px] text-[#888] flex items-center gap-1">
+                                <Avatar name={m.full_name} size={5} />
+                                {m.full_name.split(' ')[0]}
+                              </span>
+                            ) : null
+                          })()}
+                          {item.due_date && (
+                            <span className={`text-[10px] font-medium flex items-center gap-0.5 ${
+                              new Date(item.due_date) < new Date() && !item.completed ? 'text-red-500' : 'text-[#aaa]'
+                            }`}>
+                              <IconCalendar size={9} />
+                              {new Date(item.due_date).toLocaleDateString('az-AZ',{day:'numeric',month:'short'})}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
                     <button onClick={() => deleteCheck(item.id)}
                       className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded text-[#ccc] hover:text-red-400 transition-all">
                       <IconX size={11} />
@@ -499,15 +547,26 @@ function DetailPanel({ task, projects, members, onClose, onEdit, onDelete, onSta
                   </div>
                 ))}
               </div>
-              <div className="flex gap-2 items-center border-t border-[#f5f5f0] pt-3">
-                <input value={newCheck} onChange={e => setNewCheck(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && addChecklist()}
-                  className="flex-1 px-3 py-2 bg-[#f8fafc] border border-transparent rounded-xl text-xs focus:outline-none focus:border-[#0f172a] focus:bg-white transition-all placeholder-[#bbb]"
-                  placeholder="Yeni addım əlavə et... (Enter)" />
-                <button onClick={addChecklist}
-                  className="w-8 h-8 flex items-center justify-center bg-[#0f172a] text-white rounded-xl hover:bg-[#1e293b] transition-colors flex-shrink-0">
-                  <IconPlus size={13} />
-                </button>
+              <div className="border-t border-[#f5f5f0] pt-3 space-y-2">
+                <div className="flex gap-2 items-center">
+                  <input value={newCheck} onChange={e => setNewCheck(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && addChecklist()}
+                    className="flex-1 px-3 py-2 bg-[#f8fafc] border border-transparent rounded-xl text-xs focus:outline-none focus:border-[#0f172a] focus:bg-white transition-all placeholder-[#bbb]"
+                    placeholder="Yeni addım əlavə et..." />
+                  <button onClick={addChecklist}
+                    className="w-8 h-8 flex items-center justify-center bg-[#0f172a] text-white rounded-xl hover:bg-[#1e293b] transition-colors flex-shrink-0">
+                    <IconPlus size={13} />
+                  </button>
+                </div>
+                <div className="flex gap-2">
+                  <select value={checkAssignee} onChange={e => setCheckAssignee(e.target.value)}
+                    className="flex-1 px-2 py-1.5 bg-[#f8fafc] border border-transparent rounded-lg text-[11px] focus:outline-none focus:border-[#0f172a] focus:bg-white text-[#888]">
+                    <option value="">Cavabdeh seçin...</option>
+                    {members.map(m => <option key={m.id} value={m.id}>{m.full_name}</option>)}
+                  </select>
+                  <input type="date" value={checkDue} onChange={e => setCheckDue(e.target.value)}
+                    className="px-2 py-1.5 bg-[#f8fafc] border border-transparent rounded-lg text-[11px] focus:outline-none focus:border-[#0f172a] focus:bg-white text-[#888]" />
+                </div>
               </div>
             </div>
           )}
@@ -962,7 +1021,7 @@ export default function TapshiriqlarPage() {
 
   async function handleSave(form) {
     if (!form.title.trim()) { addToast('Tapşırıq adı daxil edin', 'error'); return }
-    const data = { title:form.title.trim(), description:form.description||null, project_id:form.project_id||null, assignee_id:form.assignee_id||null, status:form.status, priority:form.priority, due_date:form.due_date||null, tags:form.tags||[], is_hidden:form.is_hidden||false }
+    const data = { title:form.title.trim(), description:form.description||null, project_id:form.project_id||null, assignee_ids:form.assignee_ids||[], status:form.status, priority:form.priority, due_date:form.due_date||null, tags:form.tags||[], is_hidden:form.is_hidden||false }
     if (editTask) {
       const { error } = await supabase.from('tasks').update(data).eq('id', editTask.id)
       if (error) { addToast('Xəta: '+error.message,'error'); return }
@@ -980,8 +1039,10 @@ export default function TapshiriqlarPage() {
       if (error) { addToast('Xəta: '+error.message,'error'); return }
       await supabase.from('task_comments').insert({ task_id:inserted.id, author_id:user?.id, type:'activity', content:'tapşırıq yaradıldı', metadata:{} })
       // Cavabdehə bildiriş
-      if (data.assignee_id && data.assignee_id !== user?.id) {
-        await notify(data.assignee_id, 'Yeni tapşırıq', data.title, 'info', '/tapshiriqlar?task=' + inserted.id)
+      for (const uid of (data.assignee_ids||[])) {
+        if (uid !== user?.id) {
+          await notify(uid, 'Yeni tapşırıq', data.title, 'info', '/tapshiriqlar?task=' + inserted.id)
+        }
       }
       addToast('Tapşırıq əlavə edildi','success')
     }
@@ -995,7 +1056,8 @@ export default function TapshiriqlarPage() {
       title: form.title,
       status: form.status,
       project_id: form.project_id || null,
-      assignee_id: form.assignee_id || null,
+      assignee_ids: form.assignee_ids || [],
+      assignee_id: (form.assignee_ids||[])[0] || null,
       priority: 'medium',
       due_date: form.due_date || null,
       description: null,
@@ -1009,8 +1071,8 @@ export default function TapshiriqlarPage() {
     setTasks(prev => [inserted, ...prev])
     // Activity + bildiriş (fire and forget)
     supabase.from('task_comments').insert({ task_id:inserted.id, author_id:user?.id, type:'activity', content:'tapşırıq yaradıldı', metadata:{} })
-    if (form.assignee_id && form.assignee_id !== user?.id) {
-      notify(form.assignee_id, 'Yeni tapşırıq', form.title, 'info', '/tapshiriqlar?task=' + inserted.id)
+    for (const uid of (form.assignee_ids||[])) {
+      if (uid !== user?.id) notify(uid, 'Yeni tapşırıq', form.title, 'info', '/tapshiriqlar?task=' + inserted.id)
     }
     // checkCounts yenilə
     setCheckCounts(prev => ({ ...prev, [inserted.id]: { done:0, total:0 } }))
@@ -1113,7 +1175,11 @@ export default function TapshiriqlarPage() {
   const activeTasks = tasks.filter(t => !t.archived && (isAdmin || !t.is_hidden))
   const filtered = activeTasks.filter(t => {
     if (filterProj !== 'all' && t.project_id !== filterProj) return false
-    if (filterUser !== 'all' && t.assignee_id !== filterUser) return false
+    if (filterUser !== 'all') {
+      const inIds = (t.assignee_ids||[]).includes(filterUser)
+      const inOld = t.assignee_id === filterUser
+      if (!inIds && !inOld) return false
+    }
     if (search && !t.title.toLowerCase().includes(search.toLowerCase())) return false
     if (filterTag !== 'all' && !(t.tags||[]).includes(filterTag)) return false
     // Gizli tapşırıqlar: showHidden=true olduqda yalnız hidden-lar, default-da hidden-lar gizlənir (non-admin üçün activeTasks-da artıq yoxdur)
