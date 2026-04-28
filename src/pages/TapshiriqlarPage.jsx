@@ -747,7 +747,7 @@ function DetailPanel({ task, projects, members, onClose, onEdit, onDelete, onSta
 }
 
 // ─── Kanban Card ──────────────────────────────────────────────────────────────
-function KanbanCard({ task, projects, members, checkCounts, commentCounts, onClick, onArchive, onDragStart, onDragEnd, isDragging, filterUser }) {
+function KanbanCard({ task, projects, members, checkCounts, commentCounts, onClick, onArchive, onDragStart, onDragEnd, isDragging, filterUser, mySubtasks }) {
   const project  = projects.find(p => p.id === task.project_id)
   const assignee = members.find(m => m.id === task.assignee_id)
   const days = daysLeft(task.due_date)
@@ -875,6 +875,38 @@ function KanbanCard({ task, projects, members, checkCounts, commentCounts, onCli
         </div>
       </div>
 
+      {/* filterUser-in subtask-ları — card expand */}
+      {mySubtasks && mySubtasks.length > 0 && (
+        <div className="border-t border-[#f0f0ec] px-3.5 py-2.5 bg-[#f8faff]"
+          onClick={e => e.stopPropagation()}>
+          <div className="text-[9px] font-bold text-blue-500 uppercase tracking-wider mb-1.5">
+            Sizin subtask-lar ({mySubtasks.filter(s=>s.completed).length}/{mySubtasks.length})
+          </div>
+          <div className="space-y-1">
+            {mySubtasks.map(item => {
+              const isOverdue = item.due_date && !item.completed && new Date(item.due_date) < new Date()
+              return (
+                <div key={item.id} className={`flex items-center gap-2 py-0.5 px-1.5 rounded-md ${isOverdue ? 'bg-orange-50' : ''}`}>
+                  <div className={`w-3 h-3 rounded border flex-shrink-0 flex items-center justify-center ${
+                    item.completed ? 'bg-[#22c55e] border-[#22c55e]' : isOverdue ? 'border-orange-400' : 'border-[#d1d5db]'
+                  }`}>
+                    {item.completed && <IconCheck size={8} className="text-white" strokeWidth={3} />}
+                  </div>
+                  <span className={`text-[10px] flex-1 leading-snug ${item.completed ? 'line-through text-[#bbb]' : isOverdue ? 'text-orange-700 font-medium' : 'text-[#333]'}`}>
+                    {item.title}
+                  </span>
+                  {item.due_date && (
+                    <span className={`text-[8px] font-medium flex-shrink-0 ${isOverdue ? 'text-orange-500' : 'text-[#bbb]'}`}>
+                      {isOverdue ? '⚠ ' : ''}{new Date(item.due_date).toLocaleDateString('az-AZ',{day:'numeric',month:'short'})}
+                    </span>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Archive button — always visible on hover, outside overflow-hidden */}
       <button
         onClick={e => { e.stopPropagation(); onArchive(task) }}
@@ -887,7 +919,7 @@ function KanbanCard({ task, projects, members, checkCounts, commentCounts, onCli
 }
 
 // ─── Kanban Column ────────────────────────────────────────────────────────────
-function KanbanColumn({ column, tasks, projects, members, checkCounts, commentCounts, onCardClick, onQuickAdd, onArchive, dragTaskId, onDragStart, onDragEnd, onDrop, onDragOver, isDragOver, filterUser }) {
+function KanbanColumn({ column, tasks, projects, members, checkCounts, commentCounts, onCardClick, onQuickAdd, onArchive, dragTaskId, onDragStart, onDragEnd, onDrop, onDragOver, isDragOver, filterUser, mySubtasksMap }) {
   const [adding, setAdding] = useState(false)
 
   return (
@@ -1010,6 +1042,7 @@ export default function TapshiriqlarPage() {
   const [members,       setMembers]       = useState([])
   const [checkCounts,   setCheckCounts]   = useState({})
   const [commentCounts, setCommentCounts] = useState({})
+  const [allChecklists, setAllChecklists] = useState([]) // bütün subtask-lar
   const [loading,       setLoading]       = useState(true)
   const [view,          setView]          = useState('kanban')
   const [filterProj,    setFilterProj]    = useState('all')
@@ -1266,6 +1299,15 @@ export default function TapshiriqlarPage() {
   })
   const tasksByCol = Object.fromEntries(COLUMNS.map(c => [c.key, filtered.filter(t => t.status===c.key)]))
   const overdueCount = activeTasks.filter(t => { const d=daysLeft(t.due_date); return t.status!=='done'&&d!==null&&d<0 }).length
+  // filterUser seçildiyi halda hər task üçün onun subtask-ları
+  const mySubtasksMap = filterUser !== 'all'
+    ? Object.fromEntries(
+        activeTasks.map(t => [
+          t.id,
+          allChecklists.filter(item => item.task_id === t.id && item.assignee_id === filterUser)
+        ]).filter(([, items]) => items.length > 0)
+      )
+    : {}
   // Seçilmiş üzvün gecikmiş subtask-ları
   const myOverdueSubtasks = filterUser !== 'all'
     ? activeTasks.flatMap(t => {
@@ -1290,11 +1332,27 @@ export default function TapshiriqlarPage() {
         <div className="flex items-center justify-between mb-4">
           <div>
             <h1 className="text-sm font-bold text-[#0f172a]">Tapşırıqlar</h1>
-            <p className="text-[11px] text-[#888] mt-0.5">
-              {activeTasks.length} aktiv
-              {overdueCount > 0 && <span className="text-red-500 font-medium ml-1.5">· {overdueCount} gecikmiş</span>}
-              {tasks.filter(t=>t.archived).length > 0 && <span className="text-[#bbb] ml-1.5">· {tasks.filter(t=>t.archived).length} arxivdə</span>}
-            </p>
+            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+              <span className="text-[11px] text-[#888]">{activeTasks.length} aktiv</span>
+              {overdueCount > 0 && (
+                <span className="text-[10px] font-bold text-red-500 bg-red-50 px-2 py-0.5 rounded-full">
+                  🔴 {overdueCount} gecikmiş task
+                </span>
+              )}
+              {(() => {
+                const n = activeTasks.reduce((s,t) => s + ((checkCounts[t.id]?.overdueItems||[]).length), 0)
+                return n > 0 ? (
+                  <span className="text-[10px] font-bold text-orange-500 bg-orange-50 px-2 py-0.5 rounded-full">
+                    🟠 {n} gecikmiş subtask
+                  </span>
+                ) : null
+              })()}
+              {tasks.filter(t=>t.archived).length > 0 && (
+                <span className="text-[10px] text-[#bbb] bg-[#f5f5f0] px-2 py-0.5 rounded-full">
+                  {tasks.filter(t=>t.archived).length} arxivdə
+                </span>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <div className="flex border border-[#e8e8e4] rounded-lg overflow-hidden">
@@ -1399,6 +1457,7 @@ export default function TapshiriqlarPage() {
                   onDragOver={key => setDragOverCol(key)}
                   isDragOver={dragOverCol === column.key}
                   filterUser={filterUser}
+                  mySubtasksMap={mySubtasksMap}
                 />
               ))}
             </div>
