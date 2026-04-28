@@ -119,44 +119,69 @@ function MentionInput({ value, onChange, members, placeholder, rows=1, className
 
 // ─── Inline Quick-Add (Trello style) ─────────────────────────────────────────
 function QuickAdd({ status, projects, members, onSave, onCancel }) {
-  const [title,    setTitle]    = useState('')
-  const [projId,   setProjId]   = useState('')
-  const [assignee, setAssignee] = useState('')
-  const [due,      setDue]      = useState('')
-  const [errors,   setErrors]   = useState({})
+  const [title,      setTitle]      = useState('')
+  const [projId,     setProjId]     = useState('')
+  const [assignees,  setAssignees]  = useState([])
+  const [due,        setDue]        = useState('')
+  const [errors,     setErrors]     = useState({})
   const ref = useRef(null)
   useEffect(() => { ref.current?.focus() }, [])
 
+  function toggleAssignee(id) {
+    setAssignees(prev => prev.includes(id) ? prev.filter(x=>x!==id) : [...prev, id])
+    setErrors(v => ({...v, assignee: false}))
+  }
+
   function save() {
     const errs = {}
-    if (!title.trim())  errs.title    = true
-    if (!assignee)      errs.assignee = true
-    if (!due)           errs.due      = true
+    if (!title.trim())       errs.title    = true
+    if (!assignees.length)   errs.assignee = true
+    if (!due)                errs.due      = true
     if (Object.keys(errs).length) { setErrors(errs); return }
-    onSave({ title: title.trim(), status, project_id: projId || null,
-      assignee_id: assignee, priority: 'medium', due_date: due, description: null })
+    onSave({
+      title: title.trim(), status,
+      project_id:   projId || null,
+      assignee_ids: assignees,
+      assignee_id:  assignees[0] || null,
+      priority: 'medium', due_date: due, description: null
+    })
   }
 
   return (
     <div className="bg-white rounded-xl border-2 border-[#0f172a] shadow-lg p-3 space-y-2">
       <textarea ref={ref} value={title} onChange={e => { setTitle(e.target.value); setErrors(v=>({...v,title:false})) }}
-        onKeyDown={e => { if (e.key==='Enter'&&!e.shiftKey){e.preventDefault();save()} if(e.key==='Escape')onCancel() }}
+        onKeyDown={e => { if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();save()} if(e.key==='Escape')onCancel() }}
         rows={2} placeholder="Tapşırıq adı..."
         className={`w-full text-xs text-[#0f172a] outline-none resize-none leading-relaxed placeholder-[#ccc] ${errors.title?'placeholder-red-400':''}`} />
+
       <select value={projId} onChange={e => setProjId(e.target.value)}
         className="w-full text-[10px] px-2 py-1.5 border border-[#f0f0ec] rounded-lg outline-none text-[#888] bg-[#fafafa]">
         <option value="">Layihə seçin...</option>
         {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
       </select>
-      <select value={assignee} onChange={e => { setAssignee(e.target.value); setErrors(v=>({...v,assignee:false})) }}
-        className={`w-full text-[10px] px-2 py-1.5 border rounded-lg outline-none bg-[#fafafa] ${errors.assignee ? 'border-red-400 text-red-500' : 'border-[#f0f0ec] text-[#888]'}`}>
-        <option value="">{errors.assignee ? '⚠ Cavabdeh seçin!' : 'Cavabdeh seçin...'}</option>
-        {members.map(m => <option key={m.id} value={m.id}>{m.full_name}</option>)}
-      </select>
+
+      {/* Multi-select cavabdeh */}
+      <div>
+        <div className={`flex flex-wrap gap-1 p-1.5 border rounded-lg bg-[#fafafa] ${errors.assignee ? 'border-red-400' : 'border-[#f0f0ec]'}`}>
+          {members.map(m => (
+            <button key={m.id} type="button" onClick={() => toggleAssignee(m.id)}
+              className={`text-[10px] px-2 py-1 rounded-full font-medium border transition-all ${
+                assignees.includes(m.id)
+                  ? 'bg-[#0f172a] text-white border-[#0f172a]'
+                  : 'border-[#e0e0e0] text-[#555] bg-white hover:border-[#0f172a]'
+              }`}>
+              {m.full_name.split(' ')[0]}
+            </button>
+          ))}
+        </div>
+        {errors.assignee && <p className="text-[10px] text-red-500 mt-0.5">⚠ Cavabdeh seçin</p>}
+        {assignees.length > 0 && <p className="text-[10px] text-[#888] mt-0.5">{assignees.length} nəfər seçildi</p>}
+      </div>
+
       <input type="date" value={due} onChange={e => { setDue(e.target.value); setErrors(v=>({...v,due:false})) }}
-        className={`w-full text-[10px] px-2 py-1.5 border rounded-lg outline-none ${errors.due ? 'border-red-400 bg-red-50 text-red-600' : 'border-[#f0f0ec] bg-[#fafafa] text-[#888]'}`}
-        placeholder={errors.due ? 'Deadline məcburidir!' : ''} />
+        className={`w-full text-[10px] px-2 py-1.5 border rounded-lg outline-none ${errors.due ? 'border-red-400 bg-red-50 text-red-600' : 'border-[#f0f0ec] bg-[#fafafa] text-[#888]'}`} />
       {errors.due && <p className="text-[10px] text-red-500 -mt-1">⚠ Deadline məcburidir</p>}
+
       <div className="flex gap-1.5">
         <button onClick={save}
           className="flex-1 py-1.5 bg-[#0f172a] text-white text-[10px] font-semibold rounded-lg hover:bg-[#1e293b] transition-colors">
