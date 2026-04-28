@@ -542,7 +542,9 @@ function DetailPanel({ task, projects, members, onClose, onEdit, onDelete, onSta
               )}
               <div className="space-y-1 mb-4">
                 {checklists.map(item => (
-                  <div key={item.id} className="flex items-start gap-2 group py-1.5 px-2 rounded-lg hover:bg-[#f8fafc] transition-colors">
+                  <div key={item.id} className={`flex items-start gap-2 group py-1.5 px-2 rounded-lg transition-colors ${
+                    item.due_date && !item.completed && new Date(item.due_date) < new Date() ? 'bg-red-50/60 hover:bg-red-50' : 'hover:bg-[#f8fafc]'
+                  }`}>
                     <button onClick={() => toggleCheck(item)}
                       className={`w-4 h-4 mt-0.5 rounded border-2 flex-shrink-0 flex items-center justify-center transition-all ${
                         item.completed ? 'bg-[#22c55e] border-[#22c55e]' : 'border-[#d1d5db] hover:border-[#0f172a]'
@@ -1033,17 +1035,29 @@ export default function TapshiriqlarPage() {
       supabase.from('tasks').select('*').order('created_at', { ascending: false }),
       supabase.from('projects').select('id, name').order('name'),
       supabase.from('profiles').select('id, full_name').eq('is_active', true).order('full_name'),
-      supabase.from('task_checklists').select('task_id, completed'),
+      supabase.from('task_checklists').select('task_id, completed, assignee_id, due_date'),
       supabase.from('task_comments').select('task_id, type'),
     ])
     setTasks(tRes.data || [])
     setProjects(pRes.data || [])
     setMembers(mRes.data || [])
     const cc = {}
+    const now = new Date(); now.setHours(0,0,0,0)
     for (const item of (ckRes.data||[])) {
-      if (!cc[item.task_id]) cc[item.task_id] = { done:0, total:0 }
+      if (!cc[item.task_id]) cc[item.task_id] = { done:0, total:0, overdueItems:[], assigneeItems:{} }
       cc[item.task_id].total++
       if (item.completed) cc[item.task_id].done++
+      else if (item.due_date && new Date(item.due_date) < now) {
+        cc[item.task_id].overdueItems.push(item)
+      }
+      // Subtask-ları cavabdehə görə indekslə
+      if (item.assignee_id) {
+        if (!cc[item.task_id].assigneeItems[item.assignee_id]) {
+          cc[item.task_id].assigneeItems[item.assignee_id] = { done:0, total:0 }
+        }
+        cc[item.task_id].assigneeItems[item.assignee_id].total++
+        if (item.completed) cc[item.task_id].assigneeItems[item.assignee_id].done++
+      }
     }
     setCheckCounts(cc)
     const cmt = {}
@@ -1056,7 +1070,7 @@ export default function TapshiriqlarPage() {
 
   async function handleSave(form) {
     if (!form.title.trim()) { addToast('Tapşırıq adı daxil edin', 'error'); return }
-    const data = { title:form.title.trim(), description:form.description||null, project_id:form.project_id||null, assignee_ids:form.assignee_ids||[], status:form.status, priority:form.priority, due_date:form.due_date||null, tags:form.tags||[], is_hidden:form.is_hidden||false }
+    const data = { title:form.title.trim(), description:form.description||null, project_id:form.project_id||null, assignee_ids:form.assignee_ids||[], assignee_id:(form.assignee_ids||[])[0]||null, status:form.status, priority:form.priority, due_date:form.due_date||null, tags:form.tags||[], is_hidden:form.is_hidden||false }
     if (editTask) {
       const { error } = await supabase.from('tasks').update(data).eq('id', editTask.id)
       if (error) { addToast('Xəta: '+error.message,'error'); return }
@@ -1138,9 +1152,12 @@ export default function TapshiriqlarPage() {
     }
     // 3. Activity log
     supabase.from('task_comments').insert({ task_id:task.id, author_id:user?.id, type:'activity', content:'status dəyişdi', metadata:{ old_status:task.status, new_status:newStatus } })
-    // 4. Bildiriş
-    if (task.assignee_id && task.assignee_id !== user?.id && newStatus === 'done') {
-      notify(task.assignee_id, task.title, 'Tapşırıq tamamlandı kimi işarələndi', 'success', '/tapshiriqlar?task=' + task.id)
+    // 4. Bildiriş — bütün cavabdehlərə
+    if (newStatus === 'done') {
+      const allAssignees = (task.assignee_ids||[]).length > 0 ? task.assignee_ids : (task.assignee_id ? [task.assignee_id] : [])
+      for (const uid of allAssignees) {
+        if (uid !== user?.id) notify(uid, task.title, 'Tapşırıq tamamlandı kimi işarələndi', 'success', '/tapshiriqlar?task=' + task.id)
+      }
     }
     // 5. loadData yoxdur — optimistic kifayətdir
   }
@@ -1211,16 +1228,24 @@ export default function TapshiriqlarPage() {
   const filtered = activeTasks.filter(t => {
     if (filterProj !== 'all' && t.project_id !== filterProj) return false
     if (filterUser !== 'all') {
-      const inIds = (t.assignee_ids||[]).includes(filterUser)
-      const inOld = t.assignee_id === filterUser
-      if (!inIds && !inOld) return false
+      const inIds    = (t.assignee_ids||[]).includes(filterUser)
+      const inOld    = t.assignee_id === filterUser
+      // Checklist subtask-ında bu üzv var?
+      const cc = checkCounts[t.id]
+      const inCheck  = cc?.assigneeItems?.[filterUser] !== undefined
+      if (!inIds && !inOld && !inCheck) return false
     }
     if (search && !t.title.toLowerCase().includes(search.toLowerCase())) return false
     if (filterTag !== 'all' && !(t.tags||[]).includes(filterTag)) return false
-    // Gizli tapşırıqlar: showHidden=true olduqda yalnız hidden-lar, default-da hidden-lar gizlənir (non-admin üçün activeTasks-da artıq yoxdur)
     if (isAdmin && !showHidden && t.is_hidden) return false
     if (isAdmin && showHidden && !t.is_hidden) return false
-    if (filterOverdue) { const d=daysLeft(t.due_date); if (t.status==='done'||d===null||d>=0) return false }
+    if (filterOverdue) {
+      const d = daysLeft(t.due_date)
+      const hasOverdueCheck = (checkCounts[t.id]?.overdueItems||[]).length > 0
+      if (t.status==='done' && !hasOverdueCheck) return false
+      if (d!==null && d>=0 && !hasOverdueCheck) return false
+      if (d===null && !hasOverdueCheck) return false
+    }
     return true
   })
   const tasksByCol = Object.fromEntries(COLUMNS.map(c => [c.key, filtered.filter(t => t.status===c.key)]))
@@ -1386,7 +1411,18 @@ export default function TapshiriqlarPage() {
                         {project && <div className="text-[9px] mt-0.5" style={{color:projClr(project.id,projects)}}>{project.name}</div>}
                       </td>
                       <td className="py-3 pr-4">
-                        {assignee && <div className="flex items-center gap-1.5"><Avatar name={assignee.full_name} size={5}/><span className="text-[10px] text-[#555]">{assignee.full_name.split(' ')[0]}</span></div>}
+                        <div className="flex items-center gap-1 flex-wrap">
+                          {((task.assignee_ids||[]).length > 0
+                            ? (task.assignee_ids||[]).map(id=>members.find(m=>m.id===id)).filter(Boolean)
+                            : assignee ? [assignee] : []
+                          ).slice(0,2).map((m,i) => (
+                            <div key={m.id} className="flex items-center gap-1">
+                              <Avatar name={m.full_name} size={5}/>
+                              {i===0 && <span className="text-[10px] text-[#555]">{m.full_name.split(' ')[0]}</span>}
+                            </div>
+                          ))}
+                          {(task.assignee_ids||[]).length > 2 && <span className="text-[9px] text-[#aaa]">+{(task.assignee_ids||[]).length-2}</span>}
+                        </div>
                       </td>
                       <td className="py-3 pr-4">
                         <span className="text-[10px] font-medium px-2 py-0.5 rounded-full" style={{background:cl.bg,color:cl.color}}>{cl.label}</span>
