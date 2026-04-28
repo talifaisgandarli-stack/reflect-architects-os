@@ -1084,7 +1084,7 @@ export default function TapshiriqlarPage() {
       supabase.from('tasks').select('*').order('created_at', { ascending: false }),
       supabase.from('projects').select('id, name').order('name'),
       supabase.from('profiles').select('id, full_name').eq('is_active', true).order('full_name'),
-      supabase.from('task_checklists').select('task_id, completed, assignee_id, due_date'),
+      supabase.from('task_checklists').select('id, task_id, title, completed, assignee_id, due_date'),
       supabase.from('task_comments').select('task_id, type'),
     ])
     setTasks(tRes.data || [])
