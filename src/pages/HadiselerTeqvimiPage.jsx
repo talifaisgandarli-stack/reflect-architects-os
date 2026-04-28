@@ -48,6 +48,7 @@ function QuickAdd({ date, time, members, onSave, onExpand, onClose }) {
   const [title, setTitle] = useState('')
   const [selType, setSelType] = useState('meeting')
   const [startTime, setStartTime] = useState(time || '')
+  const [endTime, setEndTime] = useState('')
   const [tagged, setTagged] = useState([])
   const inputRef = useRef(null)
 
@@ -62,7 +63,7 @@ function QuickAdd({ date, time, members, onSave, onExpand, onClose }) {
     await onSave({
       title: title.trim(), event_type: selType,
       start_date: date, end_date: date,
-      start_time: startTime, end_time: '',
+      start_time: startTime, end_time: endTime,
       notes: '', tagged_profiles: tagged
     })
   }
@@ -85,14 +86,19 @@ function QuickAdd({ date, time, members, onSave, onExpand, onClose }) {
           className="w-full text-sm font-semibold text-[#0f172a] placeholder-[#bbb] outline-none border-b border-[#f0f0ec] pb-2" />
 
         {/* Tarix + saat */}
-        <div className="flex items-center gap-2 text-xs text-[#888]">
-          <IconCalendar size={12} />
-          <span className="font-medium">{fmtDate(date)}</span>
-          {startTime && <>
-            <IconClock size={12} />
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-1.5 text-xs text-[#888]">
+            <IconCalendar size={12} />
+            <span className="font-medium text-[#555]">{fmtDate(date)}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <IconClock size={12} className="text-[#bbb]" />
             <input type="time" value={startTime} onChange={e => setStartTime(e.target.value)}
-              className="outline-none text-[#0f172a] font-medium border-b border-[#f0f0ec]" />
-          </>}
+              className="outline-none text-sm text-[#0f172a] font-medium border-b border-[#e8e8e4] focus:border-[#0f172a] bg-transparent" />
+            <span className="text-[#bbb] text-xs">–</span>
+            <input type="time" value={endTime} onChange={e => setEndTime(e.target.value)}
+              className="outline-none text-sm text-[#555] border-b border-[#e8e8e4] focus:border-[#0f172a] bg-transparent" />
+          </div>
         </div>
 
         {/* Növ pills */}
@@ -768,23 +774,37 @@ export default function HadiselerTeqvimiPage() {
         {/* ── Təqvim / Həftəlik ── */}
         <div className="lg:col-span-2">
           {viewMode==='week' ? (
-            <WeekView
-              events={filtered} members={members}
-              weekStart={weekStart}
-              onEventClick={e=>setSheet(e)}
-              onDayClick={ds=>{setQuickDay(ds); setQuickTime('')}}
-            />
+            <div className="space-y-3">
+              <WeekView
+                events={filtered} members={members}
+                weekStart={weekStart}
+                onEventClick={e=>setSheet(e)}
+                onDayClick={ds=>{setQuickDay(ds); setQuickTime('')}}
+              />
+              {quickDay && viewMode==='week' && (
+                <div className="relative">
+                  <QuickAdd
+                    date={quickDay}
+                    time={quickTime}
+                    members={members}
+                    onSave={form=>handleSave(form, null)}
+                    onExpand={()=>{setQuickDay(null);setEditEvent(null);setFullModal(true)}}
+                    onClose={()=>setQuickDay(null)}
+                  />
+                </div>
+              )}
+            </div>
           ) : (
-            <div className="bg-white border border-[#e8e8e4] rounded-2xl overflow-hidden">
+            <div className="bg-white border border-[#e8e8e4] rounded-2xl" style={{overflow:'visible'}}>
               {/* Day headers */}
-              <div className="grid grid-cols-7 bg-[#fafafa] border-b border-[#f0f0ec]">
+              <div className="grid grid-cols-7 bg-[#fafafa] border-b border-[#f0f0ec] rounded-t-2xl overflow-hidden">
                 {WEEKDAYS.map((d,i)=>(
                   <div key={d} className={`py-2.5 text-center text-[10px] font-bold uppercase tracking-wider ${i>=5?'text-[#ddd]':'text-[#c0c0c0]'}`}>{d}</div>
                 ))}
               </div>
 
               {/* Grid cells */}
-              <div className="grid grid-cols-7">
+              <div className="grid grid-cols-7" style={{overflow:'visible'}}>
                 {cells.map((day,i)=>{
                   const dayEvs = eventsForDay(day)
                   const isToday = day && viewYear===now.getFullYear() && viewMonth===now.getMonth() && day===now.getDate()
@@ -794,7 +814,7 @@ export default function HadiselerTeqvimiPage() {
                   const isQuick = quickDay===ds
 
                   return (
-                    <div key={i} className="relative">
+                    <div key={i} className="relative" style={{zIndex: quickDay===ds ? 20 : 'auto'}}>
                       <div
                         className={`min-h-[90px] p-1.5 border-b border-r border-[#f5f5f0] transition-colors ${
                           day?'cursor-pointer hover:bg-[#fafaf8]':''
