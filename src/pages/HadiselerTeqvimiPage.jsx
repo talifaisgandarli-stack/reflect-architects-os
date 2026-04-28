@@ -50,6 +50,7 @@ function QuickAdd({ date, time, members, onSave, onExpand, onClose }) {
   const [startTime, setStartTime] = useState(time || '')
   const [endTime, setEndTime] = useState('')
   const [tagged, setTagged] = useState([])
+  const [memberSearch, setMemberSearch] = useState('')
   const inputRef = useRef(null)
 
   useEffect(() => { inputRef.current?.focus() }, [])
@@ -114,23 +115,62 @@ function QuickAdd({ date, time, members, onSave, onExpand, onClose }) {
           ))}
         </div>
 
-        {/* İştirakçılar */}
+        {/* İştirakçılar — mini search */}
         {members.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            <button onClick={() => setTagged(tagged.length===members.length ? [] : members.map(m=>m.id))}
-              className={`text-[10px] px-2 py-1 rounded-full font-medium border transition-all ${
-                tagged.length===members.length ? 'bg-[#0f172a] text-white border-[#0f172a]' : 'border-[#e8e8e4] text-[#555]'
-              }`}>
-              <IconUsers size={9} className="inline mr-0.5" /> Hamı
-            </button>
-            {members.slice(0,5).map(m => (
-              <button key={m.id} onClick={() => toggleMember(m.id)}
-                className={`text-[10px] px-2 py-1 rounded-full font-medium border transition-all ${
-                  tagged.includes(m.id) ? 'bg-[#0f172a] text-white border-[#0f172a]' : 'border-[#e8e8e4] text-[#555]'
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-1.5">
+              <div className="flex-1 flex items-center gap-1.5 px-2 py-1.5 border border-[#e8e8e4] rounded-lg bg-[#fafafa]">
+                <IconUser size={10} className="text-[#bbb] flex-shrink-0" />
+                <input
+                  value={memberSearch}
+                  onChange={e => setMemberSearch(e.target.value)}
+                  placeholder="Ad axtar..."
+                  className="flex-1 text-[11px] outline-none bg-transparent placeholder-[#ccc] text-[#0f172a]"
+                />
+                {memberSearch && (
+                  <button onClick={() => setMemberSearch('')} className="text-[#bbb] hover:text-[#555]">
+                    <IconX size={9} />
+                  </button>
+                )}
+              </div>
+              <button onClick={() => { setTagged(tagged.length===members.length ? [] : members.map(m=>m.id)); setMemberSearch('') }}
+                className={`flex items-center gap-1 text-[10px] px-2 py-1.5 rounded-lg font-semibold border flex-shrink-0 transition-all ${
+                  tagged.length===members.length ? 'bg-[#0f172a] text-white border-[#0f172a]' : 'border-[#e8e8e4] text-[#555] hover:border-[#0f172a]'
                 }`}>
+                <IconUsers size={9}/> Hamı
+              </button>
+            </div>
+            {/* Seçilənlər + axtarış nəticəsi */}
+            <div className="flex flex-wrap gap-1">
+              {/* Tag olunmuş amma searchdə görünməyənlər */}
+              {tagged.filter(id => {
+                const m = members.find(m=>m.id===id)
+                return m && !m.full_name.toLowerCase().includes(memberSearch.toLowerCase())
+              }).map(id => {
+                const m = members.find(m=>m.id===id)
+                return m ? (
+                  <button key={id} onClick={() => toggleMember(id)}
+                    className="text-[10px] px-2 py-1 rounded-full font-medium bg-[#0f172a] text-white border border-[#0f172a] flex items-center gap-1">
+                    {m.full_name.split(' ')[0]} <IconX size={8}/>
+                  </button>
+                ) : null
+              })}
+              {/* Axtarış nəticəsi */}
+              {members
+                .filter(m => m.full_name.toLowerCase().includes(memberSearch.toLowerCase()))
+                .slice(0, memberSearch ? 8 : 5)
+                .map(m => (
+                <button key={m.id} onClick={() => toggleMember(m.id)}
+                  className={`text-[10px] px-2 py-1 rounded-full font-medium border transition-all ${
+                    tagged.includes(m.id) ? 'bg-[#0f172a] text-white border-[#0f172a]' : 'border-[#e8e8e4] text-[#555] hover:border-[#0f172a]'
+                  }`}>
                 {m.full_name.split(' ')[0]}
               </button>
-            ))}
+              ))}
+            </div>
+            {tagged.length > 0 && (
+              <p className="text-[9px] text-[#888]">{tagged.length} nəfər seçildi</p>
+            )}
           </div>
         )}
 
