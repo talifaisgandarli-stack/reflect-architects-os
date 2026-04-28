@@ -44,13 +44,14 @@ function Av({ name='?', size=6, className='' }) {
 }
 
 // ─── Quick Add Drawer (Google Calendar tərzi) ─────────────────────────────────
-function QuickAdd({ date, time, members, onSave, onExpand, onClose }) {
+function QuickAdd({ date, time, members, onSave, onExpand, onClose, isAdmin }) {
   const [title, setTitle] = useState('')
   const [selType, setSelType] = useState('meeting')
   const [startTime, setStartTime] = useState(time || '')
   const [endTime, setEndTime] = useState('')
   const [tagged, setTagged] = useState([])
   const [memberSearch, setMemberSearch] = useState('')
+  const [isPrivate, setIsPrivate] = useState(false)
   const inputRef = useRef(null)
 
   useEffect(() => { inputRef.current?.focus() }, [])
@@ -65,7 +66,7 @@ function QuickAdd({ date, time, members, onSave, onExpand, onClose }) {
       title: title.trim(), event_type: selType,
       start_date: date, end_date: date,
       start_time: startTime, end_time: endTime,
-      notes: '', tagged_profiles: tagged
+      notes: '', tagged_profiles: tagged, is_private: isPrivate
     })
   }
 
@@ -174,6 +175,16 @@ function QuickAdd({ date, time, members, onSave, onExpand, onClose }) {
           </div>
         )}
 
+        {/* Gizli — yalnız admin */}
+        {isAdmin && (
+          <button type="button" onClick={() => setIsPrivate(v => !v)}
+            className={`flex items-center gap-1.5 text-[10px] font-semibold px-2.5 py-1.5 rounded-lg border w-full transition-all ${
+              isPrivate ? 'bg-[#0f172a] text-white border-[#0f172a]' : 'border-[#e8e8e4] text-[#555] hover:border-[#0f172a]'
+            }`}>
+            {isPrivate ? '🔒 Gizli hadisə — yalnız adminlər görür' : '🔓 Hamıya açıq hadisə'}
+          </button>
+        )}
+
         {/* Footer */}
         <div className="flex items-center justify-between pt-1 border-t border-[#f5f5f0]">
           <button onClick={onExpand}
@@ -198,11 +209,11 @@ function QuickAdd({ date, time, members, onSave, onExpand, onClose }) {
 }
 
 // ─── Full Event Form Modal ────────────────────────────────────────────────────
-function EventModal({ open, onClose, onSave, event, members, defaultDate, defaultType }) {
+function EventModal({ open, onClose, onSave, event, members, defaultDate, defaultType, isAdmin }) {
   const blank = {
     title:'', event_type: defaultType||'meeting',
     start_date: defaultDate || todayStr(), end_date:'',
-    start_time:'', end_time:'', notes:'', tagged_profiles:[]
+    start_time:'', end_time:'', notes:'', tagged_profiles:[], is_private: false
   }
   const [form, setForm] = useState(blank)
   const [saving, setSaving] = useState(false)
@@ -213,7 +224,7 @@ function EventModal({ open, onClose, onSave, event, members, defaultDate, defaul
       title: event.title||'', event_type: event.event_type||'meeting',
       start_date: event.start_date||todayStr(), end_date: event.end_date||'',
       start_time: event.start_time||'', end_time: event.end_time||'',
-      notes: event.notes||'', tagged_profiles: event.tagged_profiles||[]
+      notes: event.notes||'', tagged_profiles: event.tagged_profiles||[], is_private: event.is_private||false
     } : blank)
   }, [open, event])
 
@@ -303,6 +314,20 @@ function EventModal({ open, onClose, onSave, event, members, defaultDate, defaul
             className="w-full px-3.5 py-2.5 border border-[#e8e8e4] rounded-xl text-sm focus:outline-none focus:border-[#0f172a] resize-none placeholder-[#ccc]"
             placeholder="Qeyd..." />
 
+          {/* Gizli hadisə — yalnız admin */}
+          {isAdmin && (
+            <div className="flex items-center justify-between p-3 bg-[#fafafa] border border-[#ebebeb] rounded-xl">
+              <div>
+                <div className="text-xs font-semibold text-[#0f172a]">Gizli hadisə</div>
+                <div className="text-[10px] text-[#888] mt-0.5">Yalnız Nicat, Talifa, Türkan görür</div>
+              </div>
+              <button type="button" onClick={() => set('is_private', !form.is_private)}
+                className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 ${form.is_private ? 'bg-[#0f172a]' : 'bg-[#e2e8f0]'}`}>
+                <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${form.is_private ? 'translate-x-5' : 'translate-x-0.5'}`} />
+              </button>
+            </div>
+          )}
+
           {/* İştirakçılar */}
           <div>
             <div className="flex items-center justify-between mb-2">
@@ -390,7 +415,10 @@ function EventSheet({ event, members, user, onClose, onEdit, onDelete, onRSVP })
               </button>
             </div>
           </div>
-          <div className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{color:t.dot}}>{t.label}</div>
+          <div className="flex items-center gap-2 mb-1">
+            <div className="text-[10px] font-bold uppercase tracking-widest" style={{color:t.dot}}>{t.label}</div>
+            {event.is_private && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-[#0f172a]/10 text-[#0f172a]">🔒 Gizli</span>}
+          </div>
           <h2 className="text-lg font-bold text-[#0f172a] leading-snug">{event.title}</h2>
 
           {/* Tarix/saat */}
@@ -539,7 +567,7 @@ function WeekView({ events, members, weekStart, onEventClick, onDayClick }) {
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export default function HadiselerTeqvimiPage() {
   const { addToast } = useToast()
-  const { user } = useAuth()
+  const { user, isAdmin } = useAuth()
   const now = new Date()
 
   const [events,      setEvents]      = useState([])
@@ -589,6 +617,7 @@ export default function HadiselerTeqvimiPage() {
       end_time:        form.end_time   || null,
       notes:           form.notes      || null,
       tagged_profiles: form.tagged_profiles || [],
+      is_private:      form.is_private || false,
     }
 
     if (existingId) {
@@ -667,6 +696,8 @@ export default function HadiselerTeqvimiPage() {
 
   // Filters
   const filtered = events.filter(e => {
+    // Gizli hadisələri yalnız adminlər görür
+    if (e.is_private && !isAdmin) return false
     if (filterType!=='all' && e.event_type!==filterType) return false
     if (filterUser==='mine') return (e.tagged_profiles||[]).includes(user?.id)
     if (filterUser!=='all') return (e.tagged_profiles||[]).includes(filterUser)
@@ -827,6 +858,7 @@ export default function HadiselerTeqvimiPage() {
                     date={quickDay}
                     time={quickTime}
                     members={members}
+                    isAdmin={isAdmin}
                     onSave={form=>handleSave(form, null)}
                     onExpand={()=>{setQuickDay(null);setEditEvent(null);setFullModal(true)}}
                     onClose={()=>setQuickDay(null)}
@@ -894,6 +926,7 @@ export default function HadiselerTeqvimiPage() {
                           date={ds}
                           time={quickTime}
                           members={members}
+                          isAdmin={isAdmin}
                           onSave={form=>handleSave(form, null)}
                           onExpand={()=>{
                             setQuickDay(null)
@@ -986,6 +1019,7 @@ export default function HadiselerTeqvimiPage() {
         event={editEvent}
         members={members}
         defaultDate={todayStr()}
+        isAdmin={isAdmin}
       />
 
       {sheet && (
