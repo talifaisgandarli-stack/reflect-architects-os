@@ -541,9 +541,11 @@ function DetailPanel({ task, projects, members, onClose, onEdit, onDelete, onSta
                 <div className="text-center py-6 text-xs text-[#bbb]">Hələ checklist yoxdur</div>
               )}
               <div className="space-y-1 mb-4">
-                {checklists.map(item => (
+                {checklists.map(item => {
+                  const isOverdueItem = item.due_date && !item.completed && new Date(item.due_date) < new Date()
+                  return (
                   <div key={item.id} className={`flex items-start gap-2 group py-1.5 px-2 rounded-lg transition-colors ${
-                    item.due_date && !item.completed && new Date(item.due_date) < new Date() ? 'bg-red-50/60 hover:bg-red-50' : 'hover:bg-[#f8fafc]'
+                    isOverdueItem ? 'bg-red-50/60 hover:bg-red-50 border border-red-100' : 'hover:bg-[#f8fafc]'
                   }`}>
                     <button onClick={() => toggleCheck(item)}
                       className={`w-4 h-4 mt-0.5 rounded border-2 flex-shrink-0 flex items-center justify-center transition-all ${
@@ -582,7 +584,8 @@ function DetailPanel({ task, projects, members, onClose, onEdit, onDelete, onSta
                       <IconX size={11} />
                     </button>
                   </div>
-                ))}
+                  )
+                })}
               </div>
               <div className="border-t border-[#f5f5f0] pt-3 space-y-2">
                 <div className="flex gap-2 items-center">
@@ -744,14 +747,17 @@ function DetailPanel({ task, projects, members, onClose, onEdit, onDelete, onSta
 }
 
 // ─── Kanban Card ──────────────────────────────────────────────────────────────
-function KanbanCard({ task, projects, members, checkCounts, commentCounts, onClick, onArchive, onDragStart, onDragEnd, isDragging }) {
+function KanbanCard({ task, projects, members, checkCounts, commentCounts, onClick, onArchive, onDragStart, onDragEnd, isDragging, filterUser }) {
   const project  = projects.find(p => p.id === task.project_id)
   const assignee = members.find(m => m.id === task.assignee_id)
   const days = daysLeft(task.due_date)
   const pr = prio(task.priority)
   const isDone = task.status === 'done'
   const overdue = !isDone && days !== null && days < 0
-  const cc = checkCounts[task.id] || { done:0, total:0 }
+  const cc = checkCounts[task.id] || { done:0, total:0, overdueItems:[], assigneeItems:{} }
+  const overdueChecks = (cc.overdueItems||[]).length
+  const myChecks = filterUser && filterUser !== 'all' ? (cc.assigneeItems||{})[filterUser] : null
+  const hasSubtaskOverdue = overdueChecks > 0 && task.status !== 'done'
   const cmt = commentCounts[task.id] || 0
 
   return (
@@ -775,13 +781,15 @@ function KanbanCard({ task, projects, members, checkCounts, commentCounts, onCli
       <div onClick={() => onClick(task)}
         className={`bg-white rounded-2xl border transition-all duration-200 ${
           overdue
-            ? 'border-red-200 hover:border-red-400 hover:shadow-md'
+            ? 'border-red-300 hover:border-red-500 hover:shadow-md'
+            : hasSubtaskOverdue
+            ? 'border-orange-200 hover:border-orange-400 hover:shadow-md'
             : 'border-[#ebebeb] hover:border-[#c8c8c8] hover:shadow-md'
         }`}
-        style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}
+        style={{ boxShadow: overdue ? '0 1px 6px rgba(239,68,68,0.15)' : '0 1px 3px rgba(0,0,0,0.06)' }}
       >
-        {/* Priority top bar */}
-        <div className="h-[3px] rounded-t-2xl" style={{ background: pr.color }} />
+        {/* Priority top bar — qırmızı overdue üçün override */}
+        <div className="h-[3px] rounded-t-2xl" style={{ background: overdue ? '#ef4444' : hasSubtaskOverdue ? '#f97316' : pr.color }} />
 
         <div className="p-3.5">
           {/* Header: project + tags + hidden */}
@@ -809,9 +817,19 @@ function KanbanCard({ task, projects, members, checkCounts, commentCounts, onCli
           </div>
 
           {/* Title */}
-          <p className={`text-[12px] font-semibold leading-snug mb-3 ${isDone ? 'line-through text-[#c0c0c0]' : 'text-[#1a1a2e]'}`}>
+          <p className={`text-[12px] font-semibold leading-snug mb-3 ${isDone ? 'line-through text-[#c0c0c0]' : overdue ? 'text-red-700' : 'text-[#1a1a2e]'}`}>
             {task.title}
           </p>
+          {/* Gecikmiş xəbərdarlıq */}
+          {(overdue || hasSubtaskOverdue) && !isDone && (
+            <div className={`flex items-center gap-1 text-[9px] font-bold mb-2 px-2 py-1 rounded-lg w-fit ${
+              overdue ? 'bg-red-50 text-red-600' : 'bg-orange-50 text-orange-600'
+            }`}>
+              {overdue
+                ? `🔴 ${Math.abs(days)} gün gecikib`
+                : `🟠 ${overdueChecks} subtask gecikib`}
+            </div>
+          )}
 
           {/* Checklist bar */}
           {cc.total > 0 && (
@@ -871,7 +889,7 @@ function KanbanCard({ task, projects, members, checkCounts, commentCounts, onCli
 }
 
 // ─── Kanban Column ────────────────────────────────────────────────────────────
-function KanbanColumn({ column, tasks, projects, members, checkCounts, commentCounts, onCardClick, onQuickAdd, onArchive, dragTaskId, onDragStart, onDragEnd, onDrop, onDragOver, isDragOver }) {
+function KanbanColumn({ column, tasks, projects, members, checkCounts, commentCounts, onCardClick, onQuickAdd, onArchive, dragTaskId, onDragStart, onDragEnd, onDrop, onDragOver, isDragOver, filterUser }) {
   const [adding, setAdding] = useState(false)
 
   return (
@@ -1250,6 +1268,14 @@ export default function TapshiriqlarPage() {
   })
   const tasksByCol = Object.fromEntries(COLUMNS.map(c => [c.key, filtered.filter(t => t.status===c.key)]))
   const overdueCount = activeTasks.filter(t => { const d=daysLeft(t.due_date); return t.status!=='done'&&d!==null&&d<0 }).length
+  // Seçilmiş üzvün gecikmiş subtask-ları
+  const myOverdueSubtasks = filterUser !== 'all'
+    ? activeTasks.flatMap(t => {
+        const cc = checkCounts[t.id] || {}
+        return (cc.overdueItems || []).filter(item => item.assignee_id === filterUser).map(item => ({ ...item, taskTitle: t.title }))
+      })
+    : []
+  const filterMember = members.find(m => m.id === filterUser)
 
   if (loading) return (
     <div className="p-4 lg:p-6 space-y-4">
@@ -1354,30 +1380,55 @@ export default function TapshiriqlarPage() {
         </div>
       </div>
 
-      {/* ── Board ── */}
-      {view === 'kanban' ? (
-        <div className="flex-1 overflow-auto p-4 lg:p-6" style={{ background: '#fafaf8' }}>
-          <div className="flex gap-3 h-full"
-            style={{ minWidth: COLUMNS.length * 280 + 'px' }}>
-            {COLUMNS.map(column => (
-              <KanbanColumn key={column.key} column={column}
-                tasks={tasksByCol[column.key]||[]}
-                projects={projects} members={members}
-                checkCounts={checkCounts} commentCounts={commentCounts}
-                onCardClick={t => setDetailTask(t)}
-                onQuickAdd={handleQuickSave}
-                onArchive={handleSingleArchive}
-                dragTaskId={dragTaskId}
-                onDragStart={id => setDragTaskId(id)}
-                onDragEnd={() => { setDragTaskId(null); setDragOverCol(null) }}
-                onDrop={handleDrop}
-                onDragOver={key => setDragOverCol(key)}
-                isDragOver={dragOverCol === column.key}
-              />
-            ))}
+      {/* ── Board: Kanban ── */}
+      {view === 'kanban' && (
+        <>
+          <div className="flex-1 overflow-auto p-4 lg:p-6" style={{ background: '#fafaf8' }}>
+            <div className="flex gap-3 h-full"
+              style={{ minWidth: COLUMNS.length * 280 + 'px' }}>
+              {COLUMNS.map(column => (
+                <KanbanColumn key={column.key} column={column}
+                  tasks={tasksByCol[column.key]||[]}
+                  projects={projects} members={members}
+                  checkCounts={checkCounts} commentCounts={commentCounts}
+                  onCardClick={t => setDetailTask(t)}
+                  onQuickAdd={handleQuickSave}
+                  onArchive={handleSingleArchive}
+                  dragTaskId={dragTaskId}
+                  onDragStart={id => setDragTaskId(id)}
+                  onDragEnd={() => { setDragTaskId(null); setDragOverCol(null) }}
+                  onDrop={handleDrop}
+                  onDragOver={key => setDragOverCol(key)}
+                  isDragOver={dragOverCol === column.key}
+                  filterUser={filterUser}
+                />
+              ))}
+            </div>
           </div>
-        </div>
-      ) : (
+          {myOverdueSubtasks.length > 0 && filterMember && (
+            <div className="mx-4 lg:mx-6 mb-4 bg-orange-50 border border-orange-200 rounded-2xl p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-sm">🟠</span>
+                <span className="text-xs font-bold text-orange-800">{filterMember.full_name} — gecikmiş subtask-lar ({myOverdueSubtasks.length})</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {myOverdueSubtasks.slice(0, 8).map((item, i) => (
+                  <div key={i} className="flex items-center gap-1.5 bg-white border border-orange-200 rounded-xl px-2.5 py-1.5 text-[10px]">
+                    <span className="text-orange-500">⏰</span>
+                    <div>
+                      <div className="font-semibold text-[#0f172a]">{item.title}</div>
+                      <div className="text-[#888]">{item.taskTitle} · {new Date(item.due_date).toLocaleDateString('az-AZ')}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ── Board: List ── */}
+      {view === 'list' && (
         <div className="flex-1 overflow-auto px-4 lg:px-6 py-4">
           <div className="bg-white border border-[#e8e8e4] rounded-2xl overflow-hidden">
             <table className="w-full text-xs">
@@ -1438,6 +1489,26 @@ export default function TapshiriqlarPage() {
                 })}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+      {/* Seçilmiş üzvün gecikmiş subtask-ları — list view üçün */}
+      {view === 'list' && myOverdueSubtasks.length > 0 && filterMember && (
+        <div className="mx-4 lg:mx-6 mb-4 bg-orange-50 border border-orange-200 rounded-2xl p-3">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-sm">🟠</span>
+            <span className="text-xs font-bold text-orange-800">{filterMember.full_name} — gecikmiş subtask-lar ({myOverdueSubtasks.length})</span>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {myOverdueSubtasks.slice(0, 8).map((item, i) => (
+              <div key={i} className="flex items-center gap-1.5 bg-white border border-orange-200 rounded-xl px-2.5 py-1.5 text-[10px]">
+                <span className="text-orange-500">⏰</span>
+                <div>
+                  <div className="font-semibold text-[#0f172a]">{item.title}</div>
+                  <div className="text-[#888]">{item.taskTitle} · {new Date(item.due_date).toLocaleDateString('az-AZ')}</div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
