@@ -1098,8 +1098,11 @@ export default function TapshiriqlarPage() {
       if (!cc[item.task_id]) cc[item.task_id] = { done:0, total:0, overdueItems:[], assigneeItems:{} }
       cc[item.task_id].total++
       if (item.completed) cc[item.task_id].done++
-      else if (item.due_date && new Date(item.due_date) < now) {
-        cc[item.task_id].overdueItems.push(item)
+      else if (item.due_date) {
+        // Timezone-safe: tarix string-ini lokal saatla müqayisə et
+        const [y,m,d] = item.due_date.split('-').map(Number)
+        const dueLocal = new Date(y, m-1, d)
+        if (dueLocal < now) cc[item.task_id].overdueItems.push(item)
       }
       // Subtask-ları cavabdehə görə indekslə
       if (item.assignee_id) {
@@ -1302,7 +1305,15 @@ export default function TapshiriqlarPage() {
   })
   const tasksByCol = Object.fromEntries(COLUMNS.map(c => [c.key, filtered.filter(t => t.status===c.key)]))
   const overdueCount = activeTasks.filter(t => { const d=daysLeft(t.due_date); return t.status!=='done'&&d!==null&&d<0 }).length
-  const overdueSubtaskCount = activeTasks.reduce((s,t) => s + ((checkCounts[t.id]?.overdueItems||[]).length), 0)
+  const overdueSubtaskCount = (() => {
+    const todayLocal = new Date()
+    todayLocal.setHours(0,0,0,0)
+    return allChecklists.filter(item => {
+      if (item.completed || !item.due_date) return false
+      const [y,m,d] = item.due_date.split('-').map(Number)
+      return new Date(y, m-1, d) < todayLocal
+    }).length
+  })()
   // filterUser seçildiyi halda hər task üçün onun subtask-ları
   const mySubtasksMap = (() => {
     if (filterUser === 'all') return {}
