@@ -38,5 +38,6 @@
       "path": "/api/agent?type=weekly_report",
       "schedule": "0 13 * * 5"
     }
-  ]
+  ],
+  "_build": "2026-04-29-v3"
 }
