@@ -12,7 +12,7 @@ import {
   IconAlertCircle, IconAt, IconClock, IconHistory
 } from '@tabler/icons-react'
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// ─── Constants ───────────────────────────────────── v2.1───────────────────────────
 const COLUMNS = [
   { key: 'not_started', label: 'Başlanmayıb', color: '#94a3b8', bg: '#f8fafc', border: '#e2e8f0' },
   { key: 'in_progress',  label: 'İcrada',      color: '#3b82f6', bg: '#eff6ff', border: '#bfdbfe' },
