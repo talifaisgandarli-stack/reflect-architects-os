@@ -1111,6 +1111,7 @@ export default function TapshiriqlarPage() {
       }
     }
     setCheckCounts(cc)
+    setAllChecklists(ckRes.data || [])  // subtitle + mySubtasksMap üçün
     const cmt = {}
     for (const item of (cmtRes.data||[])) {
       if (item.type === 'comment') cmt[item.task_id] = (cmt[item.task_id]||0) + 1
