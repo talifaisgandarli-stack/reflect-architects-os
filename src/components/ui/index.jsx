@@ -96,6 +96,67 @@ export function Skeleton({ className = '' }) {
   return <div className={`skeleton rounded ${className}`} />
 }
 
+// Page-level loading scaffolds
+export function PageLoadingShell({ stats = 4, children }) {
+  return (
+    <div className="p-4 lg:p-6 space-y-4 fade-in">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="space-y-1.5">
+          <Skeleton className="h-5 w-40" />
+          <Skeleton className="h-3 w-28" />
+        </div>
+        <Skeleton className="h-8 w-32" />
+      </div>
+      {stats > 0 && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {[...Array(stats)].map((_, i) => (
+            <div key={i} className="bg-white border border-[#e8e8e4] rounded-lg p-4 space-y-2">
+              <Skeleton className="h-3 w-20" />
+              <Skeleton className="h-6 w-24" />
+              <Skeleton className="h-3 w-16" />
+            </div>
+          ))}
+        </div>
+      )}
+      {children}
+    </div>
+  )
+}
+
+export function TableSkeleton({ rows = 6, cols = 5 }) {
+  return (
+    <div className="bg-white border border-[#e8e8e4] rounded-lg overflow-hidden">
+      <div className="border-b border-[#e8e8e4] px-4 py-3 grid gap-3" style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
+        {[...Array(cols)].map((_, i) => <Skeleton key={i} className="h-3 w-20" />)}
+      </div>
+      {[...Array(rows)].map((_, r) => (
+        <div key={r} className="border-b border-[#f5f5f0] last:border-0 px-4 py-3 grid gap-3" style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
+          {[...Array(cols)].map((_, c) => <Skeleton key={c} className="h-3 w-full" />)}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+export function CardGridSkeleton({ count = 6, cols = 3 }) {
+  const colClass = { 1: 'grid-cols-1', 2: 'sm:grid-cols-2', 3: 'sm:grid-cols-2 lg:grid-cols-3', 4: 'sm:grid-cols-2 lg:grid-cols-4' }[cols] || 'sm:grid-cols-2 lg:grid-cols-3'
+  return (
+    <div className={`grid grid-cols-1 ${colClass} gap-4`}>
+      {[...Array(count)].map((_, i) => (
+        <div key={i} className="bg-white border border-[#e8e8e4] rounded-lg p-4 space-y-3">
+          <Skeleton className="h-3 w-16" />
+          <Skeleton className="h-5 w-3/4" />
+          <Skeleton className="h-3 w-full" />
+          <div className="flex items-center justify-between pt-1">
+            <Skeleton className="h-6 w-6 rounded-full" />
+            <Skeleton className="h-3 w-12" />
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // Confirm dialog
 export function ConfirmDialog({ open, title, message, onConfirm, onCancel, danger }) {
   if (!open) return null

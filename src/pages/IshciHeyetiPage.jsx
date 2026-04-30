@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
-import { PageHeader, Badge, Card, Button, EmptyState, Modal, ConfirmDialog, Skeleton } from '../components/ui'
+import { PageHeader, Badge, Card, Button, EmptyState, Modal, ConfirmDialog, Skeleton, PageLoadingShell, CardGridSkeleton } from '../components/ui'
 import { IconPlus, IconEdit, IconTrash, IconUsersGroup, IconMail, IconPhone, IconKey, IconPower, IconStar, IconChevronUp } from '@tabler/icons-react'
 
 const CAREER_LEVELS = [
@@ -303,7 +303,7 @@ export default function IshciHeyetiPage() {
   const getRole = id => roles.find(r => r.id === id)
   const filtered = filter === 'all' ? members : filter === 'active' ? members.filter(m => m.is_active) : members.filter(m => !m.is_active)
 
-  if (loading) return <div className="p-4 lg:p-6"><Skeleton className="h-64" /></div>
+  if (loading) return <PageLoadingShell stats={0}><CardGridSkeleton count={8} cols={4} /></PageLoadingShell>
 
   return (
     <div className="p-4 lg:p-6 fade-in">

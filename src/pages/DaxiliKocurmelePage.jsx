@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useToast } from '../contexts/ToastContext'
-import { PageHeader, Badge, Card, Button, EmptyState, Modal, ConfirmDialog, Skeleton, StatCard } from '../components/ui'
+import { PageHeader, Badge, Card, Button, EmptyState, Modal, ConfirmDialog, Skeleton, StatCard, PageLoadingShell, TableSkeleton } from '../components/ui'
 import { IconPlus, IconEdit, IconTrash, IconArrowsExchange, IconCheck } from '@tabler/icons-react'
 
 const EDV = 0.18
@@ -188,7 +188,7 @@ export default function DaxiliKocurmelePage() {
   const totalOpenWithEdv = open.reduce((s, t) => s + Number(t.amount_with_edv || t.amount || 0), 0)
   const today = new Date()
 
-  if (loading) return <div className="p-6"><Skeleton className="h-64" /></div>
+  if (loading) return <PageLoadingShell stats={3}><TableSkeleton rows={5} cols={5} /></PageLoadingShell>
 
   return (
     <div className="p-6 fade-in">

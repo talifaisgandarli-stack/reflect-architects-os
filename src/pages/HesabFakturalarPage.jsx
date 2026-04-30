@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useToast } from '../contexts/ToastContext'
-import { PageHeader, Badge, Card, Button, EmptyState, Modal, ConfirmDialog, Skeleton, StatCard } from '../components/ui'
+import { PageHeader, Badge, Card, Button, EmptyState, Modal, ConfirmDialog, Skeleton, StatCard, PageLoadingShell, TableSkeleton } from '../components/ui'
 import { IconPlus, IconEdit, IconTrash, IconFileText, IconCheck } from '@tabler/icons-react'
 
 const EDV = 0.18
@@ -184,7 +184,7 @@ export default function HesabFakturalarPage() {
   const totalPaid = invoices.filter(i => i.status === 'paid').reduce((s, i) => s + Number(i.project_estimate || 0), 0)
   const totalEdv = filtered.filter(i => i.payment_method === 'transfer').reduce((s, i) => s + Number(i.edv_amount || 0), 0)
 
-  if (loading) return <div className="p-6"><Skeleton className="h-64" /></div>
+  if (loading) return <PageLoadingShell stats={4}><TableSkeleton rows={6} cols={6} /></PageLoadingShell>
 
   return (
     <div className="p-6 fade-in">

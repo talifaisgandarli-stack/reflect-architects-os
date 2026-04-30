@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useToast } from '../contexts/ToastContext'
-import { PageHeader, Badge, Card, Button, EmptyState, Modal, ConfirmDialog, Skeleton, StatCard } from '../components/ui'
+import { PageHeader, Badge, Card, Button, EmptyState, Modal, ConfirmDialog, Skeleton, StatCard, PageLoadingShell, TableSkeleton } from '../components/ui'
 import { IconPlus, IconEdit, IconTrash, IconArrowUp } from '@tabler/icons-react'
 
 const EDV = 0.18
@@ -166,7 +166,7 @@ export default function DaxilolmalarPage() {
   const getProject = id => projects.find(p => p.id === id)
   const getClient = id => clients.find(c => c.id === id)
 
-  if (loading) return <div className="p-6"><Skeleton className="h-64" /></div>
+  if (loading) return <PageLoadingShell stats={3}><TableSkeleton rows={6} cols={6} /></PageLoadingShell>
 
   return (
     <div className="p-6 fade-in">
