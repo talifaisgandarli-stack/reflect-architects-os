@@ -194,9 +194,9 @@ function ElanCard({ elan, members, onEdit, onDelete, isAdmin }) {
               {new Date(elan.created_at).toLocaleDateString('az-AZ')}
             </span>
             {elan.tag_team && (
-              <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">
+              <Badge variant="info" size="md">
                 👥 Bütün komanda
-              </span>
+              </Badge>
             )}
             {!elan.tag_team && taggedNames.length > 0 && taggedNames.map(name => (
               <span key={name} className="text-[10px] bg-[#f0f0ec] text-[#555] px-2 py-0.5 rounded-full">

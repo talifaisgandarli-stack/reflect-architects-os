@@ -237,9 +237,9 @@ export default function MezuniyyetCedveliPage() {
           <div className="text-xs font-bold text-blue-800 mb-1.5">🏖 Bu gün məzuniyyətdə</div>
           <div className="flex flex-wrap gap-2">
             {onLeaveToday.map(l => (
-              <span key={l.id} className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+              <Badge key={l.id} variant="info" size="md">
                 {getMember(l.member_id)?.full_name}
-              </span>
+              </Badge>
             ))}
           </div>
         </div>

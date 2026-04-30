@@ -494,15 +494,9 @@ export default function PodratIsleriPage() {
                         <td className="px-4 py-3"><Badge variant={ps?.color} size="sm">{ps?.label}</Badge></td>
                         <td className="px-4 py-3">
                           <div className="flex gap-1 flex-wrap">
-                            <span className={`text-[9px] px-1.5 py-0.5 rounded ${w.advance_paid ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
-                              Avans {w.advance_percent || 30}%
-                            </span>
-                            <span className={`text-[9px] px-1.5 py-0.5 rounded ${interimCount > 0 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
-                              Ara×{interimCount}
-                            </span>
-                            <span className={`text-[9px] px-1.5 py-0.5 rounded ${w.final_paid ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
-                              Final
-                            </span>
+                            <Badge variant={w.advance_paid ? 'success' : 'default'} size="sm">Avans {w.advance_percent || 30}%</Badge>
+                            <Badge variant={interimCount > 0 ? 'success' : 'default'} size="sm">Ara×{interimCount}</Badge>
+                            <Badge variant={w.final_paid ? 'success' : 'default'} size="sm">Final</Badge>
                           </div>
                         </td>
                         <td className="px-4 py-3 text-right font-medium text-[#0f172a]">{fmt(w.contract_amount)}</td>
