@@ -374,11 +374,11 @@ export default function PodratIsleriPage() {
     }
     if (editWork) {
       const { error } = await supabase.from('outsource_works').update(data).eq('id', editWork.id)
-      if (error) { addToast('Xəta: ' + error.message, 'error'); return }
+      if (error) { addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin', 'error'); return }
       addToast('Yeniləndi', 'success')
     } else {
       const { error } = await supabase.from('outsource_works').insert(data)
-      if (error) { addToast('Xəta: ' + error.message, 'error'); return }
+      if (error) { addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin', 'error'); return }
       addToast('Podrat işi əlavə edildi', 'success')
     }
     setModalOpen(false); setEditWork(null); await loadData()

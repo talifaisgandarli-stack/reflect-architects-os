@@ -225,10 +225,10 @@ export default function PerformansPage() {
 
     if (editReview) {
       const { error } = await supabase.from('performance_reviews').update(data).eq('id', editReview.id)
-      if (error) { addToast('Xəta: ' + error.message, 'error'); return }
+      if (error) { addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin', 'error'); return }
     } else {
       const { error } = await supabase.from('performance_reviews').insert(data)
-      if (error) { addToast('Xəta: ' + error.message, 'error'); return }
+      if (error) { addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin', 'error'); return }
     }
 
     // Əgər 2 ardıcıl il 4.5+ bal varsa — promotion_eligible = true

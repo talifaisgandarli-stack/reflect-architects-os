@@ -125,11 +125,11 @@ export default function TesisciBorclarPage() {
     }
     if (editLoan) {
       const { error } = await supabase.from('owner_loans').update(data).eq('id', editLoan.id)
-      if (error) { addToast('Xəta: ' + error.message, 'error'); return }
+      if (error) { addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin', 'error'); return }
       addToast('Yeniləndi', 'success')
     } else {
       const { error } = await supabase.from('owner_loans').insert(data)
-      if (error) { addToast('Xəta: ' + error.message, 'error'); return }
+      if (error) { addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin', 'error'); return }
       addToast('Borc qeydi əlavə edildi', 'success')
     }
     setModalOpen(false); setEditLoan(null); await loadData()

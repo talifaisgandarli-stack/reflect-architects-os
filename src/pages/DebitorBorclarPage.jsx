@@ -156,11 +156,11 @@ export default function DebitorBorclarPage() {
     }
     if (editRec) {
       const { error } = await supabase.from('receivables').update(data).eq('id', editRec.id)
-      if (error) { addToast('Xəta: ' + error.message, 'error'); return }
+      if (error) { addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin', 'error'); return }
       addToast('Yeniləndi', 'success')
     } else {
       const { error } = await supabase.from('receivables').insert(data)
-      if (error) { addToast('Xəta: ' + error.message, 'error'); return }
+      if (error) { addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin', 'error'); return }
       addToast('Alacaq əlavə edildi', 'success')
     }
     setModalOpen(false); setEditRec(null); await loadData()

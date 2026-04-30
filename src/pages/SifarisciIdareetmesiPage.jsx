@@ -145,11 +145,11 @@ export default function SifarisciIdareetmesiPage() {
     }
     if (editClient) {
       const { error } = await supabase.from('clients').update(data).eq('id', editClient.id)
-      if (error) { addToast('Xəta: ' + error.message, 'error'); return }
+      if (error) { addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin', 'error'); return }
       addToast('Sifarişçi yeniləndi', 'success')
     } else {
       const { error } = await supabase.from('clients').insert(data)
-      if (error) { addToast('Xəta: ' + error.message, 'error'); return }
+      if (error) { addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin', 'error'); return }
       addToast('Sifarişçi əlavə edildi', 'success')
     }
     setModalOpen(false); setEditClient(null); await loadData()

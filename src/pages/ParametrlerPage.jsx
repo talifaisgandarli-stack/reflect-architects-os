@@ -144,7 +144,7 @@ export default function ParametrlerPage() {
         setTestResult(prev => ({ ...prev, [type]: 'err' }))
       }
     } catch (err) {
-      addToast('Xəta: ' + err.message, 'error')
+      addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin', 'error')
       setTestResult(prev => ({ ...prev, [type]: 'err' }))
     }
     setTesting(null)
@@ -184,7 +184,7 @@ export default function ParametrlerPage() {
       }
       setManualMessage('')
     } catch (err) {
-      addToast('Xəta: ' + err.message, 'error')
+      addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin', 'error')
     }
     setSendingManual(false)
   }

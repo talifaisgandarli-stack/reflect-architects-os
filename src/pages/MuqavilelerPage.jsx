@@ -163,11 +163,11 @@ export default function MuqavilelerPage() {
     }
     if (editContract) {
       const { error } = await supabase.from('contracts').update(data).eq('id', editContract.id)
-      if (error) { addToast('Xəta: ' + error.message, 'error'); return }
+      if (error) { addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin', 'error'); return }
       addToast('Yeniləndi', 'success')
     } else {
       const { error } = await supabase.from('contracts').insert(data)
-      if (error) { addToast('Xəta: ' + error.message, 'error'); return }
+      if (error) { addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin', 'error'); return }
       addToast('Müqavilə əlavə edildi', 'success')
     }
     setModalOpen(false); setEditContract(null); await loadData()

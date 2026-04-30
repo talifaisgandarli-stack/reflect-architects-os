@@ -298,11 +298,11 @@ export default function SabitXerclerPage() {
     }
     if (editSub) {
       const { error } = await supabase.from('subscriptions').update(data).eq('id', editSub.id)
-      if (error) { addToast('Xəta: ' + error.message, 'error'); return }
+      if (error) { addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin', 'error'); return }
       addToast('Yeniləndi', 'success')
     } else {
       const { error } = await supabase.from('subscriptions').insert(data)
-      if (error) { addToast('Xəta: ' + error.message, 'error'); return }
+      if (error) { addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin', 'error'); return }
       addToast('Sabit xərc əlavə edildi', 'success')
     }
     setModalOpen(false); setEditSub(null); await loadData()
@@ -319,7 +319,7 @@ export default function SabitXerclerPage() {
       amount_with_edv: isT ? withEdv(amt) : amt,
       paid_date: form.paid_date, notes: form.notes || null
     })
-    if (error) { addToast('Xəta: ' + error.message, 'error'); return }
+    if (error) { addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin', 'error'); return }
     addToast('Ödəniş qeydə alındı', 'success')
     setPayModalOpen(false); setPaySub(null); await loadData()
   }
