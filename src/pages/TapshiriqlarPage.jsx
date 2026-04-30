@@ -1234,21 +1234,23 @@ export default function TapshiriqlarPage() {
       if (data.assignee_id && data.assignee_id !== editTask.assignee_id && data.assignee_id !== user?.id) {
         await notify(data.assignee_id, 'Tapşırıq sizə təyin edildi', data.title, 'info', '/tapshiriqlar?task=' + editTask.id)
       }
+      // Optimistic update for edit
+      setTasks(prev => prev.map(t => t.id === editTask.id ? { ...t, ...data } : t))
+      if (detailTask?.id === editTask.id) setDetailTask(prev => ({ ...prev, ...data }))
       addToast('Tapşırıq yeniləndi','success')
     } else {
       const { data:inserted, error } = await supabase.from('tasks').insert(data).select().single()
       if (error) { addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin','error'); return }
-      await supabase.from('task_comments').insert({ task_id:inserted.id, author_id:user?.id, type:'activity', content:'tapşırıq yaradıldı', metadata:{} })
-      // Cavabdehə bildiriş
+      // Optimistic: yeni tapşırığı dərhal state-ə əlavə et
+      setTasks(prev => [inserted, ...prev])
+      setCheckCounts(prev => ({ ...prev, [inserted.id]: { done:0, total:0, overdueItems:[], assigneeItems:{} } }))
+      setCommentCounts(prev => ({ ...prev, [inserted.id]: 0 }))
+      supabase.from('task_comments').insert({ task_id:inserted.id, author_id:user?.id, type:'activity', content:'tapşırıq yaradıldı', metadata:{} })
       for (const uid of (data.assignee_ids||[])) {
-        if (uid !== user?.id) {
-          await notify(uid, 'Yeni tapşırıq', data.title, 'info', '/tapshiriqlar?task=' + inserted.id)
-        }
+        if (uid !== user?.id) notify(uid, 'Yeni tapşırıq', data.title, 'info', '/tapshiriqlar?task=' + inserted.id)
       }
       addToast('Tapşırıq əlavə edildi','success')
     }
-    // Yeni tapşırıq — loadData çağır
-    await loadData()
     setModalOpen(false); setEditTask(null)
   }
 
@@ -1281,11 +1283,12 @@ export default function TapshiriqlarPage() {
   }
 
   async function handleDelete() {
-    await supabase.from('tasks').delete().eq('id', deleteTask.id)
-    addToast('Silindi','success')
+    const id = deleteTask.id
+    setTasks(prev => prev.filter(t => t.id !== id))
+    if (detailTask?.id === id) setDetailTask(null)
     setDeleteTask(null)
-    if (detailTask?.id === deleteTask?.id) setDetailTask(null)
-    await loadData()
+    addToast('Silindi','success')
+    await supabase.from('tasks').delete().eq('id', id)
   }
 
   async function handleStatusChange(task, newStatus) {
@@ -1326,25 +1329,29 @@ export default function TapshiriqlarPage() {
     const doneTasks = tasks.filter(t => t.status === 'done' && !t.archived)
     if (!doneTasks.length) { addToast('Arxivlənəcək tamamlanmış tapşırıq yoxdur','info'); return }
     const now = new Date()
-    for (const t of doneTasks) {
-      await supabase.from('tasks').update({ archived:true, archived_at:now.toISOString(), archive_year:now.getFullYear() }).eq('id', t.id)
-    }
+    const ids = doneTasks.map(t => t.id)
+    const patch = { archived:true, archived_at:now.toISOString(), archive_year:now.getFullYear() }
+    setTasks(prev => prev.map(t => ids.includes(t.id) ? { ...t, ...patch } : t))
     addToast(`${doneTasks.length} tapşırıq arxivləndi`,'success')
-    await loadData()
+    for (const t of doneTasks) {
+      supabase.from('tasks').update(patch).eq('id', t.id)
+    }
   }
 
   async function handleSingleArchive(task) {
     const now = new Date()
-    await supabase.from('tasks').update({ archived:true, archived_at:now.toISOString(), archive_year:now.getFullYear() }).eq('id', task.id)
-    addToast('Tapşırıq arxivləndi','success')
+    const patch = { archived:true, archived_at:now.toISOString(), archive_year:now.getFullYear() }
+    setTasks(prev => prev.map(t => t.id === task.id ? { ...t, ...patch } : t))
     if (detailTask?.id === task.id) setDetailTask(null)
-    await loadData()
+    addToast('Tapşırıq arxivləndi','success')
+    supabase.from('tasks').update(patch).eq('id', task.id)
   }
 
   async function handleUnarchive(task) {
-    await supabase.from('tasks').update({ archived:false, archived_at:null, archive_year:null }).eq('id', task.id)
+    const patch = { archived:false, archived_at:null, archive_year:null }
+    setTasks(prev => prev.map(t => t.id === task.id ? { ...t, ...patch } : t))
     addToast('Tapşırıq geri qaytarıldı','success')
-    await loadData()
+    supabase.from('tasks').update(patch).eq('id', task.id)
   }
 
   async function handleDrop(targetColKey) {
@@ -1433,9 +1440,41 @@ export default function TapshiriqlarPage() {
   const filterMember = members.find(m => m.id === filterUser)
 
   if (loading) return (
-    <div className="p-4 lg:p-6 space-y-4">
-      <Skeleton className="h-8 w-48" />
-      <div className="flex gap-4">{COLUMNS.map((_,i)=><Skeleton key={i} className="h-64 flex-1"/>)}</div>
+    <div className="h-full flex flex-col overflow-hidden">
+      <div className="px-4 lg:px-6 pt-5 pb-4 border-b border-[#e8e8e4] bg-white flex-shrink-0">
+        <div className="flex items-center justify-between mb-4">
+          <div className="space-y-1.5">
+            <Skeleton className="h-4 w-28" />
+            <Skeleton className="h-3 w-40" />
+          </div>
+          <Skeleton className="h-8 w-28" />
+        </div>
+        <div className="flex gap-2">
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="h-8 w-36" />
+          <Skeleton className="h-8 w-36" />
+        </div>
+      </div>
+      <div className="flex-1 overflow-x-auto p-4 lg:p-6">
+        <div className="flex gap-4 h-full min-w-max">
+          {COLUMNS.map((col, i) => (
+            <div key={i} className="w-[280px] flex flex-col gap-2">
+              <Skeleton className="h-5 w-24 mb-1" />
+              {[...Array(i === 1 ? 3 : i === 0 ? 2 : 1)].map((_, j) => (
+                <div key={j} className="bg-white rounded-xl border border-[#e8e8e4] p-3 space-y-2">
+                  <Skeleton className="h-3 w-16" />
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-3/4" />
+                  <div className="flex justify-between pt-1">
+                    <Skeleton className="h-5 w-5 rounded-full" />
+                    <Skeleton className="h-3 w-12" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   )
 

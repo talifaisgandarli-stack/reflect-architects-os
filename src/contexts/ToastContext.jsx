@@ -1,13 +1,19 @@
-import { createContext, useContext, useState, useCallback } from 'react'
+import { createContext, useContext, useState, useCallback, useRef } from 'react'
 
 const ToastContext = createContext({})
 
 export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([])
+  const recentKeys = useRef(new Set())
 
   const addToast = useCallback((message, type = 'success', duration = 3000) => {
+    const key = `${type}:${message}`
+    if (recentKeys.current.has(key)) return
+    recentKeys.current.add(key)
+    setTimeout(() => recentKeys.current.delete(key), 1000)
+
     const id = Date.now()
-    setToasts(prev => [...prev, { id, message, type }])
+    setToasts(prev => [...prev.slice(-4), { id, message, type }])
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id))
     }, duration)
@@ -26,7 +32,7 @@ export function ToastProvider({ children }) {
             key={toast.id}
             className={`toast-enter flex items-center gap-3 px-4 py-3 rounded-lg shadow-lg text-sm font-medium min-w-64 cursor-pointer ${
               toast.type === 'success' ? 'bg-green-600 text-white' :
-              toast.type === 'error' ? 'bg-red-600 text-white' :
+              toast.type === 'error'   ? 'bg-red-600 text-white' :
               toast.type === 'warning' ? 'bg-yellow-500 text-white' :
               'bg-gray-800 text-white'
             }`}
