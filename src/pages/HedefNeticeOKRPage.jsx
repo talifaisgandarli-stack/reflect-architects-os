@@ -265,11 +265,11 @@ export default function HedefNeticeOKRPage() {
     }
     if (editOkr) {
       const { error } = await supabase.from('okrs').update(data).eq('id', editOkr.id)
-      if (error) { addToast('Xəta: ' + error.message, 'error'); return }
+      if (error) { addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin', 'error'); return }
       addToast('OKR yeniləndi', 'success')
     } else {
       const { error } = await supabase.from('okrs').insert(data)
-      if (error) { addToast('Xəta: ' + error.message, 'error'); return }
+      if (error) { addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin', 'error'); return }
       addToast('OKR əlavə edildi', 'success')
     }
     setModalOpen(false); setEditOkr(null)
@@ -278,7 +278,7 @@ export default function HedefNeticeOKRPage() {
 
   async function handleDelete() {
     const { error } = await supabase.from('okrs').delete().eq('id', deleteOkr.id)
-    if (error) { addToast('Xəta: ' + error.message, 'error'); return }
+    if (error) { addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin', 'error'); return }
     addToast('Silindi', 'success')
     setDeleteOkr(null)
     await loadData()

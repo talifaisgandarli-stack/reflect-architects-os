@@ -157,11 +157,11 @@ export default function KommersiyaTeklifleriPage() {
     }
     if (editProposal) {
       const { error } = await supabase.from('proposals').update(data).eq('id', editProposal.id)
-      if (error) { addToast('Xəta: ' + error.message, 'error'); return }
+      if (error) { addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin', 'error'); return }
       addToast('Yeniləndi', 'success')
     } else {
       const { error } = await supabase.from('proposals').insert(data)
-      if (error) { addToast('Xəta: ' + error.message, 'error'); return }
+      if (error) { addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin', 'error'); return }
       addToast('Kommersiya təklifi əlavə edildi', 'success')
     }
     setModalOpen(false); setEditProposal(null); await loadData()

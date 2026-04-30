@@ -160,11 +160,11 @@ export default function DaxiliKocurmelePage() {
     }
     if (editTransfer) {
       const { error } = await supabase.from('internal_transfers').update(data).eq('id', editTransfer.id)
-      if (error) { addToast('Xəta: ' + error.message, 'error'); return }
+      if (error) { addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin', 'error'); return }
       addToast('Yeniləndi', 'success')
     } else {
       const { error } = await supabase.from('internal_transfers').insert(data)
-      if (error) { addToast('Xəta: ' + error.message, 'error'); return }
+      if (error) { addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin', 'error'); return }
       addToast('Köçürmə əlavə edildi', 'success')
     }
     setModalOpen(false); setEditTransfer(null); await loadData()

@@ -322,7 +322,7 @@ export default function ElanlarLovhesiPage() {
       }
     }
 
-    if (error) { addToast('Xəta: ' + error.message, 'error'); return }
+    if (error) { addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin', 'error'); return }
 
     setModalOpen(false)
     setEditElan(null)
@@ -331,7 +331,7 @@ export default function ElanlarLovhesiPage() {
 
   async function handleDelete() {
     const { error } = await supabase.from('notices').delete().eq('id', deleteElan.id)
-    if (error) { addToast('Xəta: ' + error.message, 'error'); return }
+    if (error) { addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin', 'error'); return }
     addToast('Elan silindi', 'success')
     setDeleteElan(null)
     await loadData()

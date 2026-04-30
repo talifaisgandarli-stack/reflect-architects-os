@@ -169,11 +169,11 @@ export default function MezuniyyetCedveliPage() {
     }
     if (editLeave) {
       const { error } = await supabase.from('leave_requests').update(data).eq('id', editLeave.id)
-      if (error) { addToast('Xəta: ' + error.message, 'error'); return }
+      if (error) { addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin', 'error'); return }
       addToast('Yeniləndi', 'success')
     } else {
       const { error } = await supabase.from('leave_requests').insert(data)
-      if (error) { addToast('Xəta: ' + error.message, 'error'); return }
+      if (error) { addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin', 'error'); return }
       addToast(`Sorğu göndərildi → ${form.approver_name}`, 'success')
     }
     setModalOpen(false); setEditLeave(null)
@@ -186,7 +186,7 @@ export default function MezuniyyetCedveliPage() {
       approved_by: profile?.full_name || 'Admin',
       approved_at: new Date().toISOString()
     }).eq('id', leave.id)
-    if (error) { addToast('Xəta: ' + error.message, 'error'); return }
+    if (error) { addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin', 'error'); return }
     // İşçiyə bildiriş göndər
     if (leave.member_id) {
       const msg = status === 'approved'

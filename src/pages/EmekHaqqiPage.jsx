@@ -234,7 +234,7 @@ export default function EmekHaqqiPage() {
     if (histErr) { addToast('Xəta: ' + histErr.message, 'error'); return }
 
     const { error } = await supabase.from('profiles').update({ monthly_salary: net }).eq('id', salaryModal.id)
-    if (error) { addToast('Xəta: ' + error.message, 'error'); return }
+    if (error) { addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin', 'error'); return }
 
     addToast('Maaş yeniləndi', 'success')
     setSalaryModal(null)

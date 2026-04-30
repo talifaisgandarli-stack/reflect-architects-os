@@ -623,7 +623,7 @@ export default function HadiselerTeqvimiPage() {
     if (existingId) {
       // Redaktə
       const { error } = await supabase.from('events').update(data).eq('id', existingId)
-      if (error) { addToast('Xəta: '+error.message,'error'); return }
+      if (error) { addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin','error'); return }
       // Dəyişiklik bildirişi — bütün tag olunanları xəbərdar et
       for (const uid of (data.tagged_profiles||[])) {
         if (uid !== user?.id) {
@@ -637,7 +637,7 @@ export default function HadiselerTeqvimiPage() {
     } else {
       // Yeni
       const { error } = await supabase.from('events').insert(data)
-      if (error) { addToast('Xəta: '+error.message,'error'); return }
+      if (error) { addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin','error'); return }
       // Dəvət bildirişi
       for (const uid of (data.tagged_profiles||[])) {
         if (uid !== user?.id) {
@@ -660,7 +660,7 @@ export default function HadiselerTeqvimiPage() {
 
   async function handleDelete() {
     const { error } = await supabase.from('events').delete().eq('id', deleteEv.id)
-    if (error) { addToast('Xəta: '+error.message,'error'); return }
+    if (error) { addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin','error'); return }
     addToast('Silindi', 'success')
     setDeleteEv(null)
     setSheet(null)
@@ -673,7 +673,7 @@ export default function HadiselerTeqvimiPage() {
     if (prev === status) return // eyni cavab
     const updated = { ...current, [user.id]: status }
     const { error } = await supabase.from('events').update({ rsvp: updated }).eq('id', event.id)
-    if (error) { addToast('Xəta: '+error.message,'error'); return }
+    if (error) { addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin','error'); return }
 
     addToast(status==='accepted'?'✓ Qəbul etdiniz':'✕ Rədd etdiniz', status==='accepted'?'success':'error')
 

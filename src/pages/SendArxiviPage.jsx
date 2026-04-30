@@ -98,11 +98,11 @@ export default function SendArxiviPage() {
     const data = { title: form.title.trim(), doc_type: form.doc_type, project: form.project || null, drive_link: form.drive_link || null, notes: form.notes || null }
     if (editDoc) {
       const { error } = await supabase.from('documents').update(data).eq('id', editDoc.id)
-      if (error) { addToast('Xəta: ' + error.message, 'error'); return }
+      if (error) { addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin', 'error'); return }
       addToast('Yeniləndi', 'success')
     } else {
       const { error } = await supabase.from('documents').insert(data)
-      if (error) { addToast('Xəta: ' + error.message, 'error'); return }
+      if (error) { addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin', 'error'); return }
       addToast('Sənəd əlavə edildi', 'success')
     }
     setModalOpen(false); setEditDoc(null); await loadData()
