@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { PageHeader, Card, Button, Skeleton, StatCard } from '../components/ui'
+import { getLocalYear, getLocalMonth } from '../lib/dateUtils'
 import { IconDownload } from '@tabler/icons-react'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -49,16 +50,8 @@ export default function HesabatlarPage() {
       if (filterMonth !== 0 && idx + 1 !== filterMonth) {
         return { month, income: 0, incomeWithEdv: 0, expense: 0, expenseWithEdv: 0, profit: 0, profitWithEdv: 0 }
       }
-      const monthInc = incomes.filter(i => {
-        if (!i.payment_date) return false
-        const d = new Date(i.payment_date)
-        return d.getFullYear() === year && d.getMonth() === idx
-      })
-      const monthExp = expenses.filter(e => {
-        if (!e.expense_date) return false
-        const d = new Date(e.expense_date)
-        return d.getFullYear() === year && d.getMonth() === idx
-      })
+      const monthInc = incomes.filter(i => getLocalYear(i.payment_date) === year && getLocalMonth(i.payment_date) === idx + 1)
+      const monthExp = expenses.filter(e => getLocalYear(e.expense_date) === year && getLocalMonth(e.expense_date) === idx + 1)
 
       const income = monthInc.reduce((s, i) => s + Number(i.amount || 0), 0)
       const incomeWithEdv = monthInc.reduce((s, i) => s + Number(i.amount_with_edv || i.amount || 0), 0)
@@ -104,20 +97,14 @@ export default function HesabatlarPage() {
     const expByCategory = Object.entries(catMap).map(([name, value]) => ({ name, value: Math.round(value) })).sort((a, b) => b.value - a.value)
 
     // Ümumi KPI
-    const filtInc = incomes.filter(i => {
-      if (!i.payment_date) return false
-      const d = new Date(i.payment_date)
-      if (d.getFullYear() !== year) return false
-      if (filterMonth && d.getMonth() + 1 !== filterMonth) return false
+    const inPeriod = (dateStr) => {
+      if (!dateStr) return false
+      if (getLocalYear(dateStr) !== year) return false
+      if (filterMonth && getLocalMonth(dateStr) !== filterMonth) return false
       return true
-    })
-    const filtExp = expenses.filter(e => {
-      if (!e.expense_date) return false
-      const d = new Date(e.expense_date)
-      if (d.getFullYear() !== year) return false
-      if (filterMonth && d.getMonth() + 1 !== filterMonth) return false
-      return true
-    })
+    }
+    const filtInc = incomes.filter(i => inPeriod(i.payment_date))
+    const filtExp = expenses.filter(e => inPeriod(e.expense_date))
     const totalIncome = filtInc.reduce((s, i) => s + Number(i.amount || 0), 0)
     const totalIncomeWithEdv = filtInc.reduce((s, i) => s + Number(i.amount_with_edv || i.amount || 0), 0)
     const totalEdvCollected = filtInc.filter(i => i.payment_method === 'transfer').reduce((s, i) => s + Number(i.edv_amount || 0), 0)
