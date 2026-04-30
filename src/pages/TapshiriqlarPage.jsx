@@ -748,8 +748,9 @@ function DetailPanel({ task, projects, members, onClose, onEdit, onDelete, onSta
 
 // ─── Kanban Card ──────────────────────────────────────────────────────────────
 function KanbanCard({ task, projects, members, checkCounts, commentCounts, onClick, onArchive, onDragStart, onDragEnd, isDragging, filterUser, mySubtasks }) {
-  const project  = projects.find(p => p.id === task.project_id)
-  const assignee = members.find(m => m.id === task.assignee_id)
+  const project      = projects.find(p => p.id === task.project_id)
+  const assignee     = members.find(m => m.id === task.assignee_id)
+  const filteredMember = filterUser && filterUser !== 'all' ? members.find(m => m.id === filterUser) : null
   const days = daysLeft(task.due_date)
   const pr = prio(task.priority)
   const isDone = task.status === 'done'
@@ -880,7 +881,7 @@ function KanbanCard({ task, projects, members, checkCounts, commentCounts, onCli
         <div className="border-t border-[#f0f0ec] px-3.5 py-2.5 bg-[#f8faff]"
           onClick={e => e.stopPropagation()}>
           <div className="text-[9px] font-bold text-blue-500 uppercase tracking-wider mb-1.5">
-            Sizin subtask-lar ({mySubtasks.filter(s=>s.completed).length}/{mySubtasks.length})
+            {filteredMember ? filteredMember.full_name.split(' ')[0] : 'Sizin'} subtask-lar ({mySubtasks.filter(s=>s.completed).length}/{mySubtasks.length})
           </div>
           <div className="space-y-1">
             {mySubtasks.map(item => {
@@ -1092,6 +1093,11 @@ export default function TapshiriqlarPage() {
     setTasks(tRes.data || [])
     setProjects(pRes.data || [])
     setMembers(mRes.data || [])
+    if (ckRes.error) {
+      // task_checklists cədvəlində assignee_id/due_date sütunları yoxdursa bu xəta baş verir.
+      // SQL: ALTER TABLE task_checklists ADD COLUMN IF NOT EXISTS assignee_id uuid, due_date date;
+      console.error('Checklist query failed — run schema migration:', ckRes.error.message)
+    }
     const cc = {}
     const now = new Date(); now.setHours(0,0,0,0)
     for (const item of (ckRes.data||[])) {
