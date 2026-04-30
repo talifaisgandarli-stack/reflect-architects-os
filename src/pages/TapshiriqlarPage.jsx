@@ -315,8 +315,8 @@ function DetailPanel({ task, projects, members, onClose, onEdit, onDelete, onSta
   const [checklists, setChecklists] = useState([])
   const [comments,   setComments]   = useState([])
   const [newCheck,     setNewCheck]     = useState('')
-  const [checkAssignee, setCheckAssignee] = useState(task.assignee_id || '')
-  const [checkDue,      setCheckDue]      = useState(task.due_date || '')
+  const [checkAssignee, setCheckAssignee] = useState('')
+  const [checkDue,      setCheckDue]      = useState('')
   const [checkErrors,   setCheckErrors]   = useState({})
   const [editingId,     setEditingId]     = useState(null)
   const [editTitle,     setEditTitle]     = useState('')
@@ -364,8 +364,8 @@ function DetailPanel({ task, projects, members, onClose, onEdit, onDelete, onSta
       due_date:    checkDue,
     })
     setNewCheck('')
-    setCheckAssignee(task.assignee_id || '')
-    setCheckDue(task.due_date || '')
+    setCheckAssignee('')
+    setCheckDue('')
     loadChecklists()
   }
   async function toggleCheck(item) {
