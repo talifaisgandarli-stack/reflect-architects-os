@@ -6,8 +6,31 @@ const supabaseAdmin = createClient(
   { auth: { autoRefreshToken: false, persistSession: false } }
 )
 
+async function requireAdmin(req) {
+  const authHeader = req.headers?.authorization || req.headers?.Authorization || ''
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null
+  if (!token) return { ok: false, status: 401, error: 'Authorization tokeni yoxdur' }
+
+  const { data: userData, error: userErr } = await supabaseAdmin.auth.getUser(token)
+  if (userErr || !userData?.user) return { ok: false, status: 401, error: 'Yararsız token' }
+
+  const { data: profile, error: profErr } = await supabaseAdmin
+    .from('profiles')
+    .select('id, roles(level)')
+    .eq('id', userData.user.id)
+    .single()
+  if (profErr || !profile) return { ok: false, status: 403, error: 'Profil tapılmadı' }
+
+  const level = profile.roles?.level ?? 99
+  if (level > 2) return { ok: false, status: 403, error: 'İcazə yoxdur' }
+  return { ok: true, user: userData.user, level }
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
+
+  const gate = await requireAdmin(req)
+  if (!gate.ok) return res.status(gate.status).json({ error: gate.error })
 
   const { action, email, password, full_name, role_id, department, phone,
     monthly_salary, whatsapp_number, joining_date, user_id, is_active } = req.body || {}

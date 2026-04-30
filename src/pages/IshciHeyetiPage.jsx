@@ -239,10 +239,14 @@ export default function IshciHeyetiPage() {
 
     if (isNew) {
       if (!form.email || !password) { addToast('Email və şifrə daxil edin', 'error'); return }
+      const { data: { session } } = await supabase.auth.getSession()
       const res = await fetch('/api/users', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: form.email, password, full_name: form.full_name, role_id: form.role_id, department: form.department, phone: form.phone, joining_date: form.joining_date, career_level: form.career_level, promotion_eligible: form.promotion_eligible })
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {})
+        },
+        body: JSON.stringify({ action: 'create', email: form.email, password, full_name: form.full_name, role_id: form.role_id, department: form.department, phone: form.phone, joining_date: form.joining_date, career_level: form.career_level, promotion_eligible: form.promotion_eligible })
       })
       const data = await res.json()
       if (!res.ok) { addToast('Xəta: ' + (data.error || 'Bilinməyən xəta'), 'error'); return }

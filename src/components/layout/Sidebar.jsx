@@ -9,7 +9,7 @@ import {
   IconChartBar, IconRefresh, IconWallet,
   IconSpeakerphone, IconCalendar, IconUmbrella, IconDeviceLaptop,
   IconTarget, IconBrandInstagram, IconFolder, IconBook,
-  IconSettings, IconDatabase, IconChevronDown, IconChevronRight, IconBrandWhatsapp,
+  IconSettings, IconDatabase, IconChevronDown, IconChevronRight,
   IconLogout, IconSearch, IconBell, IconHeartHandshake, IconStar, IconSitemap,
   IconHome
 } from '@tabler/icons-react'

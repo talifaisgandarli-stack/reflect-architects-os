@@ -1128,7 +1128,7 @@ export default function TapshiriqlarPage() {
     const data = { title:form.title.trim(), description:form.description||null, project_id:form.project_id||null, assignee_ids:form.assignee_ids||[], assignee_id:(form.assignee_ids||[])[0]||null, status:form.status, priority:form.priority, due_date:form.due_date||null, tags:form.tags||[], is_hidden:form.is_hidden||false }
     if (editTask) {
       const { error } = await supabase.from('tasks').update(data).eq('id', editTask.id)
-      if (error) { addToast('Xəta: '+error.message,'error'); return }
+      if (error) { addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin','error'); return }
       // Activity: status dəyişibsə qeyd et
       if (editTask.status !== data.status) {
         await supabase.from('task_comments').insert({ task_id:editTask.id, author_id:user?.id, type:'activity', content:'status dəyişdi', metadata:{ old_status:editTask.status, new_status:data.status } })
@@ -1140,7 +1140,7 @@ export default function TapshiriqlarPage() {
       addToast('Tapşırıq yeniləndi','success')
     } else {
       const { data:inserted, error } = await supabase.from('tasks').insert(data).select().single()
-      if (error) { addToast('Xəta: '+error.message,'error'); return }
+      if (error) { addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin','error'); return }
       await supabase.from('task_comments').insert({ task_id:inserted.id, author_id:user?.id, type:'activity', content:'tapşırıq yaradıldı', metadata:{} })
       // Cavabdehə bildiriş
       for (const uid of (data.assignee_ids||[])) {
@@ -1170,7 +1170,7 @@ export default function TapshiriqlarPage() {
       archived: false,
     }
     const { data:inserted, error } = await supabase.from('tasks').insert(payload).select().single()
-    if (error) { addToast('Xəta: ' + error.message, 'error'); return }
+    if (error) { addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin', 'error'); return }
     // Optimistic — yeni tapşırığı dərhal state-ə əlavə et
     setTasks(prev => [inserted, ...prev])
     // Activity + bildiriş (fire and forget)
@@ -1202,7 +1202,7 @@ export default function TapshiriqlarPage() {
       // Rollback
       setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: task.status } : t))
       if (detailTask?.id === task.id) setDetailTask(prev => ({ ...prev, status: task.status }))
-      addToast('Xəta: ' + error.message, 'error')
+      addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin', 'error')
       return
     }
     // 3. Activity log
@@ -1222,7 +1222,7 @@ export default function TapshiriqlarPage() {
     setTasks(prev => prev.map(t => t.id === task.id ? { ...t, due_date: newDue || null } : t))
     if (detailTask?.id === task.id) setDetailTask(prev => ({ ...prev, due_date: newDue }))
     const { error } = await supabase.from('tasks').update({ due_date: newDue || null }).eq('id', task.id)
-    if (error) addToast('Xəta: ' + error.message, 'error')
+    if (error) addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin', 'error')
   }
 
   async function archiveDone() {
@@ -1267,7 +1267,7 @@ export default function TapshiriqlarPage() {
     if (error) {
       // Rollback
       setTasks(prev => prev.map(t => t.id === dragTaskId ? { ...t, status: oldStatus } : t))
-      addToast('Xəta: ' + error.message, 'error')
+      addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin', 'error')
       return
     }
     // Activity log (fire and forget)

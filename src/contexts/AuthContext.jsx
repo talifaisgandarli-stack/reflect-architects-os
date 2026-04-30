@@ -1,12 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 
-const ADMIN_EMAILS = [
-  'talifa.isgandarli@gmail.com',
-  'nusalov.n@reflect.az',
-  'turkan.a@reflect.az'
-]
-
 const AuthContext = createContext({})
 
 export function AuthProvider({ children }) {
@@ -17,27 +11,36 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null)
-      if (session?.user) fetchProfile(session.user.id, session.user.email)
+      if (session?.user) fetchProfile(session.user.id)
       else setLoading(false)
     })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null)
-      if (session?.user) fetchProfile(session.user.id, session.user.email)
+      if (session?.user) fetchProfile(session.user.id)
       else { setProfile(null); setLoading(false) }
     })
 
     return () => subscription.unsubscribe()
   }, [])
 
-  async function fetchProfile(userId, email) {
-    const { data } = await supabase
-      .from('profiles')
-      .select('*, roles(*)')
-      .eq('id', userId)
-      .single()
-    setProfile(data)
-    setLoading(false)
+  async function fetchProfile(userId) {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*, roles(*)')
+        .eq('id', userId)
+        .single()
+      if (error) {
+        setProfile(null)
+      } else {
+        setProfile(data)
+      }
+    } catch {
+      setProfile(null)
+    } finally {
+      setLoading(false)
+    }
   }
 
   async function signIn(email, password) {
@@ -49,9 +52,10 @@ export function AuthProvider({ children }) {
     await supabase.auth.signOut()
   }
 
-  const isAdmin = ADMIN_EMAILS.includes(user?.email?.toLowerCase())
+  const roleLevel = profile?.roles?.level ?? 99
+  const isAdmin = roleLevel <= 2
 
-  const value = { user, profile, loading, isAdmin, signIn, signOut }
+  const value = { user, profile, loading, isAdmin, roleLevel, signIn, signOut }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
