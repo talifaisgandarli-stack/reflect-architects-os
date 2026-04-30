@@ -5,8 +5,9 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY
 )
 
-const GEMINI_KEY   = process.env.GEMINI_API_KEY
-const BOT_TOKEN    = process.env.TELEGRAM_BOT_TOKEN
+const GEMINI_KEY     = process.env.GEMINI_API_KEY
+const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY
+const BOT_TOKEN      = process.env.TELEGRAM_BOT_TOKEN
 const TG_API       = `https://api.telegram.org/bot${BOT_TOKEN}`
 const ADMIN_EMAILS = ['talifa.isgandarli@gmail.com', 'nusalov.n@reflect.az', 'turkan.a@reflect.az']
 const BD_EMAILS    = ['talifa.isgandarli@gmail.com', 'turkan.a@reflect.az']
@@ -43,23 +44,54 @@ async function tg(chat_id, text) {
   }
 }
 
+// AI completion — OpenRouter (free models) prefer, Gemini fallback.
+// OpenRouter gives access to many free LLMs (Llama 3.3 70B, Gemini Flash,
+// Mistral, Qwen) with one API key. Set OPENROUTER_API_KEY in env.
 async function ai(prompt) {
-  if (!GEMINI_KEY) return null
-  try {
-    const r = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`,
-      {
+  if (OPENROUTER_KEY) {
+    try {
+      const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-      }
-    )
-    const d = await r.json()
-    return d?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null
-  } catch (e) {
-    console.error('Gemini error:', e.message)
-    return null
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${OPENROUTER_KEY}`,
+          'HTTP-Referer': 'https://reflect-architects-os.vercel.app',
+          'X-Title': 'Reflect Architects OS',
+        },
+        body: JSON.stringify({
+          model: 'meta-llama/llama-3.3-70b-instruct:free',
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.7,
+          max_tokens: 800,
+        })
+      })
+      const d = await r.json()
+      const text = d?.choices?.[0]?.message?.content?.trim()
+      if (text) return text
+      console.error('OpenRouter empty response:', JSON.stringify(d).slice(0, 200))
+    } catch (e) {
+      console.error('OpenRouter error:', e.message)
+    }
   }
+
+  if (GEMINI_KEY) {
+    try {
+      const r = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+        }
+      )
+      const d = await r.json()
+      return d?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null
+    } catch (e) {
+      console.error('Gemini error:', e.message)
+    }
+  }
+
+  return null
 }
 
 async function db(table, query) {
