@@ -327,7 +327,12 @@ export default function IshciHeyetiPage() {
       </div>
 
       {members.length === 0 ? (
-        <EmptyState icon={IconUsersGroup} title="Hələ işçi yoxdur" />
+        <EmptyState
+          icon={IconUsersGroup}
+          title="Hələ işçi yoxdur"
+          description="İlk işçini əlavə edərək komandanı qurmağa başla."
+          action={<Button onClick={() => { setIsNew(true); setEditMember(null); setModalOpen(true) }} size="sm"><IconPlus size={14}/> Yeni işçi</Button>}
+        />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {filtered.map(member => (
