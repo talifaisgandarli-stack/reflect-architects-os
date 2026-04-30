@@ -136,21 +136,25 @@ export default function DaxilolmalarPage() {
       payment_date: form.payment_date || null, notes: form.notes || null
     }
     if (editIncome) {
-      const { error } = await supabase.from('incomes').update(data).eq('id', editIncome.id)
-      if (error) { addToast('Xəta: ' + error.message, 'error'); return }
+      const { data: updated, error } = await supabase.from('incomes').update(data).eq('id', editIncome.id).select().single()
+      if (error) { addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin', 'error'); return }
+      setIncomes(prev => prev.map(i => i.id === editIncome.id ? updated : i))
       addToast('Yeniləndi', 'success')
     } else {
-      const { error } = await supabase.from('incomes').insert(data)
-      if (error) { addToast('Xəta: ' + error.message, 'error'); return }
+      const { data: inserted, error } = await supabase.from('incomes').insert(data).select().single()
+      if (error) { addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin', 'error'); return }
+      setIncomes(prev => [inserted, ...prev])
       addToast('Daxilolma əlavə edildi', 'success')
     }
-    setModalOpen(false); setEditIncome(null); await loadData()
+    setModalOpen(false); setEditIncome(null)
   }
 
   async function handleDelete() {
-    await supabase.from('incomes').delete().eq('id', deleteIncome.id)
+    const id = deleteIncome.id
+    setIncomes(prev => prev.filter(i => i.id !== id))
+    setDeleteIncome(null)
     addToast('Silindi', 'success')
-    setDeleteIncome(null); await loadData()
+    await supabase.from('incomes').delete().eq('id', id)
   }
 
   const totalCash = incomes.filter(i => i.payment_method === 'cash').reduce((s, i) => s + Number(i.amount || 0), 0)

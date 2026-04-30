@@ -138,21 +138,25 @@ export default function XerclerPage() {
       project_id: form.project_id || null, notes: form.notes || null
     }
     if (editExpense) {
-      const { error } = await supabase.from('expenses').update(data).eq('id', editExpense.id)
-      if (error) { addToast('Xəta: ' + error.message, 'error'); return }
+      const { data: updated, error } = await supabase.from('expenses').update(data).eq('id', editExpense.id).select().single()
+      if (error) { addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin', 'error'); return }
+      setExpenses(prev => prev.map(e => e.id === editExpense.id ? updated : e))
       addToast('Yeniləndi', 'success')
     } else {
-      const { error } = await supabase.from('expenses').insert(data)
-      if (error) { addToast('Xəta: ' + error.message, 'error'); return }
+      const { data: inserted, error } = await supabase.from('expenses').insert(data).select().single()
+      if (error) { addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin', 'error'); return }
+      setExpenses(prev => [inserted, ...prev])
       addToast('Xərc əlavə edildi', 'success')
     }
-    setModalOpen(false); setEditExpense(null); await loadData()
+    setModalOpen(false); setEditExpense(null)
   }
 
   async function handleDelete() {
-    await supabase.from('expenses').delete().eq('id', deleteExpense.id)
+    const id = deleteExpense.id
+    setExpenses(prev => prev.filter(e => e.id !== id))
+    setDeleteExpense(null)
     addToast('Silindi', 'success')
-    setDeleteExpense(null); await loadData()
+    await supabase.from('expenses').delete().eq('id', id)
   }
 
   const totalCash = expenses.filter(e => e.payment_method === 'cash').reduce((s, e) => s + Number(e.amount || 0), 0)

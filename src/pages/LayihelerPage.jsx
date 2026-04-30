@@ -447,27 +447,29 @@ export default function LayihelerPage() {
     }
 
     if (editProject) {
-      const { error } = await supabase.from('projects').update(data).eq('id', editProject.id)
-      if (error) { addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin', 'error'); console.error('UPDATE ERROR:', error); return }
+      const { data: updated, error } = await supabase.from('projects').update(data).eq('id', editProject.id).select('*, clients(name)').single()
+      if (error) { addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin', 'error'); return }
+      setProjects(prev => prev.map(p => p.id === editProject.id ? updated : p))
       addToast('Layihə yeniləndi', 'success')
     } else {
-      const { error } = await supabase.from('projects').insert(data)
-      if (error) { addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin', 'error'); console.error('INSERT ERROR:', error); return }
-      await notifyAll('Yeni layihə əlavə edildi', form.name?.trim() || 'Yeni layihə', 'info', '/layiheler')
+      const { data: inserted, error } = await supabase.from('projects').insert(data).select('*, clients(name)').single()
+      if (error) { addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin', 'error'); return }
+      setProjects(prev => [inserted, ...prev])
+      notifyAll('Yeni layihə əlavə edildi', form.name?.trim() || 'Yeni layihə', 'info', '/layiheler')
       addToast('Layihə əlavə edildi', 'success')
     }
 
     setModalOpen(false)
     setEditProject(null)
-    loadData()
   }
 
   async function handleDelete() {
-    const { error } = await supabase.from('projects').delete().eq('id', deleteProject.id)
-    if (error) { addToast('Xəta baş verdi', 'error'); return }
-    addToast('Layihə silindi', 'success')
+    const id = deleteProject.id
+    setProjects(prev => prev.filter(p => p.id !== id))
     setDeleteProject(null)
-    loadData()
+    addToast('Layihə silindi', 'success')
+    const { error } = await supabase.from('projects').delete().eq('id', id)
+    if (error) addToast('Silinmə xətası', 'error')
   }
 
   function openEdit(p) { setEditProject(p); setModalOpen(true) }
