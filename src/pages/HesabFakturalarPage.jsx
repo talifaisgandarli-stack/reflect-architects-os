@@ -150,27 +150,32 @@ export default function HesabFakturalarPage() {
       status: form.status, notes: form.notes || null
     }
     if (editInvoice) {
-      const { error } = await supabase.from('invoices').update(data).eq('id', editInvoice.id)
-      if (error) { addToast('Xəta: ' + error.message, 'error'); return }
+      const { data: updated, error } = await supabase.from('invoices').update(data).eq('id', editInvoice.id).select().single()
+      if (error) { addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin', 'error'); return }
+      setInvoices(prev => prev.map(i => i.id === editInvoice.id ? updated : i))
       addToast('Yeniləndi', 'success')
     } else {
-      const { error } = await supabase.from('invoices').insert(data)
-      if (error) { addToast('Xəta: ' + error.message, 'error'); return }
+      const { data: inserted, error } = await supabase.from('invoices').insert(data).select().single()
+      if (error) { addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin', 'error'); return }
+      setInvoices(prev => [inserted, ...prev])
       addToast('Faktura əlavə edildi', 'success')
     }
-    setModalOpen(false); setEditInvoice(null); await loadData()
+    setModalOpen(false); setEditInvoice(null)
   }
 
   async function markPaid(inv) {
-    await supabase.from('invoices').update({ status: 'paid', payment_date: new Date().toISOString().split('T')[0] }).eq('id', inv.id)
+    const patch = { status: 'paid', payment_date: new Date().toISOString().split('T')[0] }
+    setInvoices(prev => prev.map(i => i.id === inv.id ? { ...i, ...patch } : i))
     addToast('Ödənildi olaraq işarələndi', 'success')
-    await loadData()
+    await supabase.from('invoices').update(patch).eq('id', inv.id)
   }
 
   async function handleDelete() {
-    await supabase.from('invoices').delete().eq('id', deleteInvoice.id)
+    const id = deleteInvoice.id
+    setInvoices(prev => prev.filter(i => i.id !== id))
+    setDeleteInvoice(null)
     addToast('Silindi', 'success')
-    setDeleteInvoice(null); await loadData()
+    await supabase.from('invoices').delete().eq('id', id)
   }
 
   const getClient = id => clients.find(c => c.id === id)

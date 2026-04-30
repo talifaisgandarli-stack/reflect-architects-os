@@ -249,10 +249,24 @@ export default function IshciHeyetiPage() {
         body: JSON.stringify({ action: 'create', email: form.email, password, full_name: form.full_name, role_id: form.role_id, department: form.department, phone: form.phone, joining_date: form.joining_date, career_level: form.career_level, promotion_eligible: form.promotion_eligible })
       })
       const data = await res.json()
-      if (!res.ok) { addToast('Xəta: ' + (data.error || 'Bilinməyən xəta'), 'error'); return }
+      if (!res.ok) { addToast(data.error || 'Yaradılma alınmadı', 'error'); return }
       addToast('İşçi əlavə edildi', 'success')
+      // New user: API qaytardığı id ilə local state-ə əlavə et (full reload əvəzinə)
+      const newRow = {
+        id: data.user_id,
+        full_name: form.full_name.trim(),
+        email: form.email,
+        phone: form.phone || null,
+        role_id: form.role_id || null,
+        department: form.department || null,
+        joining_date: form.joining_date || null,
+        is_active: true,
+        career_level: form.career_level,
+        promotion_eligible: form.promotion_eligible,
+      }
+      setMembers(prev => [newRow, ...prev])
     } else {
-      const { error } = await supabase.from('profiles').update({
+      const patch = {
         full_name: form.full_name.trim(),
         phone: form.phone || null,
         role_id: form.role_id || null,
@@ -260,25 +274,30 @@ export default function IshciHeyetiPage() {
         joining_date: form.joining_date || null,
         is_active: form.is_active,
         career_level: form.career_level,
-        promotion_eligible: form.promotion_eligible
-      }).eq('id', editMember.id)
-      if (error) { addToast('Xəta: ' + error.message, 'error'); return }
+        promotion_eligible: form.promotion_eligible,
+      }
+      const { error } = await supabase.from('profiles').update(patch).eq('id', editMember.id)
+      if (error) { addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin', 'error'); return }
+      setMembers(prev => prev.map(m => m.id === editMember.id ? { ...m, ...patch } : m))
       addToast('Yeniləndi', 'success')
     }
-    setModalOpen(false); setEditMember(null); await loadData()
+    setModalOpen(false); setEditMember(null)
   }
 
   async function handleResetPassword() {
     const { error } = await supabase.auth.resetPasswordForEmail(resetMember.email)
-    if (error) { addToast('Xəta: ' + error.message, 'error') }
+    if (error) addToast('Email göndərilmədi', 'error')
     else addToast('Şifrə sıfırlama emaili göndərildi', 'success')
     setResetMember(null)
   }
 
   async function handleToggleActive() {
-    await supabase.from('profiles').update({ is_active: !confirmToggle.is_active }).eq('id', confirmToggle.id)
-    addToast(confirmToggle.is_active ? 'Deaktiv edildi' : 'Aktiv edildi', 'success')
-    setConfirmToggle(null); await loadData()
+    const target = confirmToggle
+    const newActive = !target.is_active
+    setMembers(prev => prev.map(m => m.id === target.id ? { ...m, is_active: newActive } : m))
+    setConfirmToggle(null)
+    addToast(target.is_active ? 'Deaktiv edildi' : 'Aktiv edildi', 'success')
+    await supabase.from('profiles').update({ is_active: newActive }).eq('id', target.id)
   }
 
   const getRole = id => roles.find(r => r.id === id)
