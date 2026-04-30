@@ -115,9 +115,11 @@ function future(n) {
 export default async function handler(req, res) {
   res.setHeader('Content-Type', 'application/json')
 
-  // Cron / external trigger qoruması: paylaşılan secret yoxlanılır.
-  // Authorization: Bearer <secret> ya da ?secret=<secret> qəbul olunur.
-  const expectedSecret = process.env.AGENT_CRON_SECRET
+  // Cron / external trigger qoruması.
+  // Vercel cron job-ları avtomatik `Authorization: Bearer <CRON_SECRET>` göndərir,
+  // sadəcə Vercel-də CRON_SECRET env var qurmaq kifayətdir.
+  // Manual çağırış üçün ?secret=<...> query param da dəstəklənir.
+  const expectedSecret = process.env.CRON_SECRET || process.env.AGENT_CRON_SECRET
   if (expectedSecret) {
     const authHeader = req.headers.authorization || ''
     const headerSecret = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null
