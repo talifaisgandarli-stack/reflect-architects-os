@@ -52,7 +52,11 @@ export function AuthProvider({ children }) {
     await supabase.auth.signOut()
   }
 
-  const roleLevel = profile?.roles?.level ?? 99
+  // roles join null-safe: əgər profile yüklənməyib, role_id yoxdur
+  // ya da roles cədvəlindəki level sütunu undefined-dırsa → 99 (adi işçi)
+  const roleLevel = (profile && profile.roles && typeof profile.roles.level === 'number')
+    ? profile.roles.level
+    : 99
   const isAdmin = roleLevel <= 2
 
   const value = { user, profile, loading, isAdmin, roleLevel, signIn, signOut }
