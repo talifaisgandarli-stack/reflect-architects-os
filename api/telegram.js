@@ -51,13 +51,16 @@ export default async function handler(req, res) {
     if (action === 'setWebhook') {
       const host = req.headers.host || process.env.VERCEL_URL
       const url  = `https://${host}/api/telegram`
+      const secret = process.env.TELEGRAM_WEBHOOK_SECRET
+      const payload = { url, drop_pending_updates: true }
+      if (secret) payload.secret_token = secret
       const r = await fetch(`${TG}/setWebhook`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url, drop_pending_updates: true })
+        body: JSON.stringify(payload)
       })
       const d = await r.json()
-      return res.json({ action: 'setWebhook', url, result: d })
+      return res.json({ action: 'setWebhook', url, result: d, secretConfigured: Boolean(secret) })
     }
 
     // Webhook statusunu yoxla: GET /api/telegram?action=getWebhookInfo
@@ -80,6 +83,15 @@ export default async function handler(req, res) {
   // ── POST sorğuları ─────────────────────────────────────────────────────────
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
+  }
+
+  // Telegram webhook spoofing-i qoru: secret_token başlığını yoxla
+  const expectedSecret = process.env.TELEGRAM_WEBHOOK_SECRET
+  if (expectedSecret) {
+    const provided = req.headers['x-telegram-bot-api-secret-token']
+    if (provided !== expectedSecret) {
+      return res.status(401).json({ error: 'Unauthorized webhook' })
+    }
   }
 
   const body = req.body || {}

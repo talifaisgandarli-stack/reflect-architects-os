@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useToast } from '../contexts/ToastContext'
+import { parseLocalDate, getLocalYear, getLocalMonth } from '../lib/dateUtils'
 import { PageHeader, Badge, Card, Button, EmptyState, Modal, ConfirmDialog, Skeleton, StatCard, PageLoadingShell, TableSkeleton } from '../components/ui'
 import { IconPlus, IconEdit, IconTrash, IconMailDollar, IconCheck } from '@tabler/icons-react'
 
@@ -188,10 +189,12 @@ export default function DebitorBorclarPage() {
   const displayed = (showPaid ? receivables : unpaid).filter(r => {
     if (filterProject && r.project_id !== filterProject) return false
     if (filterClient && r.client_id !== filterClient) return false
-    if (filterYear && r.expected_date) {
-      const d = new Date(r.expected_date)
-      if (d.getFullYear() !== filterYear) return false
-      if (filterMonth && d.getMonth() + 1 !== filterMonth) return false
+    if (filterYear || filterMonth) {
+      if (!r.expected_date) return false
+      const y = getLocalYear(r.expected_date)
+      const m = getLocalMonth(r.expected_date)
+      if (filterYear  && y !== filterYear)  return false
+      if (filterMonth && m !== filterMonth) return false
     }
     return true
   })

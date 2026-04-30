@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { StatCard, Badge, Card, Skeleton, PageLoadingShell, CardGridSkeleton } from '../components/ui'
+import { parseLocalDate, getLocalYear, getLocalMonth, daysBetween } from '../lib/dateUtils'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, LineChart, Line
@@ -45,31 +46,18 @@ export default function DashboardPage() {
       const allExpenses = expensesRes.data || []
       const tasks = tasksRes.data || []
 
-      // Filter incomes by payment_date
-      const incomes = allIncomes.filter(i => {
-        if (!i.payment_date) return false
-        const d = new Date(i.payment_date)
-        if (d.getFullYear() !== filterYear) return false
-        if (filterMonth && d.getMonth() + 1 !== filterMonth) return false
+      const matchesPeriod = (dateStr) => {
+        if (!dateStr) return false
+        const y = getLocalYear(dateStr)
+        const m = getLocalMonth(dateStr)
+        if (y !== filterYear) return false
+        if (filterMonth && m !== filterMonth) return false
         return true
-      })
-      // Filter expenses by expense_date
-      const expenses = allExpenses.filter(e => {
-        if (!e.expense_date) return false
-        const d = new Date(e.expense_date)
-        if (d.getFullYear() !== filterYear) return false
-        if (filterMonth && d.getMonth() + 1 !== filterMonth) return false
-        return true
-      })
+      }
 
-      // Filter projects by deadline
-      const filteredProjects = projects.filter(p => {
-        if (!p.deadline) return false
-        const d = new Date(p.deadline)
-        if (d.getFullYear() !== filterYear) return false
-        if (filterMonth && d.getMonth() + 1 !== filterMonth) return false
-        return true
-      })
+      const incomes = allIncomes.filter(i => matchesPeriod(i.payment_date))
+      const expenses = allExpenses.filter(e => matchesPeriod(e.expense_date))
+      const filteredProjects = projects.filter(p => matchesPeriod(p.deadline))
       const totalPortfolio = filteredProjects.reduce((s, p) => s + Number(p.contract_value || 0), 0)
       // ƏDV xaric məbləğlər
       const totalIncome = incomes.reduce((s, i) => s + Number(i.amount || 0), 0)
@@ -97,13 +85,7 @@ export default function DashboardPage() {
       const netTransfer = incomeTransfer - expenseTransfer
       const netWithEdv = totalIncomeWithEdv - expenseTotalWithEdv
 
-      const filteredDebts = debts.filter(d => {
-        if (!d.expected_date) return false
-        const dt = new Date(d.expected_date)
-        if (dt.getFullYear() !== filterYear) return false
-        if (filterMonth && dt.getMonth() + 1 !== filterMonth) return false
-        return true
-      })
+      const filteredDebts = debts.filter(d => matchesPeriod(d.expected_date))
       const totalDebt = filteredDebts.filter(d => !d.paid).reduce((s, d) => s + ((Number(d.expected_amount) || 0) - (Number(d.paid_amount) || 0)), 0)
       const activeProjects = filteredProjects.filter(p => p.status === 'active').length
 
@@ -115,11 +97,7 @@ export default function DashboardPage() {
       const currentYear = new Date().getFullYear()
       const monthlyIncome = MONTHS.map((month, idx) => {
         const total = incomes
-          .filter(i => {
-            if (!i.payment_date) return false
-            const d = new Date(i.payment_date)
-            return d.getFullYear() === currentYear && d.getMonth() === idx
-          })
+          .filter(i => getLocalYear(i.payment_date) === currentYear && getLocalMonth(i.payment_date) === idx + 1)
           .reduce((s, i) => s + Number(i.amount || 0), 0)
         return { month, amount: total }
       })
@@ -144,9 +122,10 @@ export default function DashboardPage() {
 
       const aging = { '0–30 gün': 0, '31–60 gün': 0, '60+ gün': 0 }
       const overdueReceivables = []
+      const todayStr = today.toISOString().split('T')[0]
       debts.filter(d => !d.paid).forEach(d => {
         if (!d.expected_date) return
-        const days = Math.floor((today - new Date(d.expected_date)) / 86400000)
+        const days = daysBetween(d.expected_date, todayStr) ?? 0
         const amount = (Number(d.expected_amount) || 0) - (Number(d.paid_amount) || 0)
         if (days <= 30) aging['0–30 gün'] += amount
         else if (days <= 60) aging['31–60 gün'] += amount

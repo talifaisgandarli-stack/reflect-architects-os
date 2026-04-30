@@ -115,6 +115,18 @@ function future(n) {
 export default async function handler(req, res) {
   res.setHeader('Content-Type', 'application/json')
 
+  // Cron / external trigger qoruması: paylaşılan secret yoxlanılır.
+  // Authorization: Bearer <secret> ya da ?secret=<secret> qəbul olunur.
+  const expectedSecret = process.env.AGENT_CRON_SECRET
+  if (expectedSecret) {
+    const authHeader = req.headers.authorization || ''
+    const headerSecret = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null
+    const querySecret = req.query?.secret
+    if (headerSecret !== expectedSecret && querySecret !== expectedSecret) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+  }
+
   const type = req.query?.type || req.body?.type
 
   if (!type) return res.status(400).json({ error: 'type required' })
