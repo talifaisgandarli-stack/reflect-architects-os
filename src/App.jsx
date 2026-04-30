@@ -33,7 +33,6 @@ import AvadanliqPage from './pages/AvadanliqPage'
 import HedefNeticeOKRPage from './pages/HedefNeticeOKRPage'
 import MezmunPlanlamasiPage from './pages/MezmunPlanlamasiPage'
 import SendArxiviPage from './pages/SendArxiviPage'
-import WhatsAppPage from './pages/WhatsAppPage'
 import QaynaqlarPage from './pages/QaynaqlarPage'
 import PerformansPage from './pages/PerformansPage'
 import HierarchyPage from './pages/HierarchyPage'
@@ -88,7 +87,6 @@ export default function App() {
               <Route path="hedef-netice" element={<HedefNeticeOKRPage />} />
               <Route path="mezmun-planlamasi" element={<MezmunPlanlamasiPage />} />
               <Route path="sened-arxivi" element={<SendArxiviPage />} />
-              <Route path="whatsapp" element={<WhatsAppPage />} />
               <Route path="qaynaqlar" element={<QaynaqlarPage />} />
               <Route path="parametrler" element={<ParametrlerPage />} />
               <Route path="sistem-arxivi" element={<CS t="Sistem Arxivi" />} />

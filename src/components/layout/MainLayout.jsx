@@ -103,6 +103,7 @@ export default function MainLayout() {
   const [notifOpen,   setNotifOpen]   = useState(false)
   const [notifs,      setNotifs]      = useState([])
   const [loading,     setLoading]     = useState(false)
+  const [realtimeOk,  setRealtimeOk]  = useState(false)
 
   const bellRef = useRef(null)
 
@@ -170,24 +171,24 @@ export default function MainLayout() {
       )
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
-          console.log('[notifications] realtime subscribed')
-        } else if (status === 'CHANNEL_ERROR') {
-          console.error('[notifications] realtime error — polling fallback')
-          // Realtime işləməsə hər 30 saniyədə refresh et
+          setRealtimeOk(true)
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          setRealtimeOk(false)
         }
       })
 
     return () => {
+      setRealtimeOk(false)
       supabase.removeChannel(channel)
     }
   }, [user?.id])
 
-  // ── Fallback polling — realtime işləməsə ──────────────────────────────────
+  // ── Fallback polling — yalnız realtime uğursuz olduqda ────────────────────
   useEffect(() => {
-    if (!user?.id) return
-    const interval = setInterval(loadNotifs, 10000) // 10s fallback polling
+    if (!user?.id || realtimeOk) return
+    const interval = setInterval(loadNotifs, 30000)
     return () => clearInterval(interval)
-  }, [loadNotifs])
+  }, [loadNotifs, user?.id, realtimeOk])
 
   // ── Panel xarici klik ─────────────────────────────────────────────────────
   useEffect(() => {
