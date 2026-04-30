@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useToast } from '../contexts/ToastContext'
-import { PageHeader, Badge, Card, Button, EmptyState, Modal, ConfirmDialog, Skeleton, StatCard } from '../components/ui'
+import { PageHeader, Badge, Card, Button, EmptyState, Modal, ConfirmDialog, Skeleton, StatCard, PageLoadingShell, TableSkeleton } from '../components/ui'
 import { IconPlus, IconEdit, IconTrash, IconMailDollar, IconCheck } from '@tabler/icons-react'
 
 const EDV = 0.18
@@ -196,7 +196,7 @@ export default function DebitorBorclarPage() {
     return true
   })
 
-  if (loading) return <div className="p-4 lg:p-6"><Skeleton className="h-64" /></div>
+  if (loading) return <PageLoadingShell stats={3}><TableSkeleton rows={5} cols={5} /></PageLoadingShell>
 
   return (
     <div className="p-4 lg:p-6 fade-in">

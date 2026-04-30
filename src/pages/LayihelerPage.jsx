@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
 import { notifyAll } from '../lib/notify'
-import { PageHeader, Badge, Card, Button, EmptyState, Modal, ConfirmDialog, Skeleton } from '../components/ui'
+import { PageHeader, Badge, Card, Button, EmptyState, Modal, ConfirmDialog, Skeleton, PageLoadingShell, CardGridSkeleton } from '../components/ui'
 import { IconBuildings, IconPlus, IconLayoutKanban, IconList, IconEdit, IconTrash, IconAlertTriangle, IconChevronRight } from '@tabler/icons-react'
 
 const STATUSES = [
@@ -482,14 +482,7 @@ export default function LayihelerPage() {
     return acc
   }, {})
 
-  if (loading) return (
-    <div className="p-6 space-y-3">
-      <Skeleton className="h-8 w-48" />
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-64" />)}
-      </div>
-    </div>
-  )
+  if (loading) return <PageLoadingShell stats={4}><CardGridSkeleton count={6} cols={3} /></PageLoadingShell>
 
   return (
     <div className="p-4 lg:p-6 fade-in">
