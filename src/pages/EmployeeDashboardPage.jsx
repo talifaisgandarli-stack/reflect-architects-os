@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
-import { Skeleton } from '../components/ui'
+import { Skeleton, PageLoadingShell, CardGridSkeleton } from '../components/ui'
 import { useNavigate } from 'react-router-dom'
 
 const CAREER_LEVELS = [
@@ -81,11 +81,9 @@ export default function EmployeeDashboardPage() {
     : 0
 
   if (loading) return (
-    <div className="p-6 space-y-4">
-      <Skeleton className="h-32" />
-      <div className="grid grid-cols-3 gap-3">{[0,1,2].map(i => <Skeleton key={i} className="h-24" />)}</div>
-      <Skeleton className="h-64" />
-    </div>
+    <PageLoadingShell stats={3}>
+      <CardGridSkeleton count={4} cols={2} />
+    </PageLoadingShell>
   )
 
   return (

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
-import { StatCard, Badge, Card, Skeleton } from '../components/ui'
+import { StatCard, Badge, Card, Skeleton, PageLoadingShell, CardGridSkeleton } from '../components/ui'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, LineChart, Line
@@ -180,17 +180,15 @@ export default function DashboardPage() {
   const fmt = (n) => '₼' + Math.round(n).toLocaleString()
 
   if (loading) return (
-    <div className="p-4 lg:p-6 space-y-4">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-20" />)}
-      </div>
-      <div className="grid grid-cols-2 gap-4">
-        {[...Array(2)].map((_, i) => <Skeleton key={i} className="h-48" />)}
-      </div>
-    </div>
+    <PageLoadingShell stats={4}>
+      <CardGridSkeleton count={6} cols={3} />
+    </PageLoadingShell>
   )
 
   const today = new Date()
+  const hour = today.getHours()
+  const greeting = hour < 5 ? 'Gecəniz xeyrə' : hour < 12 ? 'Sabahınız xeyir' : hour < 18 ? 'Günortanız xeyir' : 'Axşamınız xeyir'
+  const firstName = profile?.full_name?.split(' ')[0] || 'CEO'
 
   return (
     <div className="p-4 lg:p-6 space-y-5 fade-in">
@@ -198,11 +196,13 @@ export default function DashboardPage() {
       {/* Welcome */}
       <div>
         <h1 className="text-lg font-bold text-[#0f172a]">
-          Welcome, {profile?.full_name?.split(' ')[0] || 'Nicat'} 👋
+          {greeting}, {firstName} 👋
         </h1>
         <p className="text-xs text-[#888] mt-0.5">
           {today.toLocaleDateString('az-AZ', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-          {stats.overdueTasksCount > 0 && ` · ${stats.overdueTasksCount} vaxtı keçmiş tapşırıq`}
+          {stats.overdueTasksCount > 0 && (
+            <> · <span className="text-red-500 font-medium">{stats.overdueTasksCount} vaxtı keçmiş tapşırıq</span></>
+          )}
         </p>
       </div>
 
