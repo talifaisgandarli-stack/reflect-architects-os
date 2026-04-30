@@ -318,6 +318,11 @@ function DetailPanel({ task, projects, members, onClose, onEdit, onDelete, onSta
   const [checkAssignee, setCheckAssignee] = useState(task.assignee_id || '')
   const [checkDue,      setCheckDue]      = useState(task.due_date || '')
   const [checkErrors,   setCheckErrors]   = useState({})
+  const [editingId,     setEditingId]     = useState(null)
+  const [editTitle,     setEditTitle]     = useState('')
+  const [editAssignee,  setEditAssignee]  = useState('')
+  const [editDue,       setEditDue]       = useState('')
+  const [editErrors,    setEditErrors]    = useState({})
   const [newComment, setNewComment] = useState('')
   const [tab, setTab]               = useState('checklist')
   const [editingDue, setEditingDue] = useState(false)
@@ -369,6 +374,31 @@ function DetailPanel({ task, projects, members, onClose, onEdit, onDelete, onSta
   }
   async function deleteCheck(id) {
     await supabase.from('task_checklists').delete().eq('id', id); loadChecklists()
+  }
+
+  function startEditCheck(item) {
+    setEditingId(item.id)
+    setEditTitle(item.title || '')
+    setEditAssignee(item.assignee_id || task.assignee_id || '')
+    setEditDue(item.due_date || task.due_date || '')
+    setEditErrors({})
+  }
+  function cancelEditCheck() {
+    setEditingId(null); setEditErrors({})
+  }
+  async function saveEditCheck() {
+    const errs = {}
+    if (!editTitle.trim())  errs.title    = true
+    if (!editAssignee)      errs.assignee = true
+    if (!editDue)           errs.due      = true
+    if (Object.keys(errs).length) { setEditErrors(errs); return }
+    await supabase.from('task_checklists').update({
+      title:       editTitle.trim(),
+      assignee_id: editAssignee,
+      due_date:    editDue,
+    }).eq('id', editingId)
+    setEditingId(null); setEditErrors({})
+    loadChecklists()
   }
 
   async function sendComment() {
@@ -550,6 +580,47 @@ function DetailPanel({ task, projects, members, onClose, onEdit, onDelete, onSta
               <div className="space-y-1 mb-4">
                 {checklists.map(item => {
                   const isOverdueItem = item.due_date && !item.completed && new Date(item.due_date) < new Date()
+                  const isMissing = !item.completed && (!item.assignee_id || !item.due_date)
+                  const isEditing = editingId === item.id
+
+                  if (isEditing) {
+                    return (
+                      <div key={item.id} className="bg-blue-50/40 border border-blue-200 rounded-lg p-2 space-y-2">
+                        <input value={editTitle} onChange={e => { setEditTitle(e.target.value); setEditErrors(v=>({...v,title:false})) }}
+                          autoFocus
+                          onKeyDown={e => { if (e.key === 'Enter') saveEditCheck(); if (e.key === 'Escape') cancelEditCheck() }}
+                          className={`w-full px-2 py-1.5 bg-white border rounded-lg text-xs focus:outline-none ${
+                            editErrors.title ? 'border-red-400 bg-red-50' : 'border-[#e8e8e4] focus:border-[#0f172a]'
+                          }`}
+                          placeholder="Başlıq *" />
+                        <div className="flex gap-2">
+                          <select value={editAssignee} onChange={e => { setEditAssignee(e.target.value); setEditErrors(v=>({...v,assignee:false})) }}
+                            className={`flex-1 px-2 py-1.5 bg-white border rounded-lg text-[11px] focus:outline-none text-[#555] ${
+                              editErrors.assignee ? 'border-red-400 bg-red-50' : 'border-[#e8e8e4] focus:border-[#0f172a]'
+                            }`}>
+                            <option value="">Cavabdeh seçin... *</option>
+                            {members.map(m => <option key={m.id} value={m.id}>{m.full_name}</option>)}
+                          </select>
+                          <input type="date" value={editDue} onChange={e => { setEditDue(e.target.value); setEditErrors(v=>({...v,due:false})) }}
+                            className={`px-2 py-1.5 bg-white border rounded-lg text-[11px] focus:outline-none text-[#555] ${
+                              editErrors.due ? 'border-red-400 bg-red-50' : 'border-[#e8e8e4] focus:border-[#0f172a]'
+                            }`} />
+                        </div>
+                        {(editErrors.title || editErrors.assignee || editErrors.due) && (
+                          <p className="text-[10px] text-red-500">⚠ Başlıq, cavabdeh və tarix məcburidir</p>
+                        )}
+                        <div className="flex gap-1.5">
+                          <button onClick={saveEditCheck} className="flex-1 py-1.5 bg-[#0f172a] text-white text-[10px] font-semibold rounded-lg hover:bg-[#1e293b] transition-colors">
+                            Yadda saxla
+                          </button>
+                          <button onClick={cancelEditCheck} className="px-3 py-1.5 bg-white border border-[#e8e8e4] text-[#666] text-[10px] font-semibold rounded-lg hover:bg-[#f8f8f5] transition-colors">
+                            Ləğv et
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  }
+
                   return (
                   <div key={item.id} className={`flex items-start gap-2 group py-1.5 px-2 rounded-lg transition-colors ${
                     isOverdueItem ? 'bg-red-50/60 hover:bg-red-50 border border-red-100' : 'hover:bg-[#f8fafc]'
@@ -582,17 +653,24 @@ function DetailPanel({ task, projects, members, onClose, onEdit, onDelete, onSta
                             {new Date(item.due_date).toLocaleDateString('az-AZ',{day:'numeric',month:'short'})}
                           </span>
                         )}
-                        {!item.completed && (!item.assignee_id || !item.due_date) && (
-                          <span className="text-[9px] font-semibold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">
-                            ⚠ {!item.assignee_id && !item.due_date ? 'cavabdeh + tarix yoxdur' : !item.assignee_id ? 'cavabdeh yoxdur' : 'tarix yoxdur'}
-                          </span>
+                        {isMissing && (
+                          <button type="button" onClick={() => startEditCheck(item)}
+                            className="text-[9px] font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 px-1.5 py-0.5 rounded transition-colors">
+                            ⚠ {!item.assignee_id && !item.due_date ? 'cavabdeh + tarix yoxdur' : !item.assignee_id ? 'cavabdeh yoxdur' : 'tarix yoxdur'} — düzəlt
+                          </button>
                         )}
                       </div>
                     </div>
-                    <button onClick={() => deleteCheck(item.id)}
-                      className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded text-[#ccc] hover:text-red-400 transition-all">
-                      <IconX size={11} />
-                    </button>
+                    <div className="flex items-center gap-0.5">
+                      <button onClick={() => startEditCheck(item)}
+                        className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded text-[#ccc] hover:text-[#0f172a] transition-all">
+                        <IconEdit size={11} />
+                      </button>
+                      <button onClick={() => deleteCheck(item.id)}
+                        className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded text-[#ccc] hover:text-red-400 transition-all">
+                        <IconX size={11} />
+                      </button>
+                    </div>
                   </div>
                   )
                 })}
