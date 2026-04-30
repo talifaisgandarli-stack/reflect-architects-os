@@ -36,12 +36,12 @@ export function Badge({ children, variant = 'default', size = 'md' }) {
 // Page header
 export function PageHeader({ title, subtitle, action }) {
   return (
-    <div className="flex items-start justify-between mb-5">
-      <div>
-        <h1 className="text-lg font-bold text-[#0f172a]">{title}</h1>
+    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-5">
+      <div className="min-w-0">
+        <h1 className="text-lg font-bold text-[#0f172a] truncate">{title}</h1>
         {subtitle && <p className="text-xs text-[#888] mt-0.5">{subtitle}</p>}
       </div>
-      {action && <div>{action}</div>}
+      {action && <div className="flex-shrink-0">{action}</div>}
     </div>
   )
 }
@@ -123,13 +123,13 @@ export function Modal({ open, onClose, title, children, size = 'md' }) {
   if (!open) return null
   const sizes = { sm: 'max-w-sm', md: 'max-w-lg', lg: 'max-w-2xl', xl: 'max-w-4xl' }
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-start justify-center p-4 overflow-y-auto">
-      <div className={`bg-white rounded-xl shadow-2xl w-full ${sizes[size]} fade-in my-auto`}>
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[#e8e8e4] sticky top-0 bg-white rounded-t-xl z-10">
-          <h3 className="text-sm font-bold text-[#0f172a]">{title}</h3>
-          <button onClick={onClose} className="text-[#aaa] hover:text-[#555] transition-colors text-lg leading-none">✕</button>
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-start justify-center p-2 sm:p-4 overflow-y-auto">
+      <div className={`bg-white rounded-xl shadow-2xl w-full ${sizes[size]} fade-in my-2 sm:my-auto`}>
+        <div className="flex items-center justify-between px-4 sm:px-5 py-3 sm:py-4 border-b border-[#e8e8e4] sticky top-0 bg-white rounded-t-xl z-10">
+          <h3 className="text-sm font-bold text-[#0f172a] truncate pr-2">{title}</h3>
+          <button onClick={onClose} className="text-[#aaa] hover:text-[#555] transition-colors text-lg leading-none flex-shrink-0 w-8 h-8 flex items-center justify-center -mr-2">✕</button>
         </div>
-        <div className="p-5">{children}</div>
+        <div className="p-4 sm:p-5">{children}</div>
       </div>
     </div>
   )
