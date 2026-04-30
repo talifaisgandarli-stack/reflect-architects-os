@@ -315,8 +315,9 @@ function DetailPanel({ task, projects, members, onClose, onEdit, onDelete, onSta
   const [checklists, setChecklists] = useState([])
   const [comments,   setComments]   = useState([])
   const [newCheck,     setNewCheck]     = useState('')
-  const [checkAssignee, setCheckAssignee] = useState('')
-  const [checkDue,      setCheckDue]      = useState('')
+  const [checkAssignee, setCheckAssignee] = useState(task.assignee_id || '')
+  const [checkDue,      setCheckDue]      = useState(task.due_date || '')
+  const [checkErrors,   setCheckErrors]   = useState({})
   const [newComment, setNewComment] = useState('')
   const [tab, setTab]               = useState('checklist')
   const [editingDue, setEditingDue] = useState(false)
@@ -342,18 +343,24 @@ function DetailPanel({ task, projects, members, onClose, onEdit, onDelete, onSta
   }
 
   async function addChecklist() {
-    if (!newCheck.trim()) return
+    const errs = {}
+    if (!newCheck.trim())   errs.title    = true
+    if (!checkAssignee)     errs.assignee = true
+    if (!checkDue)          errs.due      = true
+    if (Object.keys(errs).length) { setCheckErrors(errs); return }
+    setCheckErrors({})
+
     await supabase.from('task_checklists').insert({
       task_id:     task.id,
       title:       newCheck.trim(),
       completed:   false,
       position:    checklists.length,
-      assignee_id: checkAssignee || null,
-      due_date:    checkDue     || null,
+      assignee_id: checkAssignee,
+      due_date:    checkDue,
     })
     setNewCheck('')
-    setCheckAssignee('')
-    setCheckDue('')
+    setCheckAssignee(task.assignee_id || '')
+    setCheckDue(task.due_date || '')
     loadChecklists()
   }
   async function toggleCheck(item) {
@@ -557,27 +564,30 @@ function DetailPanel({ task, projects, members, onClose, onEdit, onDelete, onSta
                       <span className={`text-xs leading-relaxed transition-colors block ${
                         item.completed ? 'line-through text-[#bbb]' : 'text-[#333]'
                       }`}>{item.title}</span>
-                      {(item.assignee_id || item.due_date) && (
-                        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                          {item.assignee_id && (() => {
-                            const m = members.find(mb=>mb.id===item.assignee_id)
-                            return m ? (
-                              <span className="text-[10px] text-[#888] flex items-center gap-1">
-                                <Avatar name={m.full_name} size={5} />
-                                {m.full_name.split(' ')[0]}
-                              </span>
-                            ) : null
-                          })()}
-                          {item.due_date && (
-                            <span className={`text-[10px] font-medium flex items-center gap-0.5 ${
-                              new Date(item.due_date) < new Date() && !item.completed ? 'text-red-500' : 'text-[#aaa]'
-                            }`}>
-                              <IconCalendar size={9} />
-                              {new Date(item.due_date).toLocaleDateString('az-AZ',{day:'numeric',month:'short'})}
+                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                        {item.assignee_id && (() => {
+                          const m = members.find(mb=>mb.id===item.assignee_id)
+                          return m ? (
+                            <span className="text-[10px] text-[#888] flex items-center gap-1">
+                              <Avatar name={m.full_name} size={5} />
+                              {m.full_name.split(' ')[0]}
                             </span>
-                          )}
-                        </div>
-                      )}
+                          ) : null
+                        })()}
+                        {item.due_date && (
+                          <span className={`text-[10px] font-medium flex items-center gap-0.5 ${
+                            new Date(item.due_date) < new Date() && !item.completed ? 'text-red-500' : 'text-[#aaa]'
+                          }`}>
+                            <IconCalendar size={9} />
+                            {new Date(item.due_date).toLocaleDateString('az-AZ',{day:'numeric',month:'short'})}
+                          </span>
+                        )}
+                        {!item.completed && (!item.assignee_id || !item.due_date) && (
+                          <span className="text-[9px] font-semibold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">
+                            ⚠ {!item.assignee_id && !item.due_date ? 'cavabdeh + tarix yoxdur' : !item.assignee_id ? 'cavabdeh yoxdur' : 'tarix yoxdur'}
+                          </span>
+                        )}
+                      </div>
                     </div>
                     <button onClick={() => deleteCheck(item.id)}
                       className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded text-[#ccc] hover:text-red-400 transition-all">
@@ -589,9 +599,11 @@ function DetailPanel({ task, projects, members, onClose, onEdit, onDelete, onSta
               </div>
               <div className="border-t border-[#f5f5f0] pt-3 space-y-2">
                 <div className="flex gap-2 items-center">
-                  <input value={newCheck} onChange={e => setNewCheck(e.target.value)}
+                  <input value={newCheck} onChange={e => { setNewCheck(e.target.value); setCheckErrors(v=>({...v,title:false})) }}
                     onKeyDown={e => e.key === 'Enter' && addChecklist()}
-                    className="flex-1 px-3 py-2 bg-[#f8fafc] border border-transparent rounded-xl text-xs focus:outline-none focus:border-[#0f172a] focus:bg-white transition-all placeholder-[#bbb]"
+                    className={`flex-1 px-3 py-2 bg-[#f8fafc] border rounded-xl text-xs focus:outline-none focus:bg-white transition-all placeholder-[#bbb] ${
+                      checkErrors.title ? 'border-red-400 bg-red-50' : 'border-transparent focus:border-[#0f172a]'
+                    }`}
                     placeholder="Yeni addım əlavə et..." />
                   <button onClick={addChecklist}
                     className="w-8 h-8 flex items-center justify-center bg-[#0f172a] text-white rounded-xl hover:bg-[#1e293b] transition-colors flex-shrink-0">
@@ -599,14 +611,21 @@ function DetailPanel({ task, projects, members, onClose, onEdit, onDelete, onSta
                   </button>
                 </div>
                 <div className="flex gap-2">
-                  <select value={checkAssignee} onChange={e => setCheckAssignee(e.target.value)}
-                    className="flex-1 px-2 py-1.5 bg-[#f8fafc] border border-transparent rounded-lg text-[11px] focus:outline-none focus:border-[#0f172a] focus:bg-white text-[#888]">
-                    <option value="">Cavabdeh seçin...</option>
+                  <select value={checkAssignee} onChange={e => { setCheckAssignee(e.target.value); setCheckErrors(v=>({...v,assignee:false})) }}
+                    className={`flex-1 px-2 py-1.5 bg-[#f8fafc] border rounded-lg text-[11px] focus:outline-none focus:bg-white text-[#888] ${
+                      checkErrors.assignee ? 'border-red-400 bg-red-50' : 'border-transparent focus:border-[#0f172a]'
+                    }`}>
+                    <option value="">Cavabdeh seçin... *</option>
                     {members.map(m => <option key={m.id} value={m.id}>{m.full_name}</option>)}
                   </select>
-                  <input type="date" value={checkDue} onChange={e => setCheckDue(e.target.value)}
-                    className="px-2 py-1.5 bg-[#f8fafc] border border-transparent rounded-lg text-[11px] focus:outline-none focus:border-[#0f172a] focus:bg-white text-[#888]" />
+                  <input type="date" value={checkDue} onChange={e => { setCheckDue(e.target.value); setCheckErrors(v=>({...v,due:false})) }}
+                    className={`px-2 py-1.5 bg-[#f8fafc] border rounded-lg text-[11px] focus:outline-none focus:bg-white text-[#888] ${
+                      checkErrors.due ? 'border-red-400 bg-red-50' : 'border-transparent focus:border-[#0f172a]'
+                    }`} />
                 </div>
+                {(checkErrors.title || checkErrors.assignee || checkErrors.due) && (
+                  <p className="text-[10px] text-red-500">⚠ Başlıq, cavabdeh və tarix məcburidir</p>
+                )}
               </div>
             </div>
           )}
