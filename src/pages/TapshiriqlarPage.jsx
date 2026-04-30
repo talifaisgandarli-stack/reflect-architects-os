@@ -1020,7 +1020,7 @@ function KanbanColumn({ column, tasks, projects, members, checkCounts, commentCo
   const [adding, setAdding] = useState(false)
 
   return (
-    <div className="flex flex-col flex-1 min-w-[260px] max-w-[320px]">
+    <div className="flex flex-col flex-1 min-w-[240px] sm:min-w-[260px] max-w-[320px]">
       {/* Column header */}
       <div className="flex items-center justify-between mb-3 px-0.5">
         <div className="flex items-center gap-2">
@@ -1505,21 +1505,21 @@ export default function TapshiriqlarPage() {
               )}
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <div className="flex border border-[#e8e8e4] rounded-lg overflow-hidden">
               <button onClick={() => setView('kanban')} className={`px-2.5 py-1.5 transition-colors ${view==='kanban'?'bg-[#0f172a] text-white':'text-[#555] hover:bg-[#f5f5f0]'}`}><IconLayoutKanban size={14}/></button>
               <button onClick={() => setView('list')}   className={`px-2.5 py-1.5 transition-colors ${view==='list'  ?'bg-[#0f172a] text-white':'text-[#555] hover:bg-[#f5f5f0]'}`}><IconList size={14}/></button>
             </div>
             <button onClick={() => setArchiveOpen(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 border border-[#e8e8e4] rounded-lg text-xs text-[#555] hover:border-[#0f172a] transition-colors">
-              <IconArchive size={13} /> Arxiv
+              <IconArchive size={13} /> <span className="hidden sm:inline">Arxiv</span>
             </button>
             <button onClick={archiveDone}
-              className="flex items-center gap-1.5 px-3 py-1.5 border border-[#e8e8e4] rounded-lg text-xs text-[#555] hover:border-[#0f172a] transition-colors">
+              className="hidden md:flex items-center gap-1.5 px-3 py-1.5 border border-[#e8e8e4] rounded-lg text-xs text-[#555] hover:border-[#0f172a] transition-colors">
               Tamamlananları arxivlə
             </button>
             <Button onClick={() => { setEditTask(null); setDefaultSt('not_started'); setModalOpen(true) }} size="sm">
-              <IconPlus size={14} /> Yeni tapşırıq
+              <IconPlus size={14} /> <span className="hidden sm:inline">Yeni tapşırıq</span>
             </Button>
           </div>
         </div>
