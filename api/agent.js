@@ -193,7 +193,7 @@ export default async function handler(req, res) {
       const td = today()
 
       const [tRes, pRes, eRes] = await Promise.all([
-        supabase.from('tasks').select('id,title,due_date,assignee_id,status,project_id')
+        supabase.from('tasks').select('id,title,due_date,assignee_id,assignee_ids,status,project_id')
           .neq('status', 'done').not('due_date', 'is', null),
         supabase.from('projects').select('id,name,deadline').neq('status', 'completed'),
         supabase.from('events').select('title,tagged_profiles').eq('start_date', td),
@@ -207,7 +207,7 @@ export default async function handler(req, res) {
       for (const p of workers) {
         try {
           const name  = p.full_name.split(' ')[0]
-          const myT   = tasks.filter(t => t.assignee_id === p.id)
+          const myT   = tasks.filter(t => (t.assignee_ids||[]).includes(p.id) || t.assignee_id === p.id)
           const td0   = myT.filter(t => t.due_date === td)
           const over  = myT.filter(t => days(t.due_date) < 0)
           const crit  = over.filter(t => Math.abs(days(t.due_date)) > 3)
@@ -267,7 +267,7 @@ export default async function handler(req, res) {
       const mon  = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]
 
       const [tRes, mRes, dlRes, incRes, expRes, debRes, outRes, propRes] = await Promise.all([
-        supabase.from('tasks').select('id,title,due_date,assignee_id,status,tags').neq('status', 'done'),
+        supabase.from('tasks').select('id,title,due_date,assignee_id,assignee_ids,status,tags').neq('status', 'done'),
         supabase.from('profiles').select('id,full_name').eq('is_active', true),
         supabase.from('task_comments')
           .select('task_id,metadata,created_at,author_id,content')
@@ -438,17 +438,20 @@ export default async function handler(req, res) {
 
       const { data: tasks } = await supabase
         .from('tasks')
-        .select('title,due_date,assignee_id,projects(name)')
+        .select('title,due_date,assignee_id,assignee_ids,projects(name)')
         .neq('status', 'done')
         .not('due_date', 'is', null)
 
-      // Group by assignee
+      // Group by assignee — A2: notify every assignee in assignee_ids, not just primary
       const byUser = {}
       for (const t of (tasks || [])) {
         const d = days(t.due_date)
-        if (![1, 3, 5].includes(d) || !t.assignee_id) continue
-        if (!byUser[t.assignee_id]) byUser[t.assignee_id] = []
-        byUser[t.assignee_id].push({ ...t, d })
+        if (![1, 3, 5].includes(d)) continue
+        const assignees = (t.assignee_ids && t.assignee_ids.length) ? t.assignee_ids : (t.assignee_id ? [t.assignee_id] : [])
+        for (const uid of assignees) {
+          if (!byUser[uid]) byUser[uid] = []
+          byUser[uid].push({ ...t, d })
+        }
       }
 
       let count = 0
@@ -536,7 +539,7 @@ export default async function handler(req, res) {
       const mon  = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]
 
       const [tRes, mRes, dlRes, incM, expM, incW, expW, debRes, outRes, propRes] = await Promise.all([
-        supabase.from('tasks').select('id,title,due_date,assignee_id,status,tags,archived,updated_at'),
+        supabase.from('tasks').select('id,title,due_date,assignee_id,assignee_ids,status,tags,archived,updated_at'),
         supabase.from('profiles').select('id,full_name').eq('is_active', true),
         supabase.from('task_comments')
           .select('task_id,metadata,created_at,author_id,content')

@@ -5,11 +5,20 @@ import { PageHeader, Badge, Button, Card, EmptyState, Modal, ConfirmDialog, Skel
 import { IconPlus, IconEdit, IconTrash, IconUsers } from '@tabler/icons-react'
 
 const STAGES = [
-  { key: 'lead', label: 'Potensial', color: 'bg-gray-100 text-gray-700' },
-  { key: 'proposal', label: 'Təklif', color: 'bg-blue-100 text-blue-700' },
-  { key: 'in_progress', label: 'İcrada', color: 'bg-yellow-100 text-yellow-700' },
-  { key: 'completed', label: 'Tamamlandı', color: 'bg-green-100 text-green-700' },
-  { key: 'archived', label: 'Arxiv', color: 'bg-gray-100 text-gray-500' },
+  { key: 'lead', label: 'Potensial', color: 'bg-gray-100 text-gray-700', order: 1 },
+  { key: 'proposal', label: 'Təklif', color: 'bg-blue-100 text-blue-700', order: 2 },
+  { key: 'in_progress', label: 'İcrada', color: 'bg-yellow-100 text-yellow-700', order: 3 },
+  { key: 'completed', label: 'Tamamlandı', color: 'bg-green-100 text-green-700', order: 4 },
+  { key: 'lost', label: 'İtirildi', color: 'bg-red-100 text-red-700', order: 5 },
+  { key: 'archived', label: 'Arxiv', color: 'bg-gray-100 text-gray-500', order: 6 },
+]
+const LOST_REASONS = [
+  'Qiymət baha tapdı',
+  'Rəqib seçdi',
+  'Layihə təxirə salındı',
+  'Cavab vermədi',
+  'Büdcə tapılmadı',
+  'Digər',
 ]
 
 const PRIORITIES = [
@@ -165,8 +174,28 @@ export default function PipelinePage() {
     setModalOpen(false); setEditClient(null); await loadData()
   }
 
+  const [lostPrompt, setLostPrompt] = useState(null) // { client, newStatus }
+  const [skipWarn,   setSkipWarn]   = useState(null) // { client, newStatus, fromOrder, toOrder }
+
   async function handleMove(client, newStatus) {
-    await supabase.from('clients').update({ status: newStatus }).eq('id', client.id)
+    if (newStatus === 'lost') {
+      setLostPrompt({ client, newStatus, reason: '', custom: '' })
+      return
+    }
+    // A10: warn on skipping stages (e.g., lead → completed without proposal)
+    const fromOrder = STAGES.find(s => s.key === client.status)?.order ?? 0
+    const toOrder   = STAGES.find(s => s.key === newStatus)?.order ?? 0
+    if (toOrder - fromOrder > 1 && newStatus !== 'archived') {
+      setSkipWarn({ client, newStatus, fromOrder, toOrder })
+      return
+    }
+    await _doMove(client, newStatus)
+  }
+
+  async function _doMove(client, newStatus, extra = {}) {
+    const patch = { status: newStatus, ...extra }
+    if (newStatus === 'lost') patch.lost_at = new Date().toISOString()
+    await supabase.from('clients').update(patch).eq('id', client.id)
     addToast('Mərhələ dəyişdirildi', 'success')
     await loadData()
   }
@@ -224,6 +253,49 @@ export default function PipelinePage() {
       <ConfirmDialog open={!!deleteClient} title="Sifarişçini sil"
         message={`"${deleteClient?.name}" sifarişçisini silmək istədiyinizə əminsiniz?`}
         onConfirm={handleDelete} onCancel={() => setDeleteClient(null)} danger />
+
+      {/* A10: Lost reason prompt */}
+      <Modal open={!!lostPrompt} onClose={() => setLostPrompt(null)} title="Niyə itirdik?">
+        {lostPrompt && (
+          <div className="space-y-3">
+            <p className="text-xs text-[#555]">
+              "<b>{lostPrompt.client.name}</b>" itirilmiş kimi işarələnəcək. Səbəb seçin:
+            </p>
+            <div className="space-y-1.5">
+              {LOST_REASONS.map(r => (
+                <button key={r} onClick={() => setLostPrompt(p => ({ ...p, reason: r }))}
+                  className={`w-full text-left px-3 py-2 rounded-lg border text-xs transition-colors ${
+                    lostPrompt.reason === r ? 'border-[#0f172a] bg-[#0f172a] text-white' : 'border-[#e8e8e4] hover:border-[#0f172a]'
+                  }`}>
+                  {r}
+                </button>
+              ))}
+            </div>
+            {lostPrompt.reason === 'Digər' && (
+              <input value={lostPrompt.custom} onChange={e => setLostPrompt(p => ({ ...p, custom: e.target.value }))}
+                placeholder="Səbəbi yazın..."
+                className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]" />
+            )}
+            <div className="flex gap-2 pt-2 border-t border-[#f0f0ec]">
+              <Button variant="secondary" onClick={() => setLostPrompt(null)}>Ləğv et</Button>
+              <Button onClick={async () => {
+                const reason = lostPrompt.reason === 'Digər' ? (lostPrompt.custom.trim() || 'Digər') : lostPrompt.reason
+                if (!reason) { addToast('Səbəb seçin', 'error'); return }
+                const c = lostPrompt.client
+                setLostPrompt(null)
+                await _doMove(c, 'lost', { lost_reason: reason })
+              }} className="ml-auto" disabled={!lostPrompt.reason}>Yadda saxla</Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* A10: Stage skip warning */}
+      <ConfirmDialog open={!!skipWarn}
+        title="Mərhələ atlanılır"
+        message={skipWarn ? `"${skipWarn.client.name}" üçün ${skipWarn.toOrder - skipWarn.fromOrder - 1} mərhələ atlanılır. Əminsiniz?` : ''}
+        onConfirm={async () => { const w = skipWarn; setSkipWarn(null); await _doMove(w.client, w.newStatus) }}
+        onCancel={() => setSkipWarn(null)} />
     </div>
   )
 }

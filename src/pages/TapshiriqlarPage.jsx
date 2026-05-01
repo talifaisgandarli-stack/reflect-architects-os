@@ -459,6 +459,11 @@ function DetailPanel({ task, projects, members, onClose, onEdit, onDelete, onSta
                   <span className="text-[10px] px-2 py-0.5 rounded-full text-white font-semibold"
                     style={{ background: projClr(project.id, projects) }}>{project.name}</span>
                 )}
+                {project?.clients?.name && (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#f0f0ec] text-[#555] font-medium">
+                    👤 {project.clients.name}
+                  </span>
+                )}
               </div>
               <h2 className="text-sm font-bold text-[#0f172a] leading-snug">{task.title}</h2>
             </div>
@@ -1185,7 +1190,7 @@ export default function TapshiriqlarPage() {
     setLoading(true)
     const [tRes, pRes, mRes, ckRes, cmtRes] = await Promise.all([
       supabase.from('tasks').select('*').order('position', { ascending: true, nullsFirst: false }).order('created_at', { ascending: false }),
-      supabase.from('projects').select('id, name').order('name'),
+      supabase.from('projects').select('id, name, client_id, clients(name)').order('name'),
       supabase.from('profiles').select('id, full_name').eq('is_active', true).order('full_name'),
       supabase.from('task_checklists').select('id, task_id, title, completed, assignee_id, due_date'),
       supabase.from('task_comments').select('task_id, type'),

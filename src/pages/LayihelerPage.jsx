@@ -439,7 +439,6 @@ export default function LayihelerPage() {
       status: form.status,
       risk_level: form.risk_level,
       phases: form.phases || [],
-      phase: (form.phases || [])[0] || 'concept',
       final_payment: Number(form.final_payment) || 0,
       final_payment_method: form.final_payment_method || 'transfer',
       final_payment_date: form.final_payment_date || null,

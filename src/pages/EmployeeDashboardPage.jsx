@@ -44,7 +44,8 @@ export default function EmployeeDashboardPage() {
     const in7days  = new Date(today.getTime() + 7 * 86400000).toISOString().split('T')[0]
 
     const [tRes, nRes, eRes, lRes, rRes] = await Promise.all([
-      supabase.from('tasks').select('*, projects(name)').eq('assignee_id', user.id).neq('status', 'cancelled'),
+      // A2: include both legacy assignee_id and modern assignee_ids array
+      supabase.from('tasks').select('*, projects(name)').or(`assignee_ids.cs.{${user.id}},assignee_id.eq.${user.id}`).neq('status', 'cancelled'),
       supabase.from('notices').select('*').order('created_at', { ascending: false }).limit(4),
       supabase.from('events').select('*').gte('start_date', todayStr).order('start_date').limit(3),
       supabase.from('leave_requests').select('*').eq('member_id', user.id).order('created_at', { ascending: false }).limit(3),

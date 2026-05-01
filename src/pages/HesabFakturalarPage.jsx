@@ -299,18 +299,47 @@ export default function HesabFakturalarPage() {
   }
 
   async function markPaid(inv) {
-    const patch = { status: 'paid', payment_date: new Date().toISOString().split('T')[0] }
+    const today = new Date().toISOString().split('T')[0]
+    const patch = { status: 'paid', payment_date: today }
     setInvoices(prev => prev.map(i => i.id === inv.id ? { ...i, ...patch } : i))
-    addToast('Ödənildi olaraq işarələndi', 'success')
-    await supabase.from('invoices').update(patch).eq('id', inv.id)
+    const { error: upErr } = await supabase.from('invoices').update(patch).eq('id', inv.id)
+    if (upErr) { addToast('Faktura yenilənmədi', 'error'); return }
+
+    // A1: auto-create matching income row, idempotent via invoice_id
+    const { data: existing } = await supabase.from('incomes').select('id').eq('invoice_id', inv.id).maybeSingle()
+    if (!existing) {
+      const isTransfer = inv.payment_method === 'transfer'
+      const baseAmt = Number(inv.project_estimate || inv.amount_with_edv || 0)
+      const advance = Number(inv.advance_paid || 0)
+      const incomeAmt = Math.max(0, baseAmt - advance)
+      const { error: incErr } = await supabase.from('incomes').insert({
+        name: inv.invoice_number || inv.name,
+        amount: incomeAmt,
+        payment_method: inv.payment_method || 'transfer',
+        edv_amount: isTransfer ? Number(inv.edv_amount || 0) : 0,
+        amount_with_edv: isTransfer ? Number(inv.amount_with_edv || incomeAmt) : incomeAmt,
+        project_id: inv.project_id || null,
+        client_id: inv.client_id || null,
+        payment_date: today,
+        invoice_id: inv.id,
+        notes: 'Avtomatik faktura ödənişindən'
+      })
+      if (incErr) {
+        addToast('Faktura paid, amma gəlir yazılmadı: ' + incErr.message, 'error')
+        return
+      }
+    }
+    addToast('Ödənildi və gəlir cədvəlinə yazıldı', 'success')
   }
 
   async function handleDelete() {
     const id = deleteInvoice.id
     setInvoices(prev => prev.filter(i => i.id !== id))
     setDeleteInvoice(null)
-    addToast('Silindi', 'success')
+    // A1: cascade — remove linked income row first
+    await supabase.from('incomes').delete().eq('invoice_id', id)
     await supabase.from('invoices').delete().eq('id', id)
+    addToast('Silindi', 'success')
   }
 
   const getClient = id => clients.find(c => c.id === id)
