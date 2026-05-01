@@ -11,8 +11,8 @@ ALTER TABLE clients ADD COLUMN IF NOT EXISTS lost_at     TIMESTAMPTZ;
 
 -- A3: backfill phases array from legacy phase column for any project still using single field
 UPDATE projects
-   SET phases = ARRAY[phase]::text[]
- WHERE (phases IS NULL OR array_length(phases, 1) IS NULL)
+   SET phases = to_jsonb(ARRAY[phase])
+ WHERE (phases IS NULL OR jsonb_array_length(phases) = 0)
    AND phase IS NOT NULL;
 
 -- A8-A9: holiday calendar for vacation workday computation
