@@ -4,7 +4,7 @@ import { useToast } from '../contexts/ToastContext'
 import { PageHeader, Card, Button } from '../components/ui'
 import {
   IconBrandTelegram, IconRobot, IconDownload, IconSend,
-  IconClock, IconUser, IconCheck, IconX
+  IconClock, IconUser, IconCheck, IconX, IconShield
 } from '@tabler/icons-react'
 
 function Toggle({ checked, onChange }) {
@@ -97,15 +97,20 @@ export default function ParametrlerPage() {
   const [sendingManual,  setSendingManual]  = useState(false)
   const [registeredUsers,setRegisteredUsers]= useState([])
   const [allProfiles,    setAllProfiles]    = useState([])
+  const [roles,          setRoles]          = useState([])
+  const [membersWithRoles,setMembersWithRoles]=useState([])
+  const [updatingRole,   setUpdatingRole]   = useState(null)
 
   useEffect(() => { loadData() }, [])
 
   async function loadData() {
     setLoading(true)
-    const [settingsRes, profilesRes, allRes] = await Promise.all([
+    const [settingsRes, profilesRes, allRes, rolesRes, membersRes] = await Promise.all([
       supabase.from('system_settings').select('key, value'),
       supabase.from('profiles').select('id, full_name, telegram_chat_id').not('telegram_chat_id', 'is', null),
       supabase.from('profiles').select('id, full_name, telegram_chat_id').eq('is_active', true),
+      supabase.from('roles').select('id, title, level').order('level'),
+      supabase.from('profiles').select('id, full_name, role_id').eq('is_active', true).order('full_name'),
     ])
     if (settingsRes.data) {
       const s = {}
@@ -114,6 +119,8 @@ export default function ParametrlerPage() {
     }
     setRegisteredUsers(profilesRes.data || [])
     setAllProfiles(allRes.data || [])
+    setRoles(rolesRes.data || [])
+    setMembersWithRoles(membersRes.data || [])
     setLoading(false)
   }
 
@@ -212,6 +219,18 @@ export default function ParametrlerPage() {
     addToast('Məlumatlar ixrac edildi', 'success')
   }
 
+  async function updateMemberRole(memberId, roleId) {
+    setUpdatingRole(memberId)
+    const { error } = await supabase.from('profiles').update({ role_id: roleId }).eq('id', memberId)
+    if (error) {
+      addToast('Xəta baş verdi', 'error')
+    } else {
+      setMembersWithRoles(prev => prev.map(m => m.id === memberId ? { ...m, role_id: roleId } : m))
+      addToast('Rol yeniləndi', 'success')
+    }
+    setUpdatingRole(null)
+  }
+
   async function removeTelegramUser(id) {
     await supabase.from('profiles').update({ telegram_chat_id: null }).eq('id', id)
     addToast('Telegram əlaqəsi silindi', 'success')
@@ -229,6 +248,65 @@ export default function ParametrlerPage() {
 
         {/* SOL SÜTUN */}
         <div className="space-y-4">
+
+          {/* İstifadəçi Rolları */}
+          <Card className="p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-9 h-9 bg-[#0f172a] rounded-xl flex items-center justify-center flex-shrink-0">
+                <IconShield size={16} className="text-white" />
+              </div>
+              <div>
+                <div className="text-sm font-bold text-[#0f172a]">İstifadəçi Rolları</div>
+                <div className="text-xs text-[#888]">Giriş səviyyəsini idarə et</div>
+              </div>
+            </div>
+
+            {roles.length > 0 && (
+              <div className="flex gap-1.5 mb-3 flex-wrap">
+                {roles.map(r => (
+                  <span key={r.id} className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                    r.level === 1 ? 'bg-[#0f172a] text-white' :
+                    r.level === 2 ? 'bg-blue-100 text-blue-700' :
+                    'bg-[#f0f0ec] text-[#888]'
+                  }`}>
+                    {r.title}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              {membersWithRoles.map(m => {
+                const currentRole = roles.find(r => r.id === m.role_id)
+                return (
+                  <div key={m.id} className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-[#fafaf8] border border-[#f0f0ec]">
+                    <div className="w-7 h-7 bg-[#0f172a] rounded-full flex items-center justify-center flex-shrink-0">
+                      <span className="text-white text-[9px] font-bold">
+                        {m.full_name?.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                      </span>
+                    </div>
+                    <span className="text-xs font-medium text-[#0f172a] flex-1 truncate">{m.full_name}</span>
+                    <select
+                      value={m.role_id || ''}
+                      onChange={e => updateMemberRole(m.id, e.target.value)}
+                      disabled={updatingRole === m.id}
+                      className={`text-[11px] border rounded-lg px-2 py-1 focus:outline-none focus:border-[#0f172a] bg-white transition-colors ${
+                        currentRole?.level === 1 ? 'border-[#0f172a] text-[#0f172a] font-bold' :
+                        currentRole?.level === 2 ? 'border-blue-300 text-blue-700' :
+                        'border-[#e8e8e4] text-[#555]'
+                      } disabled:opacity-50`}>
+                      {roles.map(r => (
+                        <option key={r.id} value={r.id}>{r.title}</option>
+                      ))}
+                    </select>
+                  </div>
+                )
+              })}
+              {membersWithRoles.length === 0 && (
+                <div className="text-xs text-[#bbb] text-center py-3">İstifadəçi tapılmadı</div>
+              )}
+            </div>
+          </Card>
 
           {/* AI Agent toggle */}
           <Card className="p-4">

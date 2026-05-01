@@ -9,8 +9,6 @@ const GEMINI_KEY     = process.env.GEMINI_API_KEY
 const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY
 const BOT_TOKEN      = process.env.TELEGRAM_BOT_TOKEN
 const TG_API       = `https://api.telegram.org/bot${BOT_TOKEN}`
-const ADMIN_EMAILS = ['talifa.isgandarli@gmail.com', 'nusalov.n@reflect.az', 'turkan.a@reflect.az']
-const BD_EMAILS    = ['talifa.isgandarli@gmail.com', 'turkan.a@reflect.az']
 const NICAT_EMAIL  = 'nusalov.n@reflect.az'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -106,12 +104,12 @@ async function db(table, query) {
 async function getProfiles(filter) {
   const { data } = await supabase
     .from('profiles')
-    .select('id, full_name, email, telegram_chat_id')
+    .select('id, full_name, email, telegram_chat_id, roles(level, name)')
     .eq('is_active', true)
     .not('telegram_chat_id', 'is', null)
   const all = data || []
-  if (filter === 'admins') return all.filter(p => ADMIN_EMAILS.includes(p.email))
-  if (filter === 'bd')     return all.filter(p => BD_EMAILS.includes(p.email))
+  if (filter === 'admins') return all.filter(p => (p.roles?.level ?? 99) <= 2)
+  if (filter === 'bd')     return all.filter(p => (p.roles?.level ?? 99) <= 3)
   if (filter === 'nicat')  return all.filter(p => p.email === NICAT_EMAIL)
   return all
 }

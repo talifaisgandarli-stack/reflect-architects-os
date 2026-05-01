@@ -5,7 +5,8 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import {
   IconBell, IconX, IconSearch, IconMenu2, IconCheck,
-  IconAlertCircle, IconInfoCircle, IconCircleCheck
+  IconAlertCircle, IconInfoCircle, IconCircleCheck,
+  IconCheckbox, IconBuildings, IconUsers
 } from '@tabler/icons-react'
 
 // ─── Notification icon ────────────────────────────────────────────────────────
@@ -94,11 +95,13 @@ function NotifPanel({ notifs, onRead, onReadAll, onClose, navigate }) {
 
 // ─── Main Layout ──────────────────────────────────────────────────────────────
 export default function MainLayout() {
-  const { profile, user } = useAuth()
+  const { profile, user, isAdmin } = useAuth()
   const navigate = useNavigate()
 
-  const [searchOpen,  setSearchOpen]  = useState(false)
-  const [searchQuery, setSearchQuery] = useState('')
+  const [searchOpen,    setSearchOpen]    = useState(false)
+  const [searchQuery,   setSearchQuery]   = useState('')
+  const [searchResults, setSearchResults] = useState([])
+  const [searchBusy,    setSearchBusy]    = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [notifOpen,   setNotifOpen]   = useState(false)
   const [notifs,      setNotifs]      = useState([])
@@ -133,6 +136,32 @@ export default function MainLayout() {
   useEffect(() => {
     loadNotifs()
   }, [loadNotifs])
+
+  // ── Search ────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!searchOpen) { setSearchResults([]); setSearchQuery(''); return }
+  }, [searchOpen])
+
+  useEffect(() => {
+    const q = searchQuery.trim()
+    if (q.length < 2) { setSearchResults([]); return }
+    const timer = setTimeout(async () => {
+      setSearchBusy(true)
+      const [tRes, pRes, cRes] = await Promise.all([
+        supabase.from('tasks').select('id,title,status,is_hidden').ilike('title', `%${q}%`).eq('archived', false).limit(5),
+        supabase.from('projects').select('id,name,status').ilike('name', `%${q}%`).limit(5),
+        isAdmin ? supabase.from('clients').select('id,full_name,status').ilike('full_name', `%${q}%`).limit(5) : Promise.resolve({ data: [] }),
+      ])
+      const results = [
+        ...(tRes.data || []).filter(t => isAdmin || !t.is_hidden).map(t => ({ type: 'task', id: t.id, label: t.title, sub: t.status, link: '/tapshiriqlar?task=' + t.id })),
+        ...(pRes.data || []).map(p => ({ type: 'project', id: p.id, label: p.name, sub: p.status, link: '/layiheler' })),
+        ...(cRes.data || []).map(c => ({ type: 'client', id: c.id, label: c.full_name, sub: c.status, link: '/sifarisci-idareetme' })),
+      ]
+      setSearchResults(results)
+      setSearchBusy(false)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [searchQuery, isAdmin])
 
   // ── Realtime subscription ──────────────────────────────────────────────────
   useEffect(() => {
@@ -360,9 +389,30 @@ export default function MainLayout() {
                 <IconX size={16} />
               </button>
             </div>
-            <div className="p-4 text-sm text-[#aaa] text-center">
-              Axtarış üçün yazmağa başlayın...
-            </div>
+            {searchQuery.trim().length < 2 ? (
+              <div className="p-4 text-sm text-[#aaa] text-center">Axtarış üçün yazmağa başlayın...</div>
+            ) : searchBusy ? (
+              <div className="p-4 text-sm text-[#aaa] text-center">Axtarılır...</div>
+            ) : searchResults.length === 0 ? (
+              <div className="p-4 text-sm text-[#aaa] text-center">Nəticə tapılmadı</div>
+            ) : (
+              <ul className="max-h-72 overflow-y-auto divide-y divide-[#f0f0ec]">
+                {searchResults.map(r => (
+                  <li key={r.type + r.id}>
+                    <button
+                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[#f5f5f0] text-left transition-colors"
+                      onClick={() => { navigate(r.link); setSearchOpen(false) }}
+                    >
+                      <span className="text-[#aaa]">
+                        {r.type === 'task' ? <IconCheckbox size={14} /> : r.type === 'project' ? <IconBuildings size={14} /> : <IconUsers size={14} />}
+                      </span>
+                      <span className="flex-1 text-sm text-[#0f172a] truncate">{r.label}</span>
+                      <span className="text-[10px] text-[#bbb]">{r.sub}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </div>
       )}
