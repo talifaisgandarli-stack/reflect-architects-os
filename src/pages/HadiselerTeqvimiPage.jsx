@@ -621,6 +621,16 @@ export default function HadiselerTeqvimiPage() {
     }
 
     if (existingId) {
+      // C10: Clean up RSVP entries for users who were untagged
+      const prevEvent = events.find(e => e.id === existingId)
+      if (prevEvent?.rsvp) {
+        const newTagSet = new Set(data.tagged_profiles || [])
+        const cleanedRsvp = Object.fromEntries(
+          Object.entries(prevEvent.rsvp).filter(([uid]) => newTagSet.has(uid))
+        )
+        data.rsvp = cleanedRsvp
+      }
+
       // Redaktə
       const { error } = await supabase.from('events').update(data).eq('id', existingId)
       if (error) { addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin','error'); return }

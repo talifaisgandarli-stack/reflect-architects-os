@@ -128,6 +128,7 @@ export default function XerclerPage() {
   async function handleSave(form) {
     if (!form.name.trim() || !form.amount) { addToast('Ad və məbləğ daxil edin', 'error'); return }
     const amt = Number(form.amount)
+    if (amt <= 0) { addToast('Məbləğ sıfırdan böyük olmalıdır', 'error'); return }
     const isTransfer = form.payment_method === 'transfer'
     const data = {
       name: form.name.trim(), category: form.category, amount: amt,
@@ -168,9 +169,9 @@ export default function XerclerPage() {
   const filtered = expenses.filter(e => {
     if (filterCat !== 'all' && e.category !== filterCat) return false
     if (filterProject && e.project_id !== filterProject) return false
-    if (filterYear && e.expense_date) {
+    if (e.expense_date) {
       const d = new Date(e.expense_date)
-      if (d.getFullYear() !== filterYear) return false
+      if (filterYear && d.getFullYear() !== filterYear) return false
       if (filterMonth && d.getMonth() + 1 !== filterMonth) return false
     }
     return true

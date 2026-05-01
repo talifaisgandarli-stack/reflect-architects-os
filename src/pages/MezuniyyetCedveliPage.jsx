@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
@@ -12,6 +12,19 @@ const LEAVE_TYPES = [
   { key: 'unpaid', label: 'Ödənişsiz', color: 'default' },
   { key: 'other', label: 'Digər', color: 'info' },
 ]
+
+function countWorkdays(start, end) {
+  if (!start || !end) return 0
+  let count = 0
+  const d = new Date(start + 'T00:00:00')
+  const e = new Date(end + 'T00:00:00')
+  while (d <= e) {
+    const dow = d.getDay()
+    if (dow !== 0 && dow !== 6) count++
+    d.setDate(d.getDate() + 1)
+  }
+  return count
+}
 
 const STATUSES = [
   { key: 'pending', label: 'Gözləyir', color: 'warning' },
@@ -48,8 +61,7 @@ function RequestForm({ open, onClose, onSave, leave, members, isAdmin }) {
   }, [leave, open])
 
   function set(k, v) { setForm(f => ({ ...f, [k]: v })) }
-  const days = form.start_date && form.end_date
-    ? Math.floor((new Date(form.end_date) - new Date(form.start_date)) / 86400000) + 1 : 0
+  const days = countWorkdays(form.start_date, form.end_date)
 
   return (
     <Modal open={open} onClose={onClose} title={leave ? 'Sorğunu redaktə et' : 'Məzuniyyət sorğusu göndər'}>
@@ -155,7 +167,22 @@ export default function MezuniyyetCedveliPage() {
     if (!form.approver_name) {
       addToast('Təsdiqləyici seçin', 'error'); return
     }
-    const days = Math.floor((new Date(form.end_date) - new Date(form.start_date)) / 86400000) + 1
+    const days = countWorkdays(form.start_date, form.end_date)
+
+    // A9: Overlap conflict detection — same member, approved leaves
+    const { data: overlapping } = await supabase
+      .from('leave_requests')
+      .select('id, start_date, end_date')
+      .eq('member_id', form.member_id)
+      .eq('status', 'approved')
+      .lte('start_date', form.end_date)
+      .gte('end_date', form.start_date)
+    const conflicts = (overlapping || []).filter(r => !editLeave || r.id !== editLeave.id)
+    if (conflicts.length > 0) {
+      addToast(`Uyğunsuzluq: bu işçinin ${conflicts[0].start_date} – ${conflicts[0].end_date} tarixlərində təsdiqlənmiş məzuniyyəti var!`, 'warning')
+      return
+    }
+
     const data = {
       member_id: form.member_id,
       leave_type: form.leave_type,

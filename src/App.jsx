@@ -64,6 +64,12 @@ function RoleBasedDashboard() {
   return isAdmin ? <DashboardPage /> : <EmployeeDashboardPage />
 }
 
+function AdminRoute({ children }) {
+  const { isAdmin, loading } = useAuth()
+  if (loading) return null
+  return isAdmin ? children : <Navigate to="/" replace />
+}
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -83,34 +89,34 @@ export default function App() {
               <Route path="layiheler"             element={<Suspense fallback={<PageLoader />}><LayihelerPage /></Suspense>} />
               <Route path="tapshiriqlar"          element={<Suspense fallback={<PageLoader />}><TapshiriqlarPage /></Suspense>} />
               <Route path="icazeler"              element={<CS t="İcazə və Razılaşmalar" />} />
-              <Route path="sifarisci-idareetme"   element={<Suspense fallback={<PageLoader />}><SifarisciIdareetmesiPage /></Suspense>} />
-              <Route path="pipeline"              element={<Suspense fallback={<PageLoader />}><PipelinePage /></Suspense>} />
-              <Route path="kommersiya-teklifleri" element={<Suspense fallback={<PageLoader />}><KommersiyaTeklifleriPage /></Suspense>} />
-              <Route path="muqavileler"           element={<Suspense fallback={<PageLoader />}><MuqavilelerPage /></Suspense>} />
+              <Route path="sifarisci-idareetme"   element={<AdminRoute><Suspense fallback={<PageLoader />}><SifarisciIdareetmesiPage /></Suspense></AdminRoute>} />
+              <Route path="pipeline"              element={<AdminRoute><Suspense fallback={<PageLoader />}><PipelinePage /></Suspense></AdminRoute>} />
+              <Route path="kommersiya-teklifleri" element={<AdminRoute><Suspense fallback={<PageLoader />}><KommersiyaTeklifleriPage /></Suspense></AdminRoute>} />
+              <Route path="muqavileler"           element={<AdminRoute><Suspense fallback={<PageLoader />}><MuqavilelerPage /></Suspense></AdminRoute>} />
               <Route path="portfel"               element={<Suspense fallback={<PageLoader />}><PortfelPage /></Suspense>} />
-              <Route path="daxilolmalar"          element={<Suspense fallback={<PageLoader />}><DaxilolmalarPage /></Suspense>} />
-              <Route path="hesab-fakturalar"      element={<Suspense fallback={<PageLoader />}><HesabFakturalarPage /></Suspense>} />
-              <Route path="xercler"               element={<Suspense fallback={<PageLoader />}><XerclerPage /></Suspense>} />
+              <Route path="daxilolmalar"          element={<AdminRoute><Suspense fallback={<PageLoader />}><DaxilolmalarPage /></Suspense></AdminRoute>} />
+              <Route path="hesab-fakturalar"      element={<AdminRoute><Suspense fallback={<PageLoader />}><HesabFakturalarPage /></Suspense></AdminRoute>} />
+              <Route path="xercler"               element={<AdminRoute><Suspense fallback={<PageLoader />}><XerclerPage /></Suspense></AdminRoute>} />
               <Route path="podrat-isleri"         element={<Suspense fallback={<PageLoader />}><PodratIsleriPage /></Suspense>} />
-              <Route path="debitor-borclar"       element={<Suspense fallback={<PageLoader />}><DebitorBorclarPage /></Suspense>} />
-              <Route path="daxili-kocurmeler"     element={<Suspense fallback={<PageLoader />}><DaxiliKocurmelePage /></Suspense>} />
-              <Route path="tesisci-borclari"      element={<Suspense fallback={<PageLoader />}><TesisciBorclarPage /></Suspense>} />
-              <Route path="hesabatlar"            element={<Suspense fallback={<PageLoader />}><HesabatlarPage /></Suspense>} />
-              <Route path="sabit-xercler"         element={<Suspense fallback={<PageLoader />}><SabitXerclerPage /></Suspense>} />
+              <Route path="debitor-borclar"       element={<AdminRoute><Suspense fallback={<PageLoader />}><DebitorBorclarPage /></Suspense></AdminRoute>} />
+              <Route path="daxili-kocurmeler"     element={<AdminRoute><Suspense fallback={<PageLoader />}><DaxiliKocurmelePage /></Suspense></AdminRoute>} />
+              <Route path="tesisci-borclari"      element={<AdminRoute><Suspense fallback={<PageLoader />}><TesisciBorclarPage /></Suspense></AdminRoute>} />
+              <Route path="hesabatlar"            element={<AdminRoute><Suspense fallback={<PageLoader />}><HesabatlarPage /></Suspense></AdminRoute>} />
+              <Route path="sabit-xercler"         element={<AdminRoute><Suspense fallback={<PageLoader />}><SabitXerclerPage /></Suspense></AdminRoute>} />
               <Route path="isci-heyeti"           element={<Suspense fallback={<PageLoader />}><IshciHeyetiPage /></Suspense>} />
-              <Route path="emek-haqqi"            element={<Suspense fallback={<PageLoader />}><EmekHaqqiPage /></Suspense>} />
+              <Route path="emek-haqqi"            element={<AdminRoute><Suspense fallback={<PageLoader />}><EmekHaqqiPage /></Suspense></AdminRoute>} />
               <Route path="performans"            element={<Suspense fallback={<PageLoader />}><PerformansPage /></Suspense>} />
-              <Route path="karyera-strukturu"     element={<Suspense fallback={<PageLoader />}><HierarchyPage /></Suspense>} />
+              <Route path="karyera-strukturu"     element={<AdminRoute><Suspense fallback={<PageLoader />}><HierarchyPage /></Suspense></AdminRoute>} />
               <Route path="elanlar"               element={<Suspense fallback={<PageLoader />}><ElanlarLovhesiPage /></Suspense>} />
               <Route path="hadiseler"             element={<Suspense fallback={<PageLoader />}><HadiselerTeqvimiPage /></Suspense>} />
               <Route path="mezuniyyet"            element={<Suspense fallback={<PageLoader />}><MezuniyyetCedveliPage /></Suspense>} />
               <Route path="avadanliq"             element={<Suspense fallback={<PageLoader />}><AvadanliqPage /></Suspense>} />
               <Route path="hedef-netice"          element={<Suspense fallback={<PageLoader />}><HedefNeticeOKRPage /></Suspense>} />
-              <Route path="mezmun-planlamasi"     element={<Suspense fallback={<PageLoader />}><MezmunPlanlamasiPage /></Suspense>} />
+              <Route path="mezmun-planlamasi"     element={<AdminRoute><Suspense fallback={<PageLoader />}><MezmunPlanlamasiPage /></Suspense></AdminRoute>} />
               <Route path="sened-arxivi"          element={<Suspense fallback={<PageLoader />}><SendArxiviPage /></Suspense>} />
               <Route path="qaynaqlar"             element={<Suspense fallback={<PageLoader />}><QaynaqlarPage /></Suspense>} />
-              <Route path="parametrler"           element={<Suspense fallback={<PageLoader />}><ParametrlerPage /></Suspense>} />
-              <Route path="sistem-arxivi"         element={<CS t="Sistem Arxivi" />} />
+              <Route path="parametrler"           element={<AdminRoute><Suspense fallback={<PageLoader />}><ParametrlerPage /></Suspense></AdminRoute>} />
+              <Route path="sistem-arxivi"         element={<AdminRoute><CS t="Sistem Arxivi" /></AdminRoute>} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

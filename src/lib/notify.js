@@ -1,11 +1,5 @@
 import { supabase } from './supabase'
 
-const ADMIN_EMAILS = [
-  'talifa.isgandarli@gmail.com',
-  'nusalov.n@reflect.az',
-  'turkan.a@reflect.az'
-]
-
 /**
  * Bir istifadəçiyə bildiriş göndər
  */
@@ -81,14 +75,14 @@ export async function notifyAll(title, body = null, type = 'info', link = null, 
  */
 export async function notifyAdmins(title, body = null, type = 'info', link = null) {
   try {
-    const { data: admins, error: aErr } = await supabase
+    const { data: profiles, error: aErr } = await supabase
       .from('profiles')
-      .select('id, email')
-      .in('email', ADMIN_EMAILS)
+      .select('id, roles(level)')
       .eq('is_active', true)
 
     if (aErr) { console.error('[notifyAdmins] profiles xətası:', aErr.message); return }
-    if (!admins?.length) { console.warn('[notifyAdmins] admin tapılmadı'); return }
+    const admins = (profiles || []).filter(p => (p.roles?.level ?? 99) <= 2)
+    if (!admins.length) { console.warn('[notifyAdmins] admin tapılmadı'); return }
 
     const rows = admins.map(p => ({
       user_id: p.id,

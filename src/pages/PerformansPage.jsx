@@ -208,17 +208,19 @@ export default function PerformansPage() {
     const survey = Number(form.survey_360) || 0
     const manager = Number(form.manager_score) || 0
 
-    // Tapşırıq skoru hesabla
-    const taskScore = await calcTaskScore(form.employee_id, form.review_year)
-    const total = Math.round(((survey * 0.4) + (manager * 0.3) + (taskScore * 0.3)) * 10) / 10
+    // D3: Task score auto-calc active only from 2026 onwards
+    const taskScore = form.review_year >= 2026 ? await calcTaskScore(form.employee_id, form.review_year) : null
+    const total = taskScore !== null
+      ? Math.round(((survey * 0.4) + (manager * 0.3) + (taskScore * 0.3)) * 10) / 10
+      : (survey && manager ? Math.round(((survey * 0.4) + (manager * 0.6)) * 10) / 10 : null)
 
     const data = {
       employee_id: form.employee_id,
       review_year: form.review_year,
       survey_360: survey || null,
       manager_score: manager || null,
-      task_score: taskScore,
-      total_score: total,
+      task_score: taskScore ?? null,
+      total_score: total ?? null,
       notes: form.notes || null,
       reviewed_by: form.reviewed_by || null,
     }

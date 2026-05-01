@@ -1151,6 +1151,7 @@ export default function TapshiriqlarPage() {
   const [defaultSt,     setDefaultSt]     = useState('not_started')
   const [editTask,      setEditTask]      = useState(null)
   const [deleteTask,    setDeleteTask]    = useState(null)
+  const [doneWarn,      setDoneWarn]      = useState(null) // { task, newStatus, incomplete }
   const [detailTask,    setDetailTask]    = useState(null)
   const [archiveOpen,   setArchiveOpen]   = useState(false)
   const [filterTag,     setFilterTag]     = useState('all')
@@ -1291,30 +1292,34 @@ export default function TapshiriqlarPage() {
     await supabase.from('tasks').delete().eq('id', id)
   }
 
-  async function handleStatusChange(task, newStatus) {
-    if (task.status === newStatus) return
-    // 1. Optimistic update — UI dərhal cavab verir
+  async function _doStatusChange(task, newStatus) {
+    const oldStatus = task.status
     setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: newStatus } : t))
     if (detailTask?.id === task.id) setDetailTask(prev => ({ ...prev, status: newStatus }))
-    // 2. Supabase update
     const { error } = await supabase.from('tasks').update({ status: newStatus }).eq('id', task.id)
     if (error) {
-      // Rollback
-      setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: task.status } : t))
-      if (detailTask?.id === task.id) setDetailTask(prev => ({ ...prev, status: task.status }))
+      setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: oldStatus } : t))
+      if (detailTask?.id === task.id) setDetailTask(prev => ({ ...prev, status: oldStatus }))
       addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin', 'error')
       return
     }
-    // 3. Activity log
-    supabase.from('task_comments').insert({ task_id:task.id, author_id:user?.id, type:'activity', content:'status dəyişdi', metadata:{ old_status:task.status, new_status:newStatus } })
-    // 4. Bildiriş — bütün cavabdehlərə
+    supabase.from('task_comments').insert({ task_id:task.id, author_id:user?.id, type:'activity', content:'status dəyişdi', metadata:{ old_status:oldStatus, new_status:newStatus } })
     if (newStatus === 'done') {
       const allAssignees = (task.assignee_ids||[]).length > 0 ? task.assignee_ids : (task.assignee_id ? [task.assignee_id] : [])
       for (const uid of allAssignees) {
         if (uid !== user?.id) notify(uid, task.title, 'Tapşırıq tamamlandı kimi işarələndi', 'success', '/tapshiriqlar?task=' + task.id)
       }
     }
-    // 5. loadData yoxdur — optimistic kifayətdir
+  }
+
+  async function handleStatusChange(task, newStatus) {
+    if (task.status === newStatus) return
+    if (newStatus === 'done') {
+      const cc = checkCounts[task.id]
+      const incomplete = (cc?.total || 0) - (cc?.done || 0)
+      if (incomplete > 0) { setDoneWarn({ task, newStatus, incomplete }); return }
+    }
+    await _doStatusChange(task, newStatus)
   }
 
   async function handleDeadlineChange(task, newDue) {
@@ -1361,25 +1366,17 @@ export default function TapshiriqlarPage() {
       setDragTaskId(null); setDragOverCol(null); setDragOverIdx(null)
       return
     }
-    const oldStatus = task.status
-    // Optimistic update
-    setTasks(prev => prev.map(t => t.id === dragTaskId ? { ...t, status: targetColKey } : t))
-    if (detailTask?.id === dragTaskId) setDetailTask(prev => ({ ...prev, status: targetColKey }))
-    setDragTaskId(null); setDragOverCol(null); setDragOverIdx(null)
-    // Supabase update
-    const { error } = await supabase.from('tasks').update({ status: targetColKey }).eq('id', dragTaskId)
-    if (error) {
-      // Rollback
-      setTasks(prev => prev.map(t => t.id === dragTaskId ? { ...t, status: oldStatus } : t))
-      addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin', 'error')
-      return
+    if (targetColKey === 'done') {
+      const cc = checkCounts[dragTaskId]
+      const incomplete = (cc?.total || 0) - (cc?.done || 0)
+      if (incomplete > 0) {
+        setDoneWarn({ task, newStatus: targetColKey, incomplete })
+        setDragTaskId(null); setDragOverCol(null); setDragOverIdx(null)
+        return
+      }
     }
-    // Activity log (fire and forget)
-    supabase.from('task_comments').insert({
-      task_id: dragTaskId, author_id: user?.id, type: 'activity',
-      content: 'status dəyişdi',
-      metadata: { old_status: oldStatus, new_status: targetColKey }
-    })
+    setDragTaskId(null); setDragOverCol(null); setDragOverIdx(null)
+    await _doStatusChange(task, targetColKey)
   }
 
   const { isAdmin } = useAuth()
@@ -1735,6 +1732,10 @@ export default function TapshiriqlarPage() {
       <ConfirmDialog open={!!deleteTask} title="Tapşırığı sil"
         message={`"${deleteTask?.title}" tapşırığını silmək istədiyinizə əminsiniz?`}
         onConfirm={handleDelete} onCancel={() => setDeleteTask(null)} danger />
+      <ConfirmDialog open={!!doneWarn} title="Tamamlanmamış alt tapşırıqlar"
+        message={`Bu tapşırıqda ${doneWarn?.incomplete} tamamlanmamış alt tapşırıq var. Yenə də "Tamamlandı" kimi işarələmək istəyirsiniz?`}
+        onConfirm={() => { const w = doneWarn; setDoneWarn(null); _doStatusChange(w.task, w.newStatus) }}
+        onCancel={() => setDoneWarn(null)} />
       <ArchiveModal open={archiveOpen} onClose={() => setArchiveOpen(false)}
         tasks={tasks} projects={projects} members={members} checkCounts={checkCounts} onUnarchive={handleUnarchive} />
     </div>

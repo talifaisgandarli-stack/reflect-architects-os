@@ -168,7 +168,7 @@ export default function DebitorBorclarPage() {
   }
 
   async function markPaid(rec) {
-    await supabase.from('receivables').update({ paid: true, paid_amount: rec.expected_amount }).eq('id', rec.id)
+    await supabase.from('receivables').update({ paid: true }).eq('id', rec.id)
     addToast('Ödənildi olaraq işarələndi', 'success')
     await loadData()
   }
