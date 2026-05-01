@@ -32,6 +32,27 @@ const daysUntil = d => {
   return Math.floor((dd - t) / 86400000)
 }
 
+const FREQ_LABELS = { daily:'Hər gün', weekly:'Hər həftə', monthly:'Hər ay', yearly:'Hər il' }
+
+function isEventOnDate(event, dateStr) {
+  const rule = event.recurrence_rule
+  if (!rule || !rule.freq) {
+    return event.start_date <= dateStr && (event.end_date || event.start_date) >= dateStr
+  }
+  if (dateStr < event.start_date) return false
+  if (rule.until && dateStr > rule.until) return false
+  const start = new Date(event.start_date + 'T00:00:00')
+  const check = new Date(dateStr + 'T00:00:00')
+  const diffDays = Math.round((check - start) / 86400000)
+  switch (rule.freq) {
+    case 'daily':   return true
+    case 'weekly':  return diffDays % 7 === 0
+    case 'monthly': return start.getDate() === check.getDate()
+    case 'yearly':  return start.getDate() === check.getDate() && start.getMonth() === check.getMonth()
+    default: return false
+  }
+}
+
 // ─── Avatar ───────────────────────────────────────────────────────────────────
 function Av({ name='?', size=6, className='' }) {
   const ini = name.split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase()
@@ -213,7 +234,8 @@ function EventModal({ open, onClose, onSave, event, members, defaultDate, defaul
   const blank = {
     title:'', event_type: defaultType||'meeting',
     start_date: defaultDate || todayStr(), end_date:'',
-    start_time:'', end_time:'', notes:'', tagged_profiles:[], is_private: false
+    start_time:'', end_time:'', notes:'', tagged_profiles:[], is_private: false,
+    recurrence_rule: null
   }
   const [form, setForm] = useState(blank)
   const [saving, setSaving] = useState(false)
@@ -224,7 +246,8 @@ function EventModal({ open, onClose, onSave, event, members, defaultDate, defaul
       title: event.title||'', event_type: event.event_type||'meeting',
       start_date: event.start_date||todayStr(), end_date: event.end_date||'',
       start_time: event.start_time||'', end_time: event.end_time||'',
-      notes: event.notes||'', tagged_profiles: event.tagged_profiles||[], is_private: event.is_private||false
+      notes: event.notes||'', tagged_profiles: event.tagged_profiles||[], is_private: event.is_private||false,
+      recurrence_rule: event.recurrence_rule||null
     } : blank)
   }, [open, event])
 
@@ -328,6 +351,43 @@ function EventModal({ open, onClose, onSave, event, members, defaultDate, defaul
             </div>
           )}
 
+          {/* Təkrarlanan hadisə */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between p-3 bg-[#fafafa] border border-[#ebebeb] rounded-xl">
+              <div>
+                <div className="text-xs font-semibold text-[#0f172a]">🔁 Təkrarlanan hadisə</div>
+                <div className="text-[10px] text-[#888] mt-0.5">Müntəzəm aralıqlarla təkrarlanır</div>
+              </div>
+              <button type="button"
+                onClick={() => set('recurrence_rule', form.recurrence_rule ? null : { freq: 'weekly', until: '' })}
+                className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 ${form.recurrence_rule ? 'bg-[#0f172a]' : 'bg-[#e2e8f0]'}`}>
+                <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${form.recurrence_rule ? 'translate-x-5' : 'translate-x-0.5'}`} />
+              </button>
+            </div>
+            {form.recurrence_rule && (
+              <div className="grid grid-cols-2 gap-3 px-1">
+                <div>
+                  <label className="block text-[10px] font-bold text-[#aaa] uppercase tracking-wider mb-1.5">Tezlik</label>
+                  <select value={form.recurrence_rule.freq}
+                    onChange={e => set('recurrence_rule', { ...form.recurrence_rule, freq: e.target.value })}
+                    className="w-full px-3 py-2 border border-[#e8e8e4] rounded-xl text-sm focus:outline-none focus:border-[#0f172a]">
+                    <option value="daily">Hər gün</option>
+                    <option value="weekly">Hər həftə</option>
+                    <option value="monthly">Hər ay</option>
+                    <option value="yearly">Hər il</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-[#aaa] uppercase tracking-wider mb-1.5">Bitiş tarixi</label>
+                  <input type="date" value={form.recurrence_rule.until || ''}
+                    onChange={e => set('recurrence_rule', { ...form.recurrence_rule, until: e.target.value })}
+                    min={form.start_date}
+                    className="w-full px-3 py-2 border border-[#e8e8e4] rounded-xl text-sm focus:outline-none focus:border-[#0f172a]" />
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* İştirakçılar */}
           <div>
             <div className="flex items-center justify-between mb-2">
@@ -418,6 +478,11 @@ function EventSheet({ event, members, user, onClose, onEdit, onDelete, onRSVP })
           <div className="flex items-center gap-2 mb-1">
             <div className="text-[10px] font-bold uppercase tracking-widest" style={{color:t.dot}}>{t.label}</div>
             {event.is_private && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-[#0f172a]/10 text-[#0f172a]">🔒 Gizli</span>}
+            {event.recurrence_rule?.freq && (
+              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600">
+                🔁 {FREQ_LABELS[event.recurrence_rule.freq]}
+              </span>
+            )}
           </div>
           <h2 className="text-lg font-bold text-[#0f172a] leading-snug">{event.title}</h2>
 
@@ -538,7 +603,7 @@ function WeekView({ events, members, weekStart, onEventClick, onDayClick }) {
       <div className="grid grid-cols-7 min-h-[200px]">
         {days.map((d,i) => {
           const ds = d.toISOString().split('T')[0]
-          const dayEvs = events.filter(e => e.start_date<=ds && (e.end_date||e.start_date)>=ds)
+          const dayEvs = events.filter(e => isEventOnDate(e, ds))
           const isToday = d.getTime()===today.getTime()
           return (
             <div key={i}
@@ -608,16 +673,20 @@ export default function HadiselerTeqvimiPage() {
     if (!form.title?.trim() || !form.start_date) {
       addToast('Ad və tarix daxil edin', 'error'); return
     }
+    const rrule = form.recurrence_rule?.freq
+      ? { freq: form.recurrence_rule.freq, until: form.recurrence_rule.until || null }
+      : null
     const data = {
-      title:           form.title.trim(),
-      event_type:      form.event_type,
-      start_date:      form.start_date,
-      end_date:        form.end_date || form.start_date,
-      start_time:      form.start_time || null,
-      end_time:        form.end_time   || null,
-      notes:           form.notes      || null,
-      tagged_profiles: form.tagged_profiles || [],
-      is_private:      form.is_private || false,
+      title:            form.title.trim(),
+      event_type:       form.event_type,
+      start_date:       form.start_date,
+      end_date:         form.end_date || form.start_date,
+      start_time:       form.start_time || null,
+      end_time:         form.end_time   || null,
+      notes:            form.notes      || null,
+      tagged_profiles:  form.tagged_profiles || [],
+      is_private:       form.is_private || false,
+      recurrence_rule:  rrule,
     }
 
     if (existingId) {
@@ -723,7 +792,7 @@ export default function HadiselerTeqvimiPage() {
   const eventsForDay = d => {
     if (!d) return []
     const ds = dayStr(d)
-    return filtered.filter(e => e.start_date<=ds && (e.end_date||e.start_date)>=ds)
+    return filtered.filter(e => isEventOnDate(e, ds))
   }
 
   // Week start (Monday)
@@ -922,7 +991,7 @@ export default function HadiselerTeqvimiPage() {
                                   className="text-[9px] px-1.5 py-0.5 rounded-md truncate mb-0.5 cursor-pointer font-semibold hover:opacity-75 transition-opacity"
                                   style={{background:t.bg, color:t.text, borderLeft:`2px solid ${t.dot}`}}
                                   onClick={ev=>{ev.stopPropagation(); setSheet(e)}}>
-                                  {t.emoji} {e.title}{e.start_time && <span className="opacity-60 ml-1">{e.start_time}</span>}
+                                  {t.emoji} {e.title}{e.recurrence_rule && <span className="opacity-50 ml-0.5">↺</span>}{e.start_time && <span className="opacity-60 ml-1">{e.start_time}</span>}
                                 </div>
                               )
                             })}

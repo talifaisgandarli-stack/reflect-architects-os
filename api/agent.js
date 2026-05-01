@@ -104,7 +104,7 @@ async function db(table, query) {
 async function getProfiles(filter) {
   const { data } = await supabase
     .from('profiles')
-    .select('id, full_name, email, telegram_chat_id, roles(level, name)')
+    .select('id, full_name, email, telegram_chat_id, roles(level, title)')
     .eq('is_active', true)
     .not('telegram_chat_id', 'is', null)
   const all = data || []
@@ -128,16 +128,18 @@ function days(due) {
   return Math.floor((d - t) / 86400000)
 }
 
+const BAKU_OFFSET = 4 * 3600000 // UTC+4
+
 function today() {
-  return new Date().toISOString().split('T')[0]
+  return new Date(Date.now() + BAKU_OFFSET).toISOString().split('T')[0]
 }
 
 function ago(n) {
-  return new Date(Date.now() - n * 86400000).toISOString().split('T')[0]
+  return new Date(Date.now() + BAKU_OFFSET - n * 86400000).toISOString().split('T')[0]
 }
 
 function future(n) {
-  return new Date(Date.now() + n * 86400000).toISOString().split('T')[0]
+  return new Date(Date.now() + BAKU_OFFSET + n * 86400000).toISOString().split('T')[0]
 }
 
 // ─── Handler ──────────────────────────────────────────────────────────────────

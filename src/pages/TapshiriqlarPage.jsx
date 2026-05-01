@@ -5,6 +5,7 @@ import { useToast } from '../contexts/ToastContext'
 import { useAuth } from '../contexts/AuthContext'
 import { Button, Modal, ConfirmDialog, Skeleton } from '../components/ui'
 import { notify } from '../lib/notify'
+import { logActivity } from '../lib/logActivity'
 import {
   IconPlus, IconX, IconEdit, IconTrash, IconCheck, IconSend,
   IconLayoutKanban, IconList, IconSearch, IconArchive,
@@ -52,21 +53,24 @@ function Avatar({ name='?', size=6 }) {
   )
 }
 
-function MentionInput({ value, onChange, members, placeholder, rows=1, className='' }) {
+function MentionInput({ value, onChange, onMentionsChange, members, placeholder, rows=1, className='' }) {
   const [show, setShow] = useState(false)
   const [query, setQuery] = useState('')
+  const [mentionIds, setMentionIds] = useState([])
   const ref = useRef(null)
 
   function handleChange(e) {
     const v = e.target.value
     onChange(v)
-    // @ işarəsinin sonundakı hərflər — hər dil üçün işləyir
+    // If text was cleared, reset tracked mentions
+    if (!v.trim()) {
+      setMentionIds([])
+      onMentionsChange?.([])
+    }
     const lastAt = v.lastIndexOf('@')
     if (lastAt === -1) { setShow(false); return }
     const afterAt = v.slice(lastAt + 1)
-    // @ yazıldı — dropdown aç
     if (lastAt === v.length - 1) { setShow(true); setQuery(''); return }
-    // @ sonrası boşluq yoxdursa — hərflər yazılır
     if (!afterAt.includes(' ') || afterAt.length < 30) {
       setShow(true)
       setQuery(afterAt)
@@ -80,10 +84,13 @@ function MentionInput({ value, onChange, members, placeholder, rows=1, className
     onChange(value.slice(0, lastAt) + '@' + m.full_name + ' ')
     setShow(false)
     setQuery('')
+    // Track picked user by ID — stable, independent of name changes
+    const updated = mentionIds.includes(m.id) ? mentionIds : [...mentionIds, m.id]
+    setMentionIds(updated)
+    onMentionsChange?.(updated)
     ref.current?.focus()
   }
 
-  // Members siyahısını query ilə filtrləmə — Azərbaycan hərflərini dəstəkləyir
   const filtered = query.length === 0
     ? members.slice(0, 6)
     : members.filter(m => m.full_name.toLowerCase().includes(query.toLowerCase())).slice(0, 6)
@@ -324,6 +331,7 @@ function DetailPanel({ task, projects, members, onClose, onEdit, onDelete, onSta
   const [editDue,       setEditDue]       = useState('')
   const [editErrors,    setEditErrors]    = useState({})
   const [newComment, setNewComment] = useState('')
+  const [commentMentions, setCommentMentions] = useState([])
   const [tab, setTab]               = useState('checklist')
   const [editingDue, setEditingDue] = useState(false)
   const [newDue,     setNewDue]     = useState(task.due_date || '')
@@ -403,24 +411,19 @@ function DetailPanel({ task, projects, members, onClose, onEdit, onDelete, onSta
 
   async function sendComment() {
     if (!newComment.trim()) return
-    // @AdSoyad formatında mention-ları tap — hər dil üçün işləyir
-    const mentions = []
-    for (const mb of members) {
-      if (newComment.includes('@' + mb.full_name)) {
-        if (!mentions.includes(mb.id)) mentions.push(mb.id)
-      }
-    }
+    // Use IDs tracked by the picker — no text-parsing, stable against name changes
+    const mentions = commentMentions
     await supabase.from('task_comments').insert({
       task_id: task.id, author_id: user?.id, content: newComment.trim(),
       type: 'comment', metadata: mentions.length ? { mentions } : null
     })
-    // Mention olunanlara bildiriş
     for (const mid of mentions) {
       if (mid !== user?.id) {
         await notify(mid, task.title + ' — yeni şərh', newComment.trim().slice(0, 80), 'info', '/tapshiriqlar?task=' + task.id)
       }
     }
     setNewComment('')
+    setCommentMentions([])
     loadComments()
     setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100)
   }
@@ -428,12 +431,7 @@ function DetailPanel({ task, projects, members, onClose, onEdit, onDelete, onSta
   async function saveDue() {
     if (newDue !== task.due_date) {
       const oldDue = task.due_date
-      // Activity log — deadline dəyişikliyi qeyd olunur
-      await supabase.from('task_comments').insert({
-        task_id: task.id, author_id: user?.id, type: 'activity',
-        content: `deadline dəyişdi`,
-        metadata: { old_due: oldDue, new_due: newDue, changed_by: user?.id }
-      })
+      await logActivity(task.id, user?.id, 'deadline dəyişdi', { old_due: oldDue, new_due: newDue, changed_by: user?.id })
       onDeadlineChange(task, newDue)
     }
     setEditingDue(false)
@@ -765,7 +763,9 @@ function DetailPanel({ task, projects, members, onClose, onEdit, onDelete, onSta
               </div>
               <div className="p-4 border-t border-[#f0f0ec] flex-shrink-0">
                 <div className="flex gap-2 items-end">
-                  <MentionInput value={newComment} onChange={setNewComment} members={members}
+                  <MentionInput value={newComment} onChange={setNewComment}
+                    onMentionsChange={setCommentMentions}
+                    members={members}
                     placeholder="Şərh yazın... @ ilə tag edin" rows={2}
                     className="bg-[#f8fafc] border-transparent focus:bg-white focus:border-[#0f172a]" />
                   <button onClick={sendComment} disabled={!newComment.trim()}
@@ -1237,7 +1237,7 @@ export default function TapshiriqlarPage() {
       if (error) { addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin','error'); return }
       // Activity: status dəyişibsə qeyd et
       if (editTask.status !== data.status) {
-        await supabase.from('task_comments').insert({ task_id:editTask.id, author_id:user?.id, type:'activity', content:'status dəyişdi', metadata:{ old_status:editTask.status, new_status:data.status } })
+        await logActivity(editTask.id, user?.id, 'status dəyişdi', { old_status: editTask.status, new_status: data.status })
       }
       // Cavabdeh dəyişibsə yeni cavabdehə bildiriş
       if (data.assignee_id && data.assignee_id !== editTask.assignee_id && data.assignee_id !== user?.id) {
@@ -1254,7 +1254,7 @@ export default function TapshiriqlarPage() {
       setTasks(prev => [inserted, ...prev])
       setCheckCounts(prev => ({ ...prev, [inserted.id]: { done:0, total:0, overdueItems:[], assigneeItems:{} } }))
       setCommentCounts(prev => ({ ...prev, [inserted.id]: 0 }))
-      supabase.from('task_comments').insert({ task_id:inserted.id, author_id:user?.id, type:'activity', content:'tapşırıq yaradıldı', metadata:{} })
+      logActivity(inserted.id, user?.id, 'tapşırıq yaradıldı', {})
       for (const uid of (data.assignee_ids||[])) {
         if (uid !== user?.id) notify(uid, 'Yeni tapşırıq', data.title, 'info', '/tapshiriqlar?task=' + inserted.id)
       }
@@ -1311,7 +1311,7 @@ export default function TapshiriqlarPage() {
       addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin', 'error')
       return
     }
-    supabase.from('task_comments').insert({ task_id:task.id, author_id:user?.id, type:'activity', content:'status dəyişdi', metadata:{ old_status:oldStatus, new_status:newStatus } })
+    logActivity(task.id, user?.id, 'status dəyişdi', { old_status: oldStatus, new_status: newStatus })
     if (newStatus === 'done') {
       const allAssignees = (task.assignee_ids||[]).length > 0 ? task.assignee_ids : (task.assignee_id ? [task.assignee_id] : [])
       for (const uid of allAssignees) {
