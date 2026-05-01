@@ -41,3 +41,24 @@ INSERT INTO holidays (date, name) VALUES
   ('2026-11-09', 'Dövlət Bayrağı günü'),
   ('2026-11-12', 'Konstitusiya günü')
 ON CONFLICT (date) DO NOTHING;
+
+-- RLS policies for holidays: everyone can read, only admins can write
+ALTER TABLE holidays ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "holidays_select_all" ON holidays
+  FOR SELECT USING (true);
+
+CREATE POLICY "holidays_insert_admin" ON holidays
+  FOR INSERT WITH CHECK (
+    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
+  );
+
+CREATE POLICY "holidays_update_admin" ON holidays
+  FOR UPDATE USING (
+    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
+  );
+
+CREATE POLICY "holidays_delete_admin" ON holidays
+  FOR DELETE USING (
+    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
+  );
