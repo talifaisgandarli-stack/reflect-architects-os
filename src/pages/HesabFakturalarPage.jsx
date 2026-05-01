@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useToast } from '../contexts/ToastContext'
 import { PageHeader, Badge, Card, Button, EmptyState, Modal, ConfirmDialog, Skeleton, StatCard, PageLoadingShell, TableSkeleton } from '../components/ui'
-import { IconPlus, IconEdit, IconTrash, IconFileText, IconCheck } from '@tabler/icons-react'
+import { IconPlus, IconEdit, IconTrash, IconFileText, IconCheck, IconPrinter, IconX } from '@tabler/icons-react'
+import { printInvoice } from '../lib/invoicePrint'
 
 const EDV = 0.18
 function fmt(n) { return '₼' + Number(n || 0).toLocaleString() }
@@ -16,37 +17,112 @@ const STATUSES = [
   { key: 'overdue', label: 'Gecikmiş', color: 'danger' },
 ]
 
+const EMPTY_ITEM = { name: '', unit: 'ədəd', qty: 1, price: 0 }
+
 function InvoiceForm({ open, onClose, onSave, invoice, clients, projects }) {
-  const [form, setForm] = useState({ name: '', client_id: '', project_id: '', project_estimate: '', payment_method: 'transfer', invoice_date: new Date().toISOString().split('T')[0], payment_date: '', status: 'draft', notes: '' })
+  const [form, setForm] = useState({
+    name: '', invoice_number: '', client_id: '', client_voen: '',
+    project_id: '', contract_name: '',
+    line_items: [{ ...EMPTY_ITEM }],
+    vat_rate: 18, advance_paid: '',
+    payment_method: 'transfer',
+    invoice_date: new Date().toISOString().split('T')[0],
+    payment_date: '', status: 'draft', notes: ''
+  })
 
   useEffect(() => {
     if (invoice) {
-      setForm({ name: invoice.name || '', client_id: invoice.client_id || '', project_id: invoice.project_id || '', project_estimate: invoice.project_estimate || '', payment_method: invoice.payment_method || 'transfer', invoice_date: invoice.invoice_date || '', payment_date: invoice.payment_date || '', status: invoice.status || 'draft', notes: invoice.notes || '' })
+      setForm({
+        name: invoice.name || '',
+        invoice_number: invoice.invoice_number || invoice.name || '',
+        client_id: invoice.client_id || '',
+        client_voen: invoice.client_voen || '',
+        project_id: invoice.project_id || '',
+        contract_name: invoice.contract_name || '',
+        line_items: Array.isArray(invoice.line_items) && invoice.line_items.length
+          ? invoice.line_items
+          : [{ ...EMPTY_ITEM }],
+        vat_rate: invoice.vat_rate ?? 18,
+        advance_paid: invoice.advance_paid || '',
+        payment_method: invoice.payment_method || 'transfer',
+        invoice_date: invoice.invoice_date || '',
+        payment_date: invoice.payment_date || '',
+        status: invoice.status || 'draft',
+        notes: invoice.notes || ''
+      })
     } else {
-      setForm({ name: '', client_id: '', project_id: '', project_estimate: '', payment_method: 'transfer', invoice_date: new Date().toISOString().split('T')[0], payment_date: '', status: 'draft', notes: '' })
+      setForm({
+        name: '', invoice_number: '', client_id: '', client_voen: '',
+        project_id: '', contract_name: '',
+        line_items: [{ ...EMPTY_ITEM }],
+        vat_rate: 18, advance_paid: '',
+        payment_method: 'transfer',
+        invoice_date: new Date().toISOString().split('T')[0],
+        payment_date: '', status: 'draft', notes: ''
+      })
     }
   }, [invoice, open])
 
   function set(k, v) { setForm(f => ({ ...f, [k]: v })) }
-  const amt = Number(form.project_estimate) || 0
+  function setItem(i, k, v) {
+    setForm(f => {
+      const items = [...f.line_items]
+      items[i] = { ...items[i], [k]: v }
+      return { ...f, line_items: items }
+    })
+  }
+  function addItem() { setForm(f => ({ ...f, line_items: [...f.line_items, { ...EMPTY_ITEM }] })) }
+  function removeItem(i) {
+    setForm(f => ({ ...f, line_items: f.line_items.length > 1 ? f.line_items.filter((_, idx) => idx !== i) : f.line_items }))
+  }
+
+  // Auto-fill contract name when project changes
+  useEffect(() => {
+    if (form.project_id && !form.contract_name) {
+      const p = projects.find(p => p.id === form.project_id)
+      if (p) set('contract_name', p.name)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.project_id])
+
+  const subtotal = form.line_items.reduce((s, it) => s + (Number(it.qty) || 0) * (Number(it.price) || 0), 0)
   const isTransfer = form.payment_method === 'transfer'
+  const vatRate = Number(form.vat_rate) || 0
+  const vatAmt = isTransfer ? Math.round(subtotal * vatRate) / 100 : 0
+  const grand = subtotal + vatAmt
+  const advance = Number(form.advance_paid) || 0
+  const due = Math.max(0, grand - advance)
+  const amt = subtotal
 
   return (
-    <Modal open={open} onClose={onClose} title={invoice ? 'Fakturanı redaktə et' : 'Yeni hesab-faktura'}>
+    <Modal open={open} onClose={onClose} title={invoice ? 'Fakturanı redaktə et' : 'Yeni hesab-faktura'} size="xl">
       <div className="space-y-3">
-        <div>
-          <label className="block text-xs font-medium text-[#555] mb-1">Faktura adı / nömrəsi *</label>
-          <input value={form.name} onChange={e => set('name', e.target.value)}
-            className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]" placeholder="FAK-2026-001" />
-        </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs font-medium text-[#555] mb-1">Sifarişçi</label>
+            <label className="block text-xs font-medium text-[#555] mb-1">Faktura nömrəsi *</label>
+            <input value={form.invoice_number} onChange={e => { set('invoice_number', e.target.value); set('name', e.target.value) }}
+              className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]" placeholder="FAK-2026-001" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-[#555] mb-1">Faktura tarixi</label>
+            <input type="date" value={form.invoice_date} onChange={e => set('invoice_date', e.target.value)}
+              className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]" />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-medium text-[#555] mb-1">Alıcı (Sifarişçi)</label>
             <select value={form.client_id} onChange={e => set('client_id', e.target.value)}
               className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]">
               <option value="">Seçin</option>
               {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-[#555] mb-1">Alıcının VÖEN-i</label>
+            <input value={form.client_voen} onChange={e => set('client_voen', e.target.value)}
+              className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]" placeholder="1234567890" />
           </div>
           <div>
             <label className="block text-xs font-medium text-[#555] mb-1">Layihə</label>
@@ -57,10 +133,52 @@ function InvoiceForm({ open, onClose, onSave, invoice, clients, projects }) {
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-[#555] mb-1">Məbləğ (₼, ƏDV xaric)</label>
-            <input type="number" value={form.project_estimate} onChange={e => set('project_estimate', e.target.value)}
-              className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]" placeholder="0" />
+            <label className="block text-xs font-medium text-[#555] mb-1">Müqavilə adı</label>
+            <input value={form.contract_name} onChange={e => set('contract_name', e.target.value)}
+              className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]" placeholder="Müqavilənin adı" />
           </div>
+        </div>
+
+        {/* Line items */}
+        <div className="border border-[#e8e8e4] rounded-lg p-3 bg-[#fafafa]">
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-xs font-bold text-[#555]">Sətirlər (Məzmun)</label>
+            <button type="button" onClick={addItem} className="text-[11px] font-semibold text-blue-600 hover:text-blue-800">
+              <IconPlus size={11} className="inline" /> Sətir əlavə et
+            </button>
+          </div>
+          <div className="space-y-2">
+            <div className="grid grid-cols-12 gap-1.5 text-[10px] font-semibold text-[#888] uppercase tracking-wider px-1">
+              <div className="col-span-5">Məzmun</div>
+              <div className="col-span-2 text-center">Ölçü</div>
+              <div className="col-span-1 text-center">Miq.</div>
+              <div className="col-span-2 text-right">Qiymət</div>
+              <div className="col-span-2 text-right">Cəmi</div>
+            </div>
+            {form.line_items.map((it, i) => {
+              const lineTotal = (Number(it.qty) || 0) * (Number(it.price) || 0)
+              return (
+                <div key={i} className="grid grid-cols-12 gap-1.5 items-center">
+                  <input value={it.name} onChange={e => setItem(i, 'name', e.target.value)}
+                    className="col-span-5 px-2 py-1.5 border border-[#e8e8e4] rounded-md text-xs focus:outline-none focus:border-[#0f172a] bg-white"
+                    placeholder="Xidmət/məhsulun adı" />
+                  <input value={it.unit} onChange={e => setItem(i, 'unit', e.target.value)}
+                    className="col-span-2 px-2 py-1.5 border border-[#e8e8e4] rounded-md text-xs text-center focus:outline-none focus:border-[#0f172a] bg-white" />
+                  <input type="number" value={it.qty} onChange={e => setItem(i, 'qty', e.target.value)}
+                    className="col-span-1 px-1 py-1.5 border border-[#e8e8e4] rounded-md text-xs text-center focus:outline-none focus:border-[#0f172a] bg-white" />
+                  <input type="number" value={it.price} onChange={e => setItem(i, 'price', e.target.value)}
+                    className="col-span-2 px-2 py-1.5 border border-[#e8e8e4] rounded-md text-xs text-right focus:outline-none focus:border-[#0f172a] bg-white" />
+                  <div className="col-span-1 text-xs text-right font-bold text-[#0f172a]">{fmt(lineTotal)}</div>
+                  <button type="button" onClick={() => removeItem(i)} className="col-span-1 text-[#aaa] hover:text-red-500" disabled={form.line_items.length === 1}>
+                    <IconX size={12} />
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-3">
           <div>
             <label className="block text-xs font-medium text-[#555] mb-1">Ödəniş üsulu</label>
             <select value={form.payment_method} onChange={e => set('payment_method', e.target.value)}
@@ -70,30 +188,34 @@ function InvoiceForm({ open, onClose, onSave, invoice, clients, projects }) {
             </select>
           </div>
           <div>
+            <label className="block text-xs font-medium text-[#555] mb-1">ƏDV (%)</label>
+            <input type="number" min="0" max="100" value={form.vat_rate} onChange={e => set('vat_rate', e.target.value)}
+              className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-[#555] mb-1">Ödənilmiş avans (₼)</label>
+            <input type="number" value={form.advance_paid} onChange={e => set('advance_paid', e.target.value)}
+              className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]" placeholder="0" />
+          </div>
+          <div>
             <label className="block text-xs font-medium text-[#555] mb-1">Status</label>
             <select value={form.status} onChange={e => set('status', e.target.value)}
               className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]">
               {STATUSES.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
             </select>
           </div>
-          <div>
-            <label className="block text-xs font-medium text-[#555] mb-1">Faktura tarixi</label>
-            <input type="date" value={form.invoice_date} onChange={e => set('invoice_date', e.target.value)}
-              className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]" />
-          </div>
         </div>
 
+        {/* Totals preview */}
         {amt > 0 && (
-          <div className={`rounded-lg p-3 text-xs ${isTransfer ? 'bg-amber-50 border border-amber-200' : 'bg-[#f5f5f0]'}`}>
-            {isTransfer ? (
-              <div className="grid grid-cols-3 gap-3 text-center">
-                <div><div className="text-[#888] mb-0.5">ƏDV xaric</div><div className="font-bold text-[#0f172a]">{fmt(amt)}</div></div>
-                <div><div className="text-[#888] mb-0.5">ƏDV (18%)</div><div className="font-bold text-amber-600">{fmt(edv(amt))}</div></div>
-                <div><div className="text-[#888] mb-0.5">ƏDV daxil</div><div className="font-bold text-green-600">{fmt(withEdv(amt))}</div></div>
-              </div>
-            ) : (
-              <div className="text-center text-[#555]">Nağd ödəniş — ƏDV tətbiq edilmir · Cəmi: <span className="font-bold text-[#0f172a]">{fmt(amt)}</span></div>
-            )}
+          <div className="rounded-lg border border-[#e8e8e4] bg-white p-3 text-xs">
+            <div className="grid grid-cols-5 gap-2 text-center">
+              <div><div className="text-[#888] mb-0.5">Ümumi</div><div className="font-bold text-[#0f172a]">{fmt(subtotal)}</div></div>
+              <div><div className="text-[#888] mb-0.5">ƏDV ({vatRate}%)</div><div className="font-bold text-amber-600">{fmt(vatAmt)}</div></div>
+              <div><div className="text-[#888] mb-0.5">Yekun</div><div className="font-bold text-green-600">{fmt(grand)}</div></div>
+              <div><div className="text-[#888] mb-0.5">Avans</div><div className="font-bold text-[#0f172a]">{fmt(advance)}</div></div>
+              <div><div className="text-[#888] mb-0.5">Ödənilməli</div><div className="font-bold text-[#0f172a]">{fmt(due)}</div></div>
+            </div>
           </div>
         )}
 
@@ -104,7 +226,7 @@ function InvoiceForm({ open, onClose, onSave, invoice, clients, projects }) {
         </div>
         <div className="flex gap-2 pt-2 border-t border-[#f0f0ec]">
           <Button variant="secondary" onClick={onClose}>Ləğv et</Button>
-          <Button onClick={() => onSave(form)} className="ml-auto">{invoice ? 'Yadda saxla' : 'Əlavə et'}</Button>
+          <Button onClick={() => onSave({ ...form, subtotal, vatAmt, grand, due })} className="ml-auto">{invoice ? 'Yadda saxla' : 'Əlavə et'}</Button>
         </div>
       </div>
     </Modal>
@@ -138,16 +260,29 @@ export default function HesabFakturalarPage() {
   }
 
   async function handleSave(form) {
-    if (!form.name.trim()) { addToast('Ad daxil edin', 'error'); return }
-    const amt = Number(form.project_estimate) || 0
-    const isTransfer = form.payment_method === 'transfer'
+    const invName = (form.invoice_number || form.name || '').trim()
+    if (!invName) { addToast('Faktura nömrəsi daxil edin', 'error'); return }
+    const subtotal = form.subtotal ?? 0
+    const vatAmt = form.vatAmt ?? 0
+    const grand = form.grand ?? subtotal
     const data = {
-      name: form.name.trim(), client_id: form.client_id || null, project_id: form.project_id || null,
-      project_estimate: amt, payment_method: form.payment_method,
-      edv_amount: isTransfer ? edv(amt) : 0,
-      amount_with_edv: isTransfer ? withEdv(amt) : amt,
-      invoice_date: form.invoice_date || null, payment_date: form.payment_date || null,
-      status: form.status, notes: form.notes || null
+      name: invName,
+      invoice_number: invName,
+      client_id: form.client_id || null,
+      client_voen: form.client_voen || null,
+      project_id: form.project_id || null,
+      contract_name: form.contract_name || null,
+      line_items: Array.isArray(form.line_items) ? form.line_items : [],
+      vat_rate: Number(form.vat_rate) || 0,
+      advance_paid: Number(form.advance_paid) || 0,
+      project_estimate: subtotal,
+      payment_method: form.payment_method,
+      edv_amount: vatAmt,
+      amount_with_edv: grand,
+      invoice_date: form.invoice_date || null,
+      payment_date: form.payment_date || null,
+      status: form.status,
+      notes: form.notes || null
     }
     if (editInvoice) {
       const { data: updated, error } = await supabase.from('invoices').update(data).eq('id', editInvoice.id).select().single()
@@ -244,6 +379,7 @@ export default function HesabFakturalarPage() {
                       <td className="px-4 py-3 text-right font-bold text-green-600">{fmt(inv.amount_with_edv || inv.project_estimate)}</td>
                       <td className="px-4 py-3">
                         <div className="flex gap-1">
+                          <button onClick={() => printInvoice(inv, getClient(inv.client_id), getProject(inv.project_id))} className="text-[#aaa] hover:text-[#0f172a] p-1" title="Çap / PDF"><IconPrinter size={12} /></button>
                           {inv.status !== 'paid' && <button onClick={() => markPaid(inv)} className="text-[#aaa] hover:text-green-600 p-1" title="Ödənildi"><IconCheck size={12} /></button>}
                           <button onClick={() => { setEditInvoice(inv); setModalOpen(true) }} className="text-[#aaa] hover:text-[#0f172a] p-1"><IconEdit size={12} /></button>
                           <button onClick={() => setDeleteInvoice(inv)} className="text-[#aaa] hover:text-red-500 p-1"><IconTrash size={12} /></button>
