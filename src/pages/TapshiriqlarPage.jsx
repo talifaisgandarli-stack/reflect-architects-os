@@ -844,9 +844,9 @@ function DetailPanel({ task, projects, members, onClose, onEdit, onDelete, onSta
 }
 
 // ─── Kanban Card ──────────────────────────────────────────────────────────────
-function KanbanCard({ task, projects, members, checkCounts, commentCounts, onClick, onArchive, onDragStart, onDragEnd, isDragging, filterUser, mySubtasks }) {
-  const project      = projects.find(p => p.id === task.project_id)
-  const assignee     = members.find(m => m.id === task.assignee_id)
+function KanbanCard({ task, projects, members, checkCounts, commentCounts, onClick, onArchive, onDragStart, onDragEnd, isDragging, filterUser, mySubtasks, onCardDragOver }) {
+  const project        = projects.find(p => p.id === task.project_id)
+  const assignee       = members.find(m => m.id === task.assignee_id)
   const filteredMember = filterUser && filterUser !== 'all' ? members.find(m => m.id === filterUser) : null
   const days = daysLeft(task.due_date)
   const pr = prio(task.priority)
@@ -873,6 +873,7 @@ function KanbanCard({ task, projects, members, checkCounts, commentCounts, onCli
         e.target.style.opacity = '1'
         onDragEnd()
       }}
+      onDragEnter={e => { e.preventDefault(); onCardDragOver && onCardDragOver() }}
       style={{ cursor: 'grab', marginBottom: '0' }}
     >
       {/* Main card */}
@@ -1017,7 +1018,7 @@ function KanbanCard({ task, projects, members, checkCounts, commentCounts, onCli
 }
 
 // ─── Kanban Column ────────────────────────────────────────────────────────────
-function KanbanColumn({ column, tasks, projects, members, checkCounts, commentCounts, onCardClick, onQuickAdd, onArchive, dragTaskId, onDragStart, onDragEnd, onDrop, onDragOver, isDragOver, filterUser, mySubtasksMap }) {
+function KanbanColumn({ column, tasks, projects, members, checkCounts, commentCounts, onCardClick, onQuickAdd, onArchive, dragTaskId, onDragStart, onDragEnd, onDrop, onDragOver, isDragOver, filterUser, mySubtasksMap, onCardDragOver }) {
   const [adding, setAdding] = useState(false)
 
   return (
@@ -1053,14 +1054,15 @@ function KanbanColumn({ column, tasks, projects, members, checkCounts, commentCo
             onSave={data => { onQuickAdd(data); setAdding(false) }}
             onCancel={() => setAdding(false)} />
         )}
-        {tasks.map(task => (
+        {tasks.map((task, idx) => (
           <KanbanCard key={task.id} task={task} projects={projects} members={members}
             checkCounts={checkCounts} commentCounts={commentCounts}
             onClick={onCardClick} onArchive={onArchive}
             onDragStart={onDragStart} onDragEnd={onDragEnd}
             isDragging={dragTaskId === task.id}
             filterUser={filterUser}
-            mySubtasks={mySubtasksMap?.[task.id] || null} />
+            mySubtasks={mySubtasksMap?.[task.id] || null}
+            onCardDragOver={() => onCardDragOver?.(idx)} />
         ))}
         {!adding && (
           <div onClick={() => setAdding(true)}
@@ -1182,7 +1184,7 @@ export default function TapshiriqlarPage() {
   async function loadData() {
     setLoading(true)
     const [tRes, pRes, mRes, ckRes, cmtRes] = await Promise.all([
-      supabase.from('tasks').select('*').order('created_at', { ascending: false }),
+      supabase.from('tasks').select('*').order('position', { ascending: true, nullsFirst: false }).order('created_at', { ascending: false }),
       supabase.from('projects').select('id, name').order('name'),
       supabase.from('profiles').select('id, full_name').eq('is_active', true).order('full_name'),
       supabase.from('task_checklists').select('id, task_id, title, completed, assignee_id, due_date'),
@@ -1368,8 +1370,20 @@ export default function TapshiriqlarPage() {
   async function handleDrop(targetColKey) {
     if (!dragTaskId || !targetColKey) return
     const task = tasks.find(t => t.id === dragTaskId)
-    if (!task || task.status === targetColKey) {
+    if (!task) { setDragTaskId(null); setDragOverCol(null); setDragOverIdx(null); return }
+
+    if (task.status === targetColKey) {
+      const colTasks = tasks.filter(t => t.status === targetColKey && !t.archived)
+      const fromIdx = colTasks.findIndex(t => t.id === dragTaskId)
+      const toIdx = dragOverIdx ?? colTasks.length - 1
       setDragTaskId(null); setDragOverCol(null); setDragOverIdx(null)
+      if (fromIdx < 0 || fromIdx === toIdx) return
+      const reordered = [...colTasks]
+      const [moved] = reordered.splice(fromIdx, 1)
+      reordered.splice(Math.min(toIdx, reordered.length), 0, moved)
+      const withPos = reordered.map((t, i) => ({ ...t, position: i + 1 }))
+      setTasks(prev => [...prev.filter(t => t.status !== targetColKey || t.archived), ...withPos])
+      await Promise.all(withPos.map(t => supabase.from('tasks').update({ position: t.position }).eq('id', t.id)))
       return
     }
     if (targetColKey === 'done') {
@@ -1612,6 +1626,7 @@ export default function TapshiriqlarPage() {
                   isDragOver={dragOverCol === column.key}
                   filterUser={filterUser}
                   mySubtasksMap={mySubtasksMap}
+                  onCardDragOver={idx => { setDragOverCol(column.key); setDragOverIdx(idx) }}
                 />
               ))}
             </div>

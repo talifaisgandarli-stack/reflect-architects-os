@@ -43,7 +43,7 @@ function PodratForm({ open, onClose, onSave, work, projects }) {
     contract_amount: '', payment_method: 'transfer',
     advance_percent: 30, advance_date: '', advance_paid: false, advance_method: 'transfer',
     interim_payments: [],
-    final_paid: false, final_date: '', final_method: 'transfer',
+    final_paid: false, final_date: '', final_method: 'transfer', final_amount: '',
     payment_status: 'not_started', work_status: 'not_started',
     client_approval_date: '', planned_deadline: '', contract_number: '', notes: ''
   }
@@ -60,7 +60,7 @@ function PodratForm({ open, onClose, onSave, work, projects }) {
         advance_method: work.advance_method || 'transfer',
         interim_payments: Array.isArray(work.interim_payments) ? work.interim_payments : [],
         final_paid: work.final_paid || false, final_date: work.final_date || '',
-        final_method: work.final_method || 'transfer',
+        final_method: work.final_method || 'transfer', final_amount: work.final_amount || '',
         payment_status: work.payment_status || 'not_started',
         work_status: work.work_status || 'not_started',
         client_approval_date: work.client_approval_date || '',
@@ -75,7 +75,9 @@ function PodratForm({ open, onClose, onSave, work, projects }) {
   const amt = Number(form.contract_amount) || 0
   const advanceAmt = Math.round(amt * (Number(form.advance_percent) || 30) / 100)
   const interimTotal = (form.interim_payments || []).reduce((s, p) => s + (Number(p.amount) || 0), 0)
-  const remaining = amt - (form.advance_paid ? advanceAmt : 0) - interimTotal - (form.final_paid ? amt - advanceAmt - interimTotal : 0)
+  const calcFinalAmt = Math.max(0, amt - advanceAmt - interimTotal)
+  const actualFinalAmt = form.final_paid ? (Number(form.final_amount) || calcFinalAmt) : 0
+  const remaining = amt - (form.advance_paid ? advanceAmt : 0) - interimTotal - actualFinalAmt
 
   function addInterim() {
     set('interim_payments', [...(form.interim_payments || []), { amount: '', method: 'transfer', date: '', note: '' }])
@@ -228,17 +230,28 @@ function PodratForm({ open, onClose, onSave, work, projects }) {
             <div className="flex items-center gap-2 mb-2">
               <input type="checkbox" checked={form.final_paid} onChange={e => set('final_paid', e.target.checked)} className="w-4 h-4 accent-[#0f172a]" />
               <span className="text-xs font-medium text-[#0f172a]">Final ödəniş ödənilib</span>
-              {amt > 0 && form.final_paid && <span className="text-xs text-[#888] ml-auto font-medium">{fmt(Math.max(0, remaining + (form.final_paid ? Math.max(0, amt - advanceAmt - interimTotal) : 0)))}</span>}
+              {amt > 0 && form.final_paid && <span className="text-xs text-[#888] ml-auto font-medium">{fmt(actualFinalAmt)}</span>}
             </div>
             {form.final_paid && (
-              <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-2">
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[10px] text-[#888] mb-1">Final məbləğ (₼)</label>
+                    <input type="number" value={form.final_amount} onChange={e => set('final_amount', e.target.value)}
+                      placeholder={String(calcFinalAmt)}
+                      className="w-full px-2 py-1.5 border border-[#e8e8e4] rounded text-xs focus:outline-none focus:border-[#0f172a]" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-[#888] mb-1">Ödəniş üsulu</label>
+                    <select value={form.final_method} onChange={e => set('final_method', e.target.value)}
+                      className="w-full px-2 py-1.5 border border-[#e8e8e4] rounded text-xs focus:outline-none focus:border-[#0f172a]">
+                      <option value="transfer">Köçürmə</option>
+                      <option value="cash">Nağd</option>
+                    </select>
+                  </div>
+                </div>
                 <input type="date" value={form.final_date} onChange={e => set('final_date', e.target.value)}
-                  className="px-2 py-1.5 border border-[#e8e8e4] rounded text-xs" placeholder="Ödəniş tarixi" />
-                <select value={form.final_method} onChange={e => set('final_method', e.target.value)}
-                  className="px-2 py-1.5 border border-[#e8e8e4] rounded text-xs">
-                  <option value="transfer">Köçürmə</option>
-                  <option value="cash">Nağd</option>
-                </select>
+                  className="w-full px-2 py-1.5 border border-[#e8e8e4] rounded text-xs" />
               </div>
             )}
           </div>
@@ -351,8 +364,8 @@ export default function PodratIsleriPage() {
     const isT = form.payment_method === 'transfer'
     const advAmt = Math.round(amt * (Number(form.advance_percent) || 30) / 100)
     const interimTotal = (form.interim_payments || []).reduce((s, p) => s + Number(p.amount || 0), 0)
-    const finalAmt = Math.max(0, amt - advAmt - interimTotal)
-    const totalPaid = (form.advance_paid ? advAmt : 0) + interimTotal + (form.final_paid ? finalAmt : 0)
+    const finalAmt = form.final_paid ? (Number(form.final_amount) || Math.max(0, amt - advAmt - interimTotal)) : 0
+    const totalPaid = (form.advance_paid ? advAmt : 0) + interimTotal + finalAmt
 
     const data = {
       name: form.name.trim(), outsource_type: form.outsource_type,
@@ -366,6 +379,7 @@ export default function PodratIsleriPage() {
       interim_payment: interimTotal,
       final_paid: form.final_paid, final_date: form.final_date || null,
       final_method: form.final_method,
+      final_amount: form.final_paid ? (Number(form.final_amount) || null) : null,
       payment_status: form.payment_status, work_status: form.work_status,
       client_approval_date: form.client_approval_date || null,
       planned_deadline: form.planned_deadline || null,
