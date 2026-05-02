@@ -13,14 +13,15 @@ const LEAVE_TYPES = [
   { key: 'other', label: 'Digər', color: 'info' },
 ]
 
-function countWorkdays(start, end) {
+function countWorkdays(start, end, holidaySet = new Set()) {
   if (!start || !end) return 0
   let count = 0
   const d = new Date(start + 'T00:00:00')
   const e = new Date(end + 'T00:00:00')
   while (d <= e) {
     const dow = d.getDay()
-    if (dow !== 0 && dow !== 6) count++
+    const ds = d.toISOString().split('T')[0]
+    if (dow !== 0 && dow !== 6 && !holidaySet.has(ds)) count++
     d.setDate(d.getDate() + 1)
   }
   return count
@@ -38,7 +39,7 @@ const APPROVERS = [
   { id: 'talifa', name: 'Talifa İsgəndərli' },
 ]
 
-function RequestForm({ open, onClose, onSave, leave, members, isAdmin }) {
+function RequestForm({ open, onClose, onSave, leave, members, isAdmin, holidays }) {
   const [form, setForm] = useState({
     member_id: '', leave_type: 'annual', start_date: '', end_date: '',
     reason: '', approver_name: '', status: 'pending'
@@ -61,7 +62,8 @@ function RequestForm({ open, onClose, onSave, leave, members, isAdmin }) {
   }, [leave, open])
 
   function set(k, v) { setForm(f => ({ ...f, [k]: v })) }
-  const days = countWorkdays(form.start_date, form.end_date)
+  const holidaySet = new Set((holidays || []).map(h => h.date))
+  const days = countWorkdays(form.start_date, form.end_date, holidaySet)
 
   return (
     <Modal open={open} onClose={onClose} title={leave ? 'Sorğunu redaktə et' : 'Məzuniyyət sorğusu göndər'}>
@@ -149,14 +151,18 @@ export default function MezuniyyetCedveliPage() {
 
   useEffect(() => { loadData() }, [])
 
+  const [holidays, setHolidays] = useState([])
+
   async function loadData() {
     setLoading(true)
-    const [lRes, mRes] = await Promise.all([
+    const [lRes, mRes, hRes] = await Promise.all([
       supabase.from('leave_requests').select('*').order('created_at', { ascending: false }),
       supabase.from('profiles').select('id, full_name').order('full_name'),
+      supabase.from('holidays').select('date, name'),
     ])
     setLeaves(lRes.data || [])
     setMembers(mRes.data || [])
+    setHolidays(hRes.data || [])
     setLoading(false)
   }
 
@@ -167,7 +173,8 @@ export default function MezuniyyetCedveliPage() {
     if (!form.approver_name) {
       addToast('Təsdiqləyici seçin', 'error'); return
     }
-    const days = countWorkdays(form.start_date, form.end_date)
+    const holidaySet = new Set(holidays.map(h => h.date))
+    const days = countWorkdays(form.start_date, form.end_date, holidaySet)
 
     // A9: Overlap conflict detection — same member, approved leaves
     const { data: overlapping } = await supabase
@@ -181,6 +188,21 @@ export default function MezuniyyetCedveliPage() {
     if (conflicts.length > 0) {
       addToast(`Uyğunsuzluq: bu işçinin ${conflicts[0].start_date} – ${conflicts[0].end_date} tarixlərində təsdiqlənmiş məzuniyyəti var!`, 'warning')
       return
+    }
+
+    // A9: Cross-team overlap — soft warning if other approved/pending leaves overlap
+    const { data: teamOverlap } = await supabase
+      .from('leave_requests')
+      .select('id, member_id, start_date, end_date, status')
+      .neq('member_id', form.member_id)
+      .in('status', ['approved', 'pending'])
+      .lte('start_date', form.end_date)
+      .gte('end_date', form.start_date)
+    const others = (teamOverlap || []).filter(r => !editLeave || r.id !== editLeave.id)
+    if (others.length > 0) {
+      const names = others.slice(0, 3).map(r => members.find(m => m.id === r.member_id)?.full_name).filter(Boolean).join(', ')
+      addToast(`⚠ Eyni dövrdə ${others.length} digər məzuniyyət var: ${names}`, 'warning')
+      // Don't block — just warn
     }
 
     const data = {
@@ -376,7 +398,7 @@ export default function MezuniyyetCedveliPage() {
       )}
 
       <RequestForm open={modalOpen} onClose={() => { setModalOpen(false); setEditLeave(null) }}
-        onSave={handleSave} leave={editLeave} members={isAdmin ? members : members.filter(m => m.id === user?.id)} isAdmin={isAdmin} />
+        onSave={handleSave} leave={editLeave} members={isAdmin ? members : members.filter(m => m.id === user?.id)} isAdmin={isAdmin} holidays={holidays} />
       <ConfirmDialog open={!!deleteLeave} title="Sorğunu sil"
         message="Bu məzuniyyət sorğusunu silmək istədiyinizə əminsiniz?"
         onConfirm={handleDelete} onCancel={() => setDeleteLeave(null)} danger />

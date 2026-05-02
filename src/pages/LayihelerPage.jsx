@@ -88,7 +88,7 @@ function ProjectForm({ open, onClose, onSave, project, clients }) {
     phases: ['concept'], completion_percent: '0',
     deadline: '', start_date: '', payment_method: 'transfer',
     final_payment: '', final_payment_method: 'transfer', final_payment_date: '',
-    vat_included: false, notes: '', next_action: '', blocker: ''
+    vat_included: false, notes: '', next_action: '', blocker: '', vat_rate: 18
   })
 
   useEffect(() => {
@@ -113,7 +113,8 @@ function ProjectForm({ open, onClose, onSave, project, clients }) {
         vat_included: project.vat_included || false,
         notes: project.notes || '',
         next_action: project.next_action || '',
-        blocker: project.blocker || ''
+        blocker: project.blocker || '',
+        vat_rate: project.vat_rate || 18
       })
     } else {
       setForm({
@@ -121,7 +122,7 @@ function ProjectForm({ open, onClose, onSave, project, clients }) {
         advance_paid: '', status: 'waiting', risk_level: 'normal',
         phase: 'concept', completion_percent: '0',
         deadline: '', start_date: '', payment_method: 'transfer',
-        vat_included: false, notes: '', next_action: '', blocker: ''
+        vat_included: false, notes: '', next_action: '', blocker: '', vat_rate: 18
       })
     }
   }, [project, open])
@@ -179,6 +180,12 @@ function ProjectForm({ open, onClose, onSave, project, clients }) {
             <input type="number" value={form.contract_value} onChange={e => set('contract_value', e.target.value)}
               className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]"
               placeholder="0" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-[#555] mb-1">ƏDV dərəcəsi (%)</label>
+            <input type="number" min="0" max="100" value={form.vat_rate} onChange={e => set('vat_rate', e.target.value)}
+              className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a]"
+              placeholder="18" />
           </div>
           <div>
             <label className="block text-xs font-medium text-[#555] mb-1">Ödəniş üsulu</label>
@@ -245,8 +252,8 @@ function ProjectForm({ open, onClose, onSave, project, clients }) {
           {(Number(form.contract_value) > 0 || Number(form.advance_paid) > 0) && form.payment_method === 'transfer' && (
             <div className="bg-amber-50 border border-amber-100 rounded p-2 text-[10px] mb-2">
               <span className="text-[#888]">Müq: </span><strong>{fmt(Number(form.contract_value))}</strong>
-              <span className="text-[#888] ml-2">ƏDV: </span><strong className="text-amber-600">{fmt(edvCalc(Number(form.contract_value)))}</strong>
-              <span className="text-[#888] ml-2">Cəmi: </span><strong className="text-green-600">{fmt(withEdvCalc(Number(form.contract_value)))}</strong>
+              <span className="text-[#888] ml-2">ƏDV ({form.vat_rate || 18}%): </span><strong className="text-amber-600">{fmt(Math.round(Number(form.contract_value || 0) * (Number(form.vat_rate) || 18) / 100))}</strong>
+              <span className="text-[#888] ml-2">Cəmi: </span><strong className="text-green-600">{fmt(Math.round(Number(form.contract_value || 0) * (1 + (Number(form.vat_rate) || 18) / 100)))}</strong>
             </div>
           )}
           <div className="flex items-center justify-between mb-1">
@@ -366,12 +373,12 @@ function KanbanCard({ project, onEdit, onDelete, isAdmin = true }) {
               <div className="text-[9px] text-[#aaa]">+</div>
               <div className="text-center">
                 <div className="text-[9px] text-[#aaa]">ƏDV 18%</div>
-                <div className="text-[10px] font-bold text-amber-600">{fmt(edvCalc(project.contract_value))}</div>
+                <div className="text-[10px] font-bold text-amber-600">{fmt(Math.round(Number(project.contract_value || 0) * (project.vat_rate || 18) / 100))}</div>
               </div>
               <div className="text-[9px] text-[#aaa]">=</div>
               <div className="text-center">
                 <div className="text-[9px] text-[#aaa]">Cəmi</div>
-                <div className="text-[10px] font-bold text-green-600">{fmt(withEdvCalc(project.contract_value))}</div>
+                <div className="text-[10px] font-bold text-green-600">{fmt(Math.round(Number(project.contract_value || 0) * (1 + (project.vat_rate || 18) / 100)))}</div>
               </div>
             </div>
           ) : (
@@ -427,12 +434,11 @@ export default function LayihelerPage() {
       advance_paid: Number(form.advance_paid) || 0,
       advance_method: form.advance_method || 'transfer',
       interim_payments: form.interim_payments || [],
-      edv_amount: form.payment_method === 'transfer' ? edvCalc(Number(form.contract_value) || 0) : 0,
-      amount_with_edv: form.payment_method === 'transfer' ? withEdvCalc(Number(form.contract_value) || 0) : (Number(form.contract_value) || 0),
+      edv_amount: form.payment_method === 'transfer' ? Math.round(Number(form.contract_value || 0) * (Number(form.vat_rate) || 18) / 100) : 0,
+      amount_with_edv: form.payment_method === 'transfer' ? Math.round(Number(form.contract_value || 0) * (1 + (Number(form.vat_rate) || 18) / 100)) : (Number(form.contract_value) || 0),
       status: form.status,
       risk_level: form.risk_level,
       phases: form.phases || [],
-      phase: (form.phases || [])[0] || 'concept',
       final_payment: Number(form.final_payment) || 0,
       final_payment_method: form.final_payment_method || 'transfer',
       final_payment_date: form.final_payment_date || null,
@@ -441,6 +447,7 @@ export default function LayihelerPage() {
       start_date: form.start_date || null,
       payment_method: form.payment_method,
       vat_included: form.vat_included,
+      vat_rate: Number(form.vat_rate) || 18,
       notes: form.notes,
       next_action: form.next_action,
       blocker: form.blocker,
@@ -590,7 +597,7 @@ export default function LayihelerPage() {
                       {isAdmin && <td className="px-4 py-3 text-right">
                         <div className="font-medium text-[#0f172a]">{fmt(p.contract_value)}</div>
                         {p.payment_method === 'transfer' && (
-                          <div className="text-[10px] text-green-600">{fmt(withEdvCalc(p.contract_value))} (ƏDV daxil)</div>
+                          <div className="text-[10px] text-green-600">{fmt(Math.round(Number(p.contract_value || 0) * (1 + (p.vat_rate || 18) / 100)))} (ƏDV daxil)</div>
                         )}
                       </td>}
                       {isAdmin && <td className="px-4 py-3 text-right text-[#555]">{fmt(p.advance_paid)}</td>}

@@ -5,6 +5,7 @@ import { useToast } from '../contexts/ToastContext'
 import { useAuth } from '../contexts/AuthContext'
 import { Button, Modal, ConfirmDialog, Skeleton } from '../components/ui'
 import { notify } from '../lib/notify'
+import { logActivity } from '../lib/logActivity'
 import {
   IconPlus, IconX, IconEdit, IconTrash, IconCheck, IconSend,
   IconLayoutKanban, IconList, IconSearch, IconArchive,
@@ -52,21 +53,24 @@ function Avatar({ name='?', size=6 }) {
   )
 }
 
-function MentionInput({ value, onChange, members, placeholder, rows=1, className='' }) {
+function MentionInput({ value, onChange, onMentionsChange, members, placeholder, rows=1, className='' }) {
   const [show, setShow] = useState(false)
   const [query, setQuery] = useState('')
+  const [mentionIds, setMentionIds] = useState([])
   const ref = useRef(null)
 
   function handleChange(e) {
     const v = e.target.value
     onChange(v)
-    // @ işarəsinin sonundakı hərflər — hər dil üçün işləyir
+    // If text was cleared, reset tracked mentions
+    if (!v.trim()) {
+      setMentionIds([])
+      onMentionsChange?.([])
+    }
     const lastAt = v.lastIndexOf('@')
     if (lastAt === -1) { setShow(false); return }
     const afterAt = v.slice(lastAt + 1)
-    // @ yazıldı — dropdown aç
     if (lastAt === v.length - 1) { setShow(true); setQuery(''); return }
-    // @ sonrası boşluq yoxdursa — hərflər yazılır
     if (!afterAt.includes(' ') || afterAt.length < 30) {
       setShow(true)
       setQuery(afterAt)
@@ -80,10 +84,13 @@ function MentionInput({ value, onChange, members, placeholder, rows=1, className
     onChange(value.slice(0, lastAt) + '@' + m.full_name + ' ')
     setShow(false)
     setQuery('')
+    // Track picked user by ID — stable, independent of name changes
+    const updated = mentionIds.includes(m.id) ? mentionIds : [...mentionIds, m.id]
+    setMentionIds(updated)
+    onMentionsChange?.(updated)
     ref.current?.focus()
   }
 
-  // Members siyahısını query ilə filtrləmə — Azərbaycan hərflərini dəstəkləyir
   const filtered = query.length === 0
     ? members.slice(0, 6)
     : members.filter(m => m.full_name.toLowerCase().includes(query.toLowerCase())).slice(0, 6)
@@ -324,6 +331,7 @@ function DetailPanel({ task, projects, members, onClose, onEdit, onDelete, onSta
   const [editDue,       setEditDue]       = useState('')
   const [editErrors,    setEditErrors]    = useState({})
   const [newComment, setNewComment] = useState('')
+  const [commentMentions, setCommentMentions] = useState([])
   const [tab, setTab]               = useState('checklist')
   const [editingDue, setEditingDue] = useState(false)
   const [newDue,     setNewDue]     = useState(task.due_date || '')
@@ -403,24 +411,19 @@ function DetailPanel({ task, projects, members, onClose, onEdit, onDelete, onSta
 
   async function sendComment() {
     if (!newComment.trim()) return
-    // @AdSoyad formatında mention-ları tap — hər dil üçün işləyir
-    const mentions = []
-    for (const mb of members) {
-      if (newComment.includes('@' + mb.full_name)) {
-        if (!mentions.includes(mb.id)) mentions.push(mb.id)
-      }
-    }
+    // Use IDs tracked by the picker — no text-parsing, stable against name changes
+    const mentions = commentMentions
     await supabase.from('task_comments').insert({
       task_id: task.id, author_id: user?.id, content: newComment.trim(),
       type: 'comment', metadata: mentions.length ? { mentions } : null
     })
-    // Mention olunanlara bildiriş
     for (const mid of mentions) {
       if (mid !== user?.id) {
         await notify(mid, task.title + ' — yeni şərh', newComment.trim().slice(0, 80), 'info', '/tapshiriqlar?task=' + task.id)
       }
     }
     setNewComment('')
+    setCommentMentions([])
     loadComments()
     setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100)
   }
@@ -428,12 +431,7 @@ function DetailPanel({ task, projects, members, onClose, onEdit, onDelete, onSta
   async function saveDue() {
     if (newDue !== task.due_date) {
       const oldDue = task.due_date
-      // Activity log — deadline dəyişikliyi qeyd olunur
-      await supabase.from('task_comments').insert({
-        task_id: task.id, author_id: user?.id, type: 'activity',
-        content: `deadline dəyişdi`,
-        metadata: { old_due: oldDue, new_due: newDue, changed_by: user?.id }
-      })
+      await logActivity(task.id, user?.id, 'deadline dəyişdi', { old_due: oldDue, new_due: newDue, changed_by: user?.id })
       onDeadlineChange(task, newDue)
     }
     setEditingDue(false)
@@ -460,6 +458,11 @@ function DetailPanel({ task, projects, members, onClose, onEdit, onDelete, onSta
                 {project && (
                   <span className="text-[10px] px-2 py-0.5 rounded-full text-white font-semibold"
                     style={{ background: projClr(project.id, projects) }}>{project.name}</span>
+                )}
+                {project?.clients?.name && (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#f0f0ec] text-[#555] font-medium">
+                    👤 {project.clients.name}
+                  </span>
                 )}
               </div>
               <h2 className="text-sm font-bold text-[#0f172a] leading-snug">{task.title}</h2>
@@ -765,7 +768,9 @@ function DetailPanel({ task, projects, members, onClose, onEdit, onDelete, onSta
               </div>
               <div className="p-4 border-t border-[#f0f0ec] flex-shrink-0">
                 <div className="flex gap-2 items-end">
-                  <MentionInput value={newComment} onChange={setNewComment} members={members}
+                  <MentionInput value={newComment} onChange={setNewComment}
+                    onMentionsChange={setCommentMentions}
+                    members={members}
                     placeholder="Şərh yazın... @ ilə tag edin" rows={2}
                     className="bg-[#f8fafc] border-transparent focus:bg-white focus:border-[#0f172a]" />
                   <button onClick={sendComment} disabled={!newComment.trim()}
@@ -844,9 +849,9 @@ function DetailPanel({ task, projects, members, onClose, onEdit, onDelete, onSta
 }
 
 // ─── Kanban Card ──────────────────────────────────────────────────────────────
-function KanbanCard({ task, projects, members, checkCounts, commentCounts, onClick, onArchive, onDragStart, onDragEnd, isDragging, filterUser, mySubtasks }) {
-  const project      = projects.find(p => p.id === task.project_id)
-  const assignee     = members.find(m => m.id === task.assignee_id)
+function KanbanCard({ task, projects, members, checkCounts, commentCounts, onClick, onArchive, onDragStart, onDragEnd, isDragging, filterUser, mySubtasks, onCardDragOver }) {
+  const project        = projects.find(p => p.id === task.project_id)
+  const assignee       = members.find(m => m.id === task.assignee_id)
   const filteredMember = filterUser && filterUser !== 'all' ? members.find(m => m.id === filterUser) : null
   const days = daysLeft(task.due_date)
   const pr = prio(task.priority)
@@ -873,6 +878,7 @@ function KanbanCard({ task, projects, members, checkCounts, commentCounts, onCli
         e.target.style.opacity = '1'
         onDragEnd()
       }}
+      onDragEnter={e => { e.preventDefault(); onCardDragOver && onCardDragOver() }}
       style={{ cursor: 'grab', marginBottom: '0' }}
     >
       {/* Main card */}
@@ -1017,7 +1023,7 @@ function KanbanCard({ task, projects, members, checkCounts, commentCounts, onCli
 }
 
 // ─── Kanban Column ────────────────────────────────────────────────────────────
-function KanbanColumn({ column, tasks, projects, members, checkCounts, commentCounts, onCardClick, onQuickAdd, onArchive, dragTaskId, onDragStart, onDragEnd, onDrop, onDragOver, isDragOver, filterUser, mySubtasksMap }) {
+function KanbanColumn({ column, tasks, projects, members, checkCounts, commentCounts, onCardClick, onQuickAdd, onArchive, dragTaskId, onDragStart, onDragEnd, onDrop, onDragOver, isDragOver, filterUser, mySubtasksMap, onCardDragOver }) {
   const [adding, setAdding] = useState(false)
 
   return (
@@ -1053,14 +1059,15 @@ function KanbanColumn({ column, tasks, projects, members, checkCounts, commentCo
             onSave={data => { onQuickAdd(data); setAdding(false) }}
             onCancel={() => setAdding(false)} />
         )}
-        {tasks.map(task => (
+        {tasks.map((task, idx) => (
           <KanbanCard key={task.id} task={task} projects={projects} members={members}
             checkCounts={checkCounts} commentCounts={commentCounts}
             onClick={onCardClick} onArchive={onArchive}
             onDragStart={onDragStart} onDragEnd={onDragEnd}
             isDragging={dragTaskId === task.id}
             filterUser={filterUser}
-            mySubtasks={mySubtasksMap?.[task.id] || null} />
+            mySubtasks={mySubtasksMap?.[task.id] || null}
+            onCardDragOver={() => onCardDragOver?.(idx)} />
         ))}
         {!adding && (
           <div onClick={() => setAdding(true)}
@@ -1182,8 +1189,8 @@ export default function TapshiriqlarPage() {
   async function loadData() {
     setLoading(true)
     const [tRes, pRes, mRes, ckRes, cmtRes] = await Promise.all([
-      supabase.from('tasks').select('*').order('created_at', { ascending: false }),
-      supabase.from('projects').select('id, name').order('name'),
+      supabase.from('tasks').select('*').order('position', { ascending: true, nullsFirst: false }).order('created_at', { ascending: false }),
+      supabase.from('projects').select('id, name, client_id, clients(name)').order('name'),
       supabase.from('profiles').select('id, full_name').eq('is_active', true).order('full_name'),
       supabase.from('task_checklists').select('id, task_id, title, completed, assignee_id, due_date'),
       supabase.from('task_comments').select('task_id, type'),
@@ -1235,7 +1242,7 @@ export default function TapshiriqlarPage() {
       if (error) { addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin','error'); return }
       // Activity: status dəyişibsə qeyd et
       if (editTask.status !== data.status) {
-        await supabase.from('task_comments').insert({ task_id:editTask.id, author_id:user?.id, type:'activity', content:'status dəyişdi', metadata:{ old_status:editTask.status, new_status:data.status } })
+        await logActivity(editTask.id, user?.id, 'status dəyişdi', { old_status: editTask.status, new_status: data.status })
       }
       // Cavabdeh dəyişibsə yeni cavabdehə bildiriş
       if (data.assignee_id && data.assignee_id !== editTask.assignee_id && data.assignee_id !== user?.id) {
@@ -1252,7 +1259,7 @@ export default function TapshiriqlarPage() {
       setTasks(prev => [inserted, ...prev])
       setCheckCounts(prev => ({ ...prev, [inserted.id]: { done:0, total:0, overdueItems:[], assigneeItems:{} } }))
       setCommentCounts(prev => ({ ...prev, [inserted.id]: 0 }))
-      supabase.from('task_comments').insert({ task_id:inserted.id, author_id:user?.id, type:'activity', content:'tapşırıq yaradıldı', metadata:{} })
+      logActivity(inserted.id, user?.id, 'tapşırıq yaradıldı', {})
       for (const uid of (data.assignee_ids||[])) {
         if (uid !== user?.id) notify(uid, 'Yeni tapşırıq', data.title, 'info', '/tapshiriqlar?task=' + inserted.id)
       }
@@ -1309,7 +1316,7 @@ export default function TapshiriqlarPage() {
       addToast('Əməliyyat alınmadı, sonra yenidən cəhd edin', 'error')
       return
     }
-    supabase.from('task_comments').insert({ task_id:task.id, author_id:user?.id, type:'activity', content:'status dəyişdi', metadata:{ old_status:oldStatus, new_status:newStatus } })
+    logActivity(task.id, user?.id, 'status dəyişdi', { old_status: oldStatus, new_status: newStatus })
     if (newStatus === 'done') {
       const allAssignees = (task.assignee_ids||[]).length > 0 ? task.assignee_ids : (task.assignee_id ? [task.assignee_id] : [])
       for (const uid of allAssignees) {
@@ -1368,8 +1375,20 @@ export default function TapshiriqlarPage() {
   async function handleDrop(targetColKey) {
     if (!dragTaskId || !targetColKey) return
     const task = tasks.find(t => t.id === dragTaskId)
-    if (!task || task.status === targetColKey) {
+    if (!task) { setDragTaskId(null); setDragOverCol(null); setDragOverIdx(null); return }
+
+    if (task.status === targetColKey) {
+      const colTasks = tasks.filter(t => t.status === targetColKey && !t.archived)
+      const fromIdx = colTasks.findIndex(t => t.id === dragTaskId)
+      const toIdx = dragOverIdx ?? colTasks.length - 1
       setDragTaskId(null); setDragOverCol(null); setDragOverIdx(null)
+      if (fromIdx < 0 || fromIdx === toIdx) return
+      const reordered = [...colTasks]
+      const [moved] = reordered.splice(fromIdx, 1)
+      reordered.splice(Math.min(toIdx, reordered.length), 0, moved)
+      const withPos = reordered.map((t, i) => ({ ...t, position: i + 1 }))
+      setTasks(prev => [...prev.filter(t => t.status !== targetColKey || t.archived), ...withPos])
+      await Promise.all(withPos.map(t => supabase.from('tasks').update({ position: t.position }).eq('id', t.id)))
       return
     }
     if (targetColKey === 'done') {
@@ -1612,6 +1631,7 @@ export default function TapshiriqlarPage() {
                   isDragOver={dragOverCol === column.key}
                   filterUser={filterUser}
                   mySubtasksMap={mySubtasksMap}
+                  onCardDragOver={idx => { setDragOverCol(column.key); setDragOverIdx(idx) }}
                 />
               ))}
             </div>

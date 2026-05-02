@@ -104,7 +104,7 @@ async function db(table, query) {
 async function getProfiles(filter) {
   const { data } = await supabase
     .from('profiles')
-    .select('id, full_name, email, telegram_chat_id, roles(level, name)')
+    .select('id, full_name, email, telegram_chat_id, roles(level, title)')
     .eq('is_active', true)
     .not('telegram_chat_id', 'is', null)
   const all = data || []
@@ -128,16 +128,18 @@ function days(due) {
   return Math.floor((d - t) / 86400000)
 }
 
+const BAKU_OFFSET = 4 * 3600000 // UTC+4
+
 function today() {
-  return new Date().toISOString().split('T')[0]
+  return new Date(Date.now() + BAKU_OFFSET).toISOString().split('T')[0]
 }
 
 function ago(n) {
-  return new Date(Date.now() - n * 86400000).toISOString().split('T')[0]
+  return new Date(Date.now() + BAKU_OFFSET - n * 86400000).toISOString().split('T')[0]
 }
 
 function future(n) {
-  return new Date(Date.now() + n * 86400000).toISOString().split('T')[0]
+  return new Date(Date.now() + BAKU_OFFSET + n * 86400000).toISOString().split('T')[0]
 }
 
 // ─── Handler ──────────────────────────────────────────────────────────────────
@@ -167,6 +169,19 @@ export default async function handler(req, res) {
 
   try {
 
+    // E5: respect notification toggles from system_settings (manual sends bypass)
+    if (type !== 'send_manual') {
+      const { data: rows } = await supabase.from('system_settings').select('key, value')
+      const map = Object.fromEntries((rows || []).map(r => [r.key, r.value]))
+      const isEnabled = v => v === undefined || v === null || (v !== 'false' && v !== false)
+      if (!isEnabled(map.agent_enabled)) {
+        return res.json({ success: true, count: 0, note: 'agent disabled' })
+      }
+      if (!isEnabled(map[type])) {
+        return res.json({ success: true, count: 0, note: `${type} disabled` })
+      }
+    }
+
     // ══════════════════════════════════════════════════════════════════════════
     // MANUAL MESAJ
     // ══════════════════════════════════════════════════════════════════════════
@@ -191,7 +206,7 @@ export default async function handler(req, res) {
       const td = today()
 
       const [tRes, pRes, eRes] = await Promise.all([
-        supabase.from('tasks').select('id,title,due_date,assignee_id,status,project_id')
+        supabase.from('tasks').select('id,title,due_date,assignee_id,assignee_ids,status,project_id')
           .neq('status', 'done').not('due_date', 'is', null),
         supabase.from('projects').select('id,name,deadline').neq('status', 'completed'),
         supabase.from('events').select('title,tagged_profiles').eq('start_date', td),
@@ -205,7 +220,7 @@ export default async function handler(req, res) {
       for (const p of workers) {
         try {
           const name  = p.full_name.split(' ')[0]
-          const myT   = tasks.filter(t => t.assignee_id === p.id)
+          const myT   = tasks.filter(t => (t.assignee_ids||[]).includes(p.id) || t.assignee_id === p.id)
           const td0   = myT.filter(t => t.due_date === td)
           const over  = myT.filter(t => days(t.due_date) < 0)
           const crit  = over.filter(t => Math.abs(days(t.due_date)) > 3)
@@ -265,7 +280,7 @@ export default async function handler(req, res) {
       const mon  = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]
 
       const [tRes, mRes, dlRes, incRes, expRes, debRes, outRes, propRes] = await Promise.all([
-        supabase.from('tasks').select('id,title,due_date,assignee_id,status,tags').neq('status', 'done'),
+        supabase.from('tasks').select('id,title,due_date,assignee_id,assignee_ids,status,tags').neq('status', 'done'),
         supabase.from('profiles').select('id,full_name').eq('is_active', true),
         supabase.from('task_comments')
           .select('task_id,metadata,created_at,author_id,content')
@@ -372,7 +387,7 @@ export default async function handler(req, res) {
           }
 
           if (w.projects?.assignee_id) {
-            const arch = all.find(p => p.id === w.projects.assignee_id && !ADMIN_EMAILS.includes(p.email))
+            const arch = all.find(p => p.id === w.projects.assignee_id && (p.roles?.level ?? 99) > 2)
             if (arch) {
               const r = await tg(arch.telegram_chat_id, msg)
               if (r?.ok) count++
@@ -436,17 +451,20 @@ export default async function handler(req, res) {
 
       const { data: tasks } = await supabase
         .from('tasks')
-        .select('title,due_date,assignee_id,projects(name)')
+        .select('title,due_date,assignee_id,assignee_ids,projects(name)')
         .neq('status', 'done')
         .not('due_date', 'is', null)
 
-      // Group by assignee
+      // Group by assignee — A2: notify every assignee in assignee_ids, not just primary
       const byUser = {}
       for (const t of (tasks || [])) {
         const d = days(t.due_date)
-        if (![1, 3, 5].includes(d) || !t.assignee_id) continue
-        if (!byUser[t.assignee_id]) byUser[t.assignee_id] = []
-        byUser[t.assignee_id].push({ ...t, d })
+        if (![1, 3, 5].includes(d)) continue
+        const assignees = (t.assignee_ids && t.assignee_ids.length) ? t.assignee_ids : (t.assignee_id ? [t.assignee_id] : [])
+        for (const uid of assignees) {
+          if (!byUser[uid]) byUser[uid] = []
+          byUser[uid].push({ ...t, d })
+        }
       }
 
       let count = 0
@@ -534,7 +552,7 @@ export default async function handler(req, res) {
       const mon  = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]
 
       const [tRes, mRes, dlRes, incM, expM, incW, expW, debRes, outRes, propRes] = await Promise.all([
-        supabase.from('tasks').select('id,title,due_date,assignee_id,status,tags,archived,updated_at'),
+        supabase.from('tasks').select('id,title,due_date,assignee_id,assignee_ids,status,tags,archived,updated_at'),
         supabase.from('profiles').select('id,full_name').eq('is_active', true),
         supabase.from('task_comments')
           .select('task_id,metadata,created_at,author_id,content')
