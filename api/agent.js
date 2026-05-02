@@ -169,6 +169,19 @@ export default async function handler(req, res) {
 
   try {
 
+    // E5: respect notification toggles from system_settings (manual sends bypass)
+    if (type !== 'send_manual') {
+      const { data: rows } = await supabase.from('system_settings').select('key, value')
+      const map = Object.fromEntries((rows || []).map(r => [r.key, r.value]))
+      const isEnabled = v => v === undefined || v === null || (v !== 'false' && v !== false)
+      if (!isEnabled(map.agent_enabled)) {
+        return res.json({ success: true, count: 0, note: 'agent disabled' })
+      }
+      if (!isEnabled(map[type])) {
+        return res.json({ success: true, count: 0, note: `${type} disabled` })
+      }
+    }
+
     // ══════════════════════════════════════════════════════════════════════════
     // MANUAL MESAJ
     // ══════════════════════════════════════════════════════════════════════════
@@ -374,7 +387,7 @@ export default async function handler(req, res) {
           }
 
           if (w.projects?.assignee_id) {
-            const arch = all.find(p => p.id === w.projects.assignee_id && !ADMIN_EMAILS.includes(p.email))
+            const arch = all.find(p => p.id === w.projects.assignee_id && (p.roles?.level ?? 99) > 2)
             if (arch) {
               const r = await tg(arch.telegram_chat_id, msg)
               if (r?.ok) count++
