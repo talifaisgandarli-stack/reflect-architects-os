@@ -50,15 +50,27 @@ CREATE POLICY "holidays_select_all" ON holidays
 
 CREATE POLICY "holidays_insert_admin" ON holidays
   FOR INSERT WITH CHECK (
-    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
+    EXISTS (
+      SELECT 1 FROM profiles p
+      JOIN roles r ON r.id = p.role_id
+      WHERE p.id = auth.uid() AND r.level <= 2
+    )
   );
 
 CREATE POLICY "holidays_update_admin" ON holidays
   FOR UPDATE USING (
-    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
+    EXISTS (
+      SELECT 1 FROM profiles p
+      JOIN roles r ON r.id = p.role_id
+      WHERE p.id = auth.uid() AND r.level <= 2
+    )
   );
 
 CREATE POLICY "holidays_delete_admin" ON holidays
   FOR DELETE USING (
-    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
+    EXISTS (
+      SELECT 1 FROM profiles p
+      JOIN roles r ON r.id = p.role_id
+      WHERE p.id = auth.uid() AND r.level <= 2
+    )
   );
