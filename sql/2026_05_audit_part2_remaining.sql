@@ -42,35 +42,15 @@ INSERT INTO holidays (date, name) VALUES
   ('2026-11-12', 'Konstitusiya günü')
 ON CONFLICT (date) DO NOTHING;
 
--- RLS policies for holidays: everyone can read, only admins can write
+-- RLS for holidays: read-only for authenticated users; writes via service_role only
 ALTER TABLE holidays ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "holidays_select_all" ON holidays;
+DROP POLICY IF EXISTS "holidays_insert_admin" ON holidays;
+DROP POLICY IF EXISTS "holidays_update_admin" ON holidays;
+DROP POLICY IF EXISTS "holidays_delete_admin" ON holidays;
 
 CREATE POLICY "holidays_select_all" ON holidays
   FOR SELECT USING (true);
-
-CREATE POLICY "holidays_insert_admin" ON holidays
-  FOR INSERT WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM profiles p
-      JOIN roles r ON r.id = p.role_id
-      WHERE p.id = auth.uid() AND r.level <= 2
-    )
-  );
-
-CREATE POLICY "holidays_update_admin" ON holidays
-  FOR UPDATE USING (
-    EXISTS (
-      SELECT 1 FROM profiles p
-      JOIN roles r ON r.id = p.role_id
-      WHERE p.id = auth.uid() AND r.level <= 2
-    )
-  );
-
-CREATE POLICY "holidays_delete_admin" ON holidays
-  FOR DELETE USING (
-    EXISTS (
-      SELECT 1 FROM profiles p
-      JOIN roles r ON r.id = p.role_id
-      WHERE p.id = auth.uid() AND r.level <= 2
-    )
-  );
+-- No INSERT/UPDATE/DELETE policies → only service_role (which bypasses RLS) can mutate.
+-- Admins can edit holidays via Supabase dashboard or a future admin API endpoint.
