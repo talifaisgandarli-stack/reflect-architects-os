@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
-import { IconX, IconSend, IconChevronDown, IconSparkles } from '@tabler/icons-react'
+import { IconX, IconSend, IconChevronDown } from '@tabler/icons-react'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const PERSONAS = [
@@ -86,7 +86,7 @@ export default function MiraiChat() {
     const path = location.pathname
     if (path.includes('maliyye')) setPersona('cfo')
     else if (path.includes('tapshiriq')) setPersona('coo')
-    else if (path.includes('musterilet') || path.includes('pipeline')) setPersona('cmo')
+    else if (path.includes('musteriler') || path.includes('pipeline')) setPersona('cmo')
     else setPersona('chief_architect')
   }, [location.pathname, isAdmin])
 

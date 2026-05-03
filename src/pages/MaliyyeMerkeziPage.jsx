@@ -3,11 +3,11 @@ import { supabase } from '../lib/supabase'
 import { Skeleton } from '../components/ui'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
-  LineChart, Line, ReferenceLine,
+  LineChart, Line,
 } from 'recharts'
 import {
-  IconCurrencyManat, IconTrendingUp, IconTrendingDown, IconAlertTriangle,
-  IconCheck, IconClock, IconMinus
+  IconTrendingUp, IconTrendingDown, IconAlertTriangle,
+  IconCheck, IconClock,
 } from '@tabler/icons-react'
 
 // ─── Constants ───────────────────────────────────────────────────────────────
