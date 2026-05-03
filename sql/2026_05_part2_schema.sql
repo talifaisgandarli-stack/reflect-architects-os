@@ -89,9 +89,11 @@ create index if not exists idx_activity_log_created on activity_log(created_at d
 
 -- RLS for activity_log
 alter table activity_log enable row level security;
-create policy if not exists "activity_log_read" on activity_log
+drop policy if exists "activity_log_read" on activity_log;
+create policy "activity_log_read" on activity_log
   for select using (true);
-create policy if not exists "activity_log_insert" on activity_log
+drop policy if exists "activity_log_insert" on activity_log;
+create policy "activity_log_insert" on activity_log
   for insert with check (auth.uid() is not null);
 
 -- ── 6. closeout_checklists ───────────────────────────────
@@ -104,7 +106,8 @@ create table if not exists closeout_checklists (
   created_at timestamptz default now()
 );
 alter table closeout_checklists enable row level security;
-create policy if not exists "closeout_rw" on closeout_checklists
+drop policy if exists "closeout_rw" on closeout_checklists;
+create policy "closeout_rw" on closeout_checklists
   for all using (auth.uid() is not null);
 
 -- ── 7. portfolio_workflows ───────────────────────────────
@@ -118,7 +121,8 @@ create table if not exists portfolio_workflows (
   created_at timestamptz default now()
 );
 alter table portfolio_workflows enable row level security;
-create policy if not exists "portfolio_rw" on portfolio_workflows
+drop policy if exists "portfolio_rw" on portfolio_workflows;
+create policy "portfolio_rw" on portfolio_workflows
   for all using (auth.uid() is not null);
 
 -- ── 8. system_awards ─────────────────────────────────────
@@ -133,7 +137,8 @@ create table if not exists system_awards (
   is_active boolean default true
 );
 alter table system_awards enable row level security;
-create policy if not exists "system_awards_read" on system_awards
+drop policy if exists "system_awards_read" on system_awards;
+create policy "system_awards_read" on system_awards
   for select using (true);
 
 -- Seed awards data
@@ -157,9 +162,11 @@ create table if not exists client_stage_history (
 );
 create index if not exists idx_stage_history_client on client_stage_history(client_id, changed_at desc);
 alter table client_stage_history enable row level security;
-create policy if not exists "stage_history_read" on client_stage_history
+drop policy if exists "stage_history_read" on client_stage_history;
+create policy "stage_history_read" on client_stage_history
   for select using (auth.uid() is not null);
-create policy if not exists "stage_history_insert" on client_stage_history
+drop policy if exists "stage_history_insert" on client_stage_history;
+create policy "stage_history_insert" on client_stage_history
   for insert with check (auth.uid() is not null);
 
 -- ── 10. project_documents ────────────────────────────────
@@ -180,10 +187,12 @@ create table if not exists project_documents (
 create index if not exists idx_project_docs_project on project_documents(project_id);
 create index if not exists idx_project_docs_client on project_documents(client_id);
 alter table project_documents enable row level security;
-create policy if not exists "project_docs_rw" on project_documents
+drop policy if exists "project_docs_rw" on project_documents;
+create policy "project_docs_rw" on project_documents
   for all using (auth.uid() is not null);
 -- Public read by share_token (no auth needed)
-create policy if not exists "project_docs_public_share" on project_documents
+drop policy if exists "project_docs_public_share" on project_documents;
+create policy "project_docs_public_share" on project_documents
   for select using (share_token is not null);
 
 -- ── 11. retrospective_surveys ────────────────────────────
@@ -202,9 +211,11 @@ create table if not exists retrospective_surveys (
   created_by uuid references profiles(id) on delete set null
 );
 alter table retrospective_surveys enable row level security;
-create policy if not exists "surveys_auth_rw" on retrospective_surveys
+drop policy if exists "surveys_auth_rw" on retrospective_surveys;
+create policy "surveys_auth_rw" on retrospective_surveys
   for all using (auth.uid() is not null);
-create policy if not exists "surveys_public_respond" on retrospective_surveys
+drop policy if exists "surveys_public_respond" on retrospective_surveys;
+create policy "surveys_public_respond" on retrospective_surveys
   for update using (share_token is not null)
   with check (responded_at is not null);
 
@@ -223,9 +234,11 @@ create table if not exists templates (
   created_at timestamptz default now()
 );
 alter table templates enable row level security;
-create policy if not exists "templates_read" on templates
+drop policy if exists "templates_read" on templates;
+create policy "templates_read" on templates
   for select using (true);
-create policy if not exists "templates_write" on templates
+drop policy if exists "templates_write" on templates;
+create policy "templates_write" on templates
   for all using (is_admin());
 
 -- Seed default templates
