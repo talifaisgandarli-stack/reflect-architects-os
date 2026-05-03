@@ -70,24 +70,6 @@ Admin təsdiq etmədən komandaya görsənmir. Flag: `mirai_generated: true`, `a
 
 ---
 
-## Attio — Soyuq Neytral Rənglər
-
-| Token | Dəyər |
-|---|---|
-| `bg-base` | `#F9F9FB` |
-| `bg-surface` | `#FFFFFF` |
-| `sidebar-bg` | `#111318` |
-| `sidebar-text` | `#9CA3AF` (gray-400) |
-| `sidebar-active` | `#FFFFFF` |
-| `text-primary` | `#111827` (gray-900) |
-| `text-muted` | `#6B7280` (gray-500) |
-| `border` | `#E5E7EB` (gray-200) |
-| `accent` | `#4F46E5` (indigo-600) |
-| `income` | `#16A34A` |
-| `expense` | `#DC2626` |
-| `warning` | `#D97706` |
-
----
 
 ## Final Nav Struktur
 
