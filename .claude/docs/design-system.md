@@ -1531,4 +1531,768 @@ Profile → locale (PRD US-AUTH-04): UI strings switch live without full reload 
 
 ---
 
-*Part 2 ends here.* Part 3 (page-by-page specs cross-referenced to PRD modules, Tailwind config, global CSS, design DoD) follows.
+## 10. Page-by-Page Specifications
+
+Each page maps to a PRD module (§5) and lists the `REQ-*` / `US-*` IDs it implements. The visual composition is described in terms of components from §6; only page-level layout and copy live here.
+
+### 10.1 Giriş (Login) — REQ-AUTH-01..03 / US-AUTH-01..04
+
+**Canvas:** `#F4F5F7` + 1px grid lines `rgba(0,0,0,0.06)` at 40px spacing (NOT dots — login only).
+
+**Layout — split:**
+```
+┌──────────────────────────────┬──────────────────────────────┐
+│ LEFT (decorative)            │ RIGHT (login card)           │
+│                              │                              │
+│ [Reflect logo top-left]      │       [centered card]        │
+│                              │       width 400px            │
+│ [Outline hexagons SVG        │       padding 40px           │
+│  scattered top-right;        │       radius 20px            │
+│  1px stroke #9CA3AF]         │       shadow-md              │
+│                              │                              │
+│ "Reflecting Excellence"      │       Xoş gəldiniz           │
+│  Rubik 400 italic 18px       │       Hesabınıza daxil olun  │
+│  #9CA3AF                     │                              │
+│                              │       [Email input]          │
+│                              │       [Şifrə input + 👁]     │
+│                              │       Şifrəni unutdum?       │
+│                              │       [Daxil ol — primary]   │
+│                              │                              │
+│                              │   "Platforma yalnız dəvətlə  │
+│                              │    əlçatandır"               │
+└──────────────────────────────┴──────────────────────────────┘
+```
+
+**Copy:**
+- H1: `Xoş gəldiniz` (Rubik 700 32px `--color-n900`)
+- Sub: `Hesabınıza daxil olun` (Rubik 400 15px `--color-n600`)
+- Forgot link: `Şifrəni unutdum?` (right-aligned, brand)
+- Invite-only note: `Platforma yalnız dəvətlə əlçatandır` (centered, `--color-n400`, 13px)
+
+**States:**
+- Invalid credentials → inline `.field-error` under password ("E-mail və ya şifrə yanlışdır")
+- Rate limited (5 fails / 15min — REQ-AUTH-01) → top banner "Çox sayda cəhd. {N} dəq sonra yenidən cəhd edin"
+- Loading → button shows spinner, all fields disabled
+- Magic-link sent (forgot password) → success state: "Mesajı yoxlayın — keçid 30 dəqiqə işləkdir"
+
+**Mobile:** stacks vertically, decorative left becomes thin header band.
+
+### 10.2 Dashboard — REQ-DASH-01..05 / US-DASH-01..05
+
+Two variants, **same component shell**, different widget set selected by `useRoleLevel()`.
+
+**Header bar (64px sticky):**
+- Left: `Salam, {ad} 👋` (Rubik 600 20px) + today's date Asia/Baku (400 14px `--color-n600`)
+- Right: notification bell (with red dot if unread > 0), MIRAI launch FAB inline, avatar dropdown
+
+#### Admin variant — bento grid
+
+```
+Row 1:  [Aktiv Layihələr — col-8 accent card] [Sürətli əməllər — col-4 base]
+Row 2:  [Bu gün tapşırıqlarım — col-6]        [Maliyyə (bu ay) — col-6 featured]
+Row 3:  [Komanda yükü — col-8]                [Yaxınlaşan deadline — col-4]
+Row 4:  [Aktivlik axını (Realtime) — col-12 base]
+```
+
+- **Aktiv Layihələr accent card:** UPPERCASE label "AKTİV LAYİHƏLƏR" (xs white-70%), large count (3xl white bold), mini list of names (sm white-80%), "Hamısına bax →" bottom link
+- **Maliyyə featured card:** "Bu ay" label, 3 numbers `Gəlir / Xərc / Balans` (tabular numerals), trend arrow vs last month (US-DASH-03)
+- **Aktivlik axını:** Attio-style compact rows — `--avatar--sm` + `[Ad] [əməl] [obyekt linki]` + relative timestamp; filter pills above (Hamısı / Tapşırıqlar / Layihələr / Maliyyə / Müştərilər); Realtime updates via `.row--just-updated` flash (§7.9)
+- **Komanda yükü:** each member = avatar + name + open task count + bar (green 1–5, amber 6–9, red 10+, US-DASH-05)
+- **Yaxınlaşan deadline:** task list ordered by deadline; coloring per §2.5 health rule
+
+#### User variant — single column, focused
+
+```
+Row 1:  [Bu gün — col-12 — task list grouped Overdue/Today]
+Row 2:  [Bu həftə — col-8] [Şəxsi OKR — col-4]
+Row 3:  [Yaxınlaşan görüşlər — col-6] [Oxunmamış elanlar — col-6]
+```
+
+- **Bu gün** widget: tabs `Bu gün / Bu həftə`; rows = task title + project pill + deadline badge + checkbox; ticking removes row with animation + emits `activity_log` (US-DASH-02)
+- **Şəxsi OKR:** ring progress (§6.9) + 1 line current key result; clicking opens OKR page
+- Finance widget hidden completely (RLS returns 0 rows; UI conditionally omits — US-DASH-03)
+
+**Empty per widget:** AZ message + CTA. e.g. "Bu gün tapşırıq yoxdur — bu axşam erkən bağlana bilər 🎉".
+
+### 10.3 Layihələr — REQ-PROJ-01..06 / US-PROJ-01..05
+
+**Header bar:** title `Layihələr` + view toggle `Grid / Cədvəl` (right) + filter bar (status / phase multi-select / sort) + `+ Yeni Layihə` primary.
+
+**Grid view:**
+- 3 columns desktop, 2 tablet, 1 mobile
+- Folder cards (§6.1) with phase-gradient header (120px) + body containing:
+  - Project name (Rubik 600 17px) + client name (sm `--color-n600`)
+  - Deadline badge (health-colored §2.5)
+  - Completion ring (small, 32px) showing % tasks done
+  - Avatar stack of project members
+  - Expertise badge (purple "E" pill if `requires_expertise`)
+- Card click → project detail page
+
+**Project detail tabs (REQ-PROJ-03):** `Ümumi / Tapşırıqlar / Sənədlər / Maliyyə (admin) / Bağlanış / Tarixçə`
+
+**Backward-planned timeline visualization (US-PROJ-02):**
+```
+Expertise: 30 İyun
+   │
+   ├─ −10 ödəniş bufferi
+   ├─ −30 ekspertiza gözləntisi
+   ├─ −10 düzəliş
+   └─ −3  çap hazırlığı
+          ↓
+Dizayn deadline: 8 May  ⚠️ 14 gün qaldı
+```
+Each step is a horizontal segment on a stepped timeline; banner turns red if `design_deadline` < 14 days.
+
+**Closeout drawer (US-PROJ-03):** right drawer (`--lg` 640px), checklist items with inline checks, "Layihəni Tamamla" button activates only when all checked.
+
+**Empty state:** centered MIRAI-inspired gradient blob (small, decorative), `Hələ heç bir layihə yoxdur`, `+ Yeni layihə yarat` primary.
+
+### 10.4 Tapşırıqlar — REQ-TASK-01..09 / US-TASK-01..08
+
+**Header:**
+- View tabs: `Kanban / Cədvəl / Mənim Tapşırıqlarım` (sliding underline indicator)
+- Right: project filter + assignee filter + `Arxivlə` ghost + `Yeni tapşırıq` primary
+
+**Kanban — 7 columns (REQ-TASK-01):**
+
+```
+İdeyalar | başlanmayıb | İcrada | Yoxlamada | Ekspertizada | Tamamlandı | Cancelled
+```
+
+- Each column: `min-width: 280px`, horizontal scroll if overflow
+- Column header: status dot + label (Rubik 500 13px) + task count badge
+- Column body: task cards (§6.2) + dashed `+ Əlavə et` button at bottom for quick create
+- Drag-over highlight: `--color-brand-light` bg + 2px dashed `--color-brand` border on whole column (§7.5)
+- Realtime echo: cards moved by other users animate cross-column (§7.5)
+
+**Quick create inline (US-TASK-01):**
+- Click `+` in column → input appears in card slot
+- Title only, Enter to commit, Esc to cancel
+- Created task lands in column with `card-enter` animation
+
+**Full create modal:**
+- Fields: title, assignees (multi-select, REQ-TASK-02), project, start_date, deadline, estimated_duration + duration_unit, risk_buffer_pct slider, is_expertise_subtask toggle, parent_task_id (search picker)
+- Workload preview: `workload = estimated_duration × (1 + risk_buffer/100)` shown live as user adjusts (REQ-TASK-06)
+- If `is_expertise_subtask = true`, suggested children appear as checklist (US-TASK-08)
+
+**Cancel dialog (US-TASK-03):** centered modal width 400px, radio list of reasons, "Digər" reveals text input, `Ləğv et` danger button.
+
+**Subtask blocker modal (US-TASK-04):** centered, lists open subtasks with inline checkboxes; `Hamısını tamamla` button atomically closes all then completes parent.
+
+**Mənim Tapşırıqlarım view (US-TASK-06):**
+- Filtered to `assignee_ids contains auth.uid()`
+- Grouped sections: `Gecikmiş` (red header) / `Bu gün` / `Bu həftə` / `Sonra`
+- Inline status update: checkbox for `Tamamlandı`, dropdown for others
+
+**Empty state (Kanban):** "Hələ heç bir tapşırıq yoxdur — Cmd+N ilə yarat" + primary CTA.
+
+### 10.5 Arxiv — REQ-ARC-01..03 / US-ARC-01..02
+
+Read-only view under İŞ group. Combines `tasks` (`archived_at IS NOT NULL`) and `projects` (`status='closed'`).
+
+**Header:** title `Arxiv` + filter bar (project / assignee / date range / status / type).
+
+**Two stacked tables:**
+1. **Arxivləşdirilmiş Tapşırıqlar** — columns: Başlıq / Layihə / Status / Arxivləşmə tarixi / Məsul / [Restore — admin only]
+2. **Bağlanmış Layihələr** — columns: Ad / Müştəri / Bağlanma tarixi / Müddət / [Yenidən aç — admin only]
+
+Restore action confirms via `confirm()` dialog → admin-only RLS guard server-side (REQ-ARC-02). Non-admin sees no restore action and is scoped to own items (REQ-ARC-03).
+
+### 10.6 Müştərilər (CRM) — REQ-CRM-01..07 / US-CRM-01..06
+
+**View toggle:** `Pipeline / Cədvəl`. Detail opens as right drawer (`--lg`) over either view.
+
+**Pipeline (Attio workflow style):**
+- Dots canvas background
+- 8 stage columns (PRD §5 MOD 6) with header showing stage name + total `Σ(expected_value × confidence_pct/100)` (REQ-CRM-02)
+- Client cards = workflow nodes (§6.13) with: company logo + name (`--text-base` 600), confidence %, last interaction relative time, AI ICP badge (`pill--ai`)
+- Drag between columns → confidence updates per §2.3 map; drop on `Udulan` opens `lost_reason` required dialog (US-CRM-01)
+
+**Table view:**
+- Columns: Şirkət (logo + name) / Əlaqə / Mərhələ / Gözlənilən dəyər (numeric) / Ehtimal % / Son aktivlik / ICP Fit (AI) / Əlaqə gücü
+- BD Lead role (level 3): financial column `Gözlənilən dəyər` masked with `cell--masked` per RLS
+
+**Client Drawer (US-CRM-04):**
+- Header: company logo + name + stage chip (`pipeline color`) + `Mərhələni dəyiş` dropdown
+- Tabs: `Ümumi / Qeydlər / Təkliflər / Layihələr / Sənədlər`
+- **Ümumi:** contact info, expected value, confidence slider, expected close date, AI ICP score with "Yenilə" button (throttled 1/24h, US-CRM-03)
+- **Qeydlər:** quick interaction log form at top (type pill row + free-text + submit ≤30s, US-CRM-02), reverse-chron feed below
+- **Təkliflər:** list of `project_documents` with `category='price_protocol'`; `Yeni təklif` opens template picker (US-CRM-05); each row has copy-link icon → toast "Link kopyalandı"
+
+**Retrospective survey (US-CRM-06):** triggered from project closeout. Public form at `/r/{share_token}` — no auth, NPS 0–10 row of 11 buttons + per-category 1–5 stars + free-text + submit.
+
+### 10.7 Maliyyə Mərkəzi — REQ-FIN-01..09 / US-FIN-01..08
+
+Single page, 6 tabs. Sticky `Cash Cockpit` summary above tabs.
+
+**Sticky top bar (Cash Cockpit balance):**
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Cari balans         12,450 AZN ↑     +8% vs keçən ay       │
+│  [+ Gəlir — primary] [+ Xərc — secondary]                   │
+└─────────────────────────────────────────────────────────────┘
+```
+- Featured-style gradient border card
+- Number tabular, large (`--text-3xl`), trend arrow + %
+
+**Tabs:** `Cash Cockpit / P&L / Outsource / Xərclər / Debitor / Forecast`
+
+#### 10.7.1 Cash Cockpit
+- Featured balance (already sticky above)
+- 3 metric cards row: `Gəlir / Xərc / Gözlənilən` (this month, tabular)
+- Recent transactions table (compact): Tarix / Növ / Layihə / Məbləğ (color-coded: gəlir green, xərc red)
+- "Hamısına bax" link → opens Xərclər/Debitor based on type
+
+#### 10.7.2 P&L (US-FIN-06)
+- Firm-level row at top (gəlir / xərc / outsource / net)
+- Project rows below, sortable by net descending
+- "Excel ixracı" button (right) → `.xlsx` download
+
+#### 10.7.3 Outsource (US-FIN-04)
+- Table: Layihə / İş növü / Məsul / Deadline / Status (always visible)
+- Admin-only columns: Məbləğ / Ödəniş tarixi / Metod
+- Non-admins: those columns render as `cell--masked` (—) — see §6.8
+- Status workflow indicator (REQ-FIN-07): Sifariş → İcra → Təhvil → Ödənildi (4-dot stepper inline)
+
+#### 10.7.4 Xərclər
+- Tabs within: `Birdəfəlik / Sabit (təkrar)`
+- Birdəfəlik: standard table
+- Sabit: list of `recurring_expenses` with period pill + next_run_at countdown; `pg_cron` materializes monthly into `expenses` (REQ-FIN-05)
+
+#### 10.7.5 Debitor
+- Receivables table: Müştəri / Layihə / Məbləğ / Ödənilib / Qalıq / Vaxt / Status
+- Status pills: `Tam ödənilib` (success) / `Qismən` (warning) / `Vaxtı keçib` (danger)
+- Row action: `Ödəniş qeyd et` opens partial-payment modal with overpayment guard ("Ödəniş qalıq məbləği aşır", US-FIN-02)
+
+#### 10.7.6 Forecast (US-FIN-07)
+- 3 tab cards: 30 / 60 / 90 gün
+- Each: ring progress around projected balance with confidence_low / high range below
+- Disclaimer: "Bu proqnoz son 6 ayın məlumatlarına əsaslanır"
+- `Yenilə` button (rate-limited 1/24h per user)
+
+**`+ Gəlir` / `+ Xərc` modal (REQ-FIN-01, REQ-FIN-04):**
+- Fields: amount (positive validated) + project + client + payment_method + date + invoice_number + note
+- On save: row insert + activity_log + receivable auto-mark-paid if amount matches (US-FIN-01)
+- Negative amount → `.input--error` + "Məbləğ müsbət olmalıdır"
+
+**Invoice template generator (US-FIN-08):**
+- Template picker → fill missing variables modal → preview → save
+- Output: `project_documents` row with `source='auto_generated'`, PDF + share-token
+- Invoice number auto-incremented per fiscal year, format `AZ-YYYY-NNNN`
+
+### 10.8 İşçi Heyəti — PRD §5 MOD 8.1
+
+**Layout:** card grid (3 cols), each card:
+```
+┌──────────────────────────────┐
+│  [Avatar lg]  Anar Quliyev   │
+│               Senior Designer │
+│  ───────────────────────────  │
+│  📧 anar@…   📱 +994…        │
+│  Avadanlıq: 2  Yük: 6 task   │
+└──────────────────────────────┘
+```
+Click → opens employee detail drawer (Profil, Kompensasiya — admin only, Performans, Avadanlıq, Tarixçə).
+
+### 10.9 Əmək Haqqı — US-SAL-01..02
+
+- **User view (US-SAL-01):** single card showing current effective salary + history table (effective_from / effective_to / amount / components breakdown)
+- **Admin view (US-SAL-02):** all employees table with current salary + "Yenilə" action; update modal inserts new `salaries` row (no overwrite), prev row's `effective_to` set to day before; `audit_log` entry recorded
+
+### 10.10 Performans — US-PERF-01..02
+
+- User: vertical list of yearly cards (2026, 2027, …) with ring progress (§6.9) + ratings breakdown bars + reviewer name
+- Admin: switchable between "Mənim" and per-employee dropdown; "Yeni qiymətləndirmə" modal (year, score 0–100, ratings JSON form, summary)
+- Activates from year 2026 (REQ-Komanda 8.3)
+
+### 10.11 Məzuniyyət — US-LEAVE-01..02
+
+**Layout:** split — left: own requests list, right: team calendar overview (mini month view).
+- "Yeni məzuniyyət" modal: kind pill row (Məzuniyyət / Xəstəlik / Şəxsi) + date range picker + note
+- Status pills: `Gözləmədə` (warning) / `Təsdiq` (success) / `Rədd` (danger)
+- Admin queue: pending requests at top with `Təsdiq / Rədd` buttons inline
+- On approve → calendar event auto-created (US-LEAVE-02)
+
+### 10.12 Təqvim — US-CAL-01..03 (PRD §8.2 Google parity)
+
+**View tabs:** `Ay / Həftə / Gün` (sliding underline indicator)
+
+**Month view:**
+- 7-column grid, day cells `min-height: 96px`
+- Today: `--color-brand-light` bg + brand dot top-left
+- Events: pill bars (project color or category color), max 3 visible + "+N daha"
+- Click cell → "Yeni hadisə" with prefilled date
+
+**Week view:** 7 day columns × 24 hour rows, events as floating positioned blocks
+
+**Day view:** single column, hour rows, side panel for selected event
+
+**Event modal:** Başlıq / Açıqlama / Başlama / Bitmə / Bütün gün toggle / Təkrarlanma (RRULE picker) / Yer / Meet linki / Daxili iştirakçılar (multi) / Xarici e-poçtlar (chip input) / Layihə (picker)
+
+**`Meet yarat` button (US-CAL-02):** opens `https://meet.new` in new tab → user pastes URL back → "Görüşə qoşul" button appears in event view; `.ics` for external attendees includes URL.
+
+### 10.13 Elanlar — REQ-Komanda 8.6 / US-ELAN-01..03
+
+Editorial Whenevr-style.
+
+**Layout:**
+```
+[Featured card — full width 480px height]
+[3-column card grid below]
+```
+
+**Featured card:**
+- Left half: full-bleed image OR gradient (category-driven; MIRAI posts use `--grad-mirai-1`)
+- Right half: white
+  - Category pill top (`pill--brand` for manual, `pill--ai` for `mirai_generated`)
+  - Title: Rubik 700 28px, line-height tight
+  - Description: 400 15px `--color-n600`, max 3 lines
+  - Footer: `5 dəq oxu • {date}`
+- Radius 16px overflow hidden
+
+**Grid cards:**
+- Image/gradient top (160px) with category pill overlaid top-right
+- Title: Rubik 600 17px
+- Description: 2-line clamp `--color-n600`
+
+**Filter bar (horizontal scrollable pills):** Hamısı / Xəbər / Hadisə / Trend (AI) / Opportunity (AI) / Siyasət / Layihə / Digər
+- Active pill: `--color-brand` bg + white text
+- Inactive: `--color-n100` bg + `--color-n600` text
+- AI categories show animated dot prefix
+
+**MIRAI moderation queue (admin only, US-ELAN-02):** banner at top "{N} MIRAI yazısı təsdiqləmə gözləyir →" → opens table with `Saxla / Rədd` row actions.
+
+**`Hamısını oxunmuş işarələ`** action top-right; per-item unread dot via `read_by jsonb`.
+
+### 10.14 Avadanlıq — US-EQUIP-01
+
+Table view: İkon + Ad / Növ / Seriya / Təyin olunub / Vəziyyət / Tarixçə.
+- Row action: "Təyin et / Geri al"
+- Transfer history opens drawer with timeline list (avatar + ad + tarix)
+
+### 10.15 OKR — US-OKR-01..03
+
+**Tabs (admin):** `Şirkət / Şəxsi / Komanda baxışı`. Non-admin sees only `Şəxsi`.
+
+**Şirkət OKR card layout:**
+```
+Q2 2026 — Müştəri sayını ikiqat artır
+Owner: Talifa
+[Ring progress 56%]
+KR1: Yeni müştərilər: 12 / 20  ━━━━━━━─── 60%
+KR2: Pipeline value: 45k / 80k ━━━━━━─── 56%
+KR3: NPS: 4.2 / 4.5             ━━━━━━━━─ 80%
+```
+
+**Komanda baxışı:** member rows with health pill (On Track ≥70% green / At Risk 40–69% amber / Off Track <40% red); click expands into their personal OKRs.
+
+**Weekly nudge:** if no update in 7 days, MIRAI sends in-app notification "OKR-ı yeniləməyi unutmayın" (US-OKR-02).
+
+### 10.16 Karyera Strukturu — US-CAREER-01
+
+Vertical level ladder; user's current level highlighted with `--color-brand-light` halo. Each level card shows requirements as checklist (already-met items get green check, e.g. "≥3 closed projects"). "Növbəti səviyyəyə yol" section shows remaining criteria as progress.
+
+Admin: edit-mode toggle reveals inline editing of level requirements.
+
+### 10.17 Məzmun Planlaması — admin only
+
+Calendar grid view + list view toggle. Each `content_plans` entry: channel pill (Instagram / LinkedIn / Blog / Newsletter) + title + scheduled time + owner avatar + status pill (`Layihə / Hazır / Yayımlandı`). Owner gets reminder 2 days before scheduled_at.
+
+### 10.18 Sistem / Parametrlər — admin only
+
+**Left rail tabs:** `Ümumi / Şablonlar / Bilik Bazası / Bildirişlər`
+
+#### Ümumi
+- Firm name input, logo uploader, default currency picker, working hours range, AZ holidays multi-select calendar
+
+#### Şablonlar (US-SYS-01)
+- Table: Kateqoriya / Ad / Variables / Son redaktə / Müəllif
+- Editor opens drawer: split — left: rich-text editor with `{{variable}}` autocomplete, right: live preview with sample values
+- Variables auto-extracted on save; preview updates live
+
+#### Bilik Bazası (US-SYS-02)
+- Drag-drop PDF uploader
+- Uploaded files table: Ad / Səhifə sayı / Chunks / Yüklənmə tarixi / Yenidən embed et
+- Pipeline status: `Çıxarılır / Embed edilir / Hazır / Xəta`
+- Re-upload same filename → confirms versioning replacement
+
+#### Bildirişlər
+- Matrix UI: rows = event kinds (Deadline / Mention / Status change / Finance alert / MIRAI feed), columns = channels (In-app / Email / Telegram), cells = toggle switches (§6.10)
+- Stored in `notification_preferences (user_id, channel, event_kind, enabled)`
+
+### 10.19 MIRAI — REQ-MIRAI-* / US-MIRAI-01..05 (PRD §7)
+
+**Canvas:** `--color-canvas-mirai` (`#EBEBEB`) — slightly darker than app canvas to create focus isolation.
+
+**Blob layer (3 large blurred animating blobs §7.6):**
+```
+Left:    pink/rose      → "Operational Intelligence" label
+Center:  yellow/amber   → "Spatial Intelligence" label
+Right:   orange/white   → "Artistic Intelligence" label
+```
+
+```css
+.mirai-blob {
+  border-radius: 50%;
+  filter: blur(40px);
+  opacity: 0.75;
+  position: absolute;
+  pointer-events: none;
+}
+.mirai-blob--1 { width: 300px; height: 300px; background: var(--grad-mirai-1); top: 10%; left: 8%; }
+.mirai-blob--2 { width: 260px; height: 260px; background: var(--grad-mirai-2); top: 15%; left: 38%; }
+.mirai-blob--3 { width: 280px; height: 280px; background: var(--grad-mirai-3); top: 8%; right: 8%; }
+```
+
+Optional geometric overlay: SVG lines connecting dots at blob centers (1px stroke `--color-n900`, dot r=3) — adds the "constellation" feel.
+
+**Persona selector:**
+- Admin: 6 pill buttons in horizontally scrollable row — `Əməliyyat Direktoru / Layihə Mühəndisi / Hüquqşünas / CMO / Maliyyə Analitiki / Strateq`
+- User: 1 pill — `Komanda Köməkçisi`
+- Active persona: `--color-brand` bg + white text; inactive: `--color-n100` bg
+- Switching persona starts a new conversation (PRD §7.2)
+
+**Chat interface:**
+- Positioned bottom half of viewport
+- History scroll area: `max-height: calc(100vh - 340px)`
+- Input: 48px height, `--radius-2xl`, white bg, indigo focus ring; right side has send button + "+" attach (future)
+- Streaming response: cursor blinks at end of generating text via `::after { content: '▌'; animation: blink 1s }` 
+- User bubble: right-aligned, `--color-brand-light` bg, rounded with smaller bottom-right corner
+- MIRAI bubble: left-aligned, white card `--shadow-sm`, persona label above (xs uppercase)
+- Citations (Hüquqşünas, US-MIRAI-02): inline `Mənbə: <pdf>, Maddə X.Y.Z` styled as `pill--ai` size sm
+- Tool invocations: collapsed accordion above response — "🔧 İstifadə olunmuş alətlər: list_my_tasks" (audit transparency)
+
+**Cost guardian banner (US-MIRAI-04):**
+- 80% used: top yellow banner "MIRAI ayllıq limitinin 80%-nə çatdınız"
+- 100% used: chat disabled, full overlay "Bu ay MIRAI limitinə çatdınız. Növbəti ay 1 yenidən aktiv olacaq."
+- Creator exempt (no banner shown if `is_creator`)
+
+**Privacy denial state (US-MIRAI-03):**
+- Tool denial in `tools_used` log
+- Response bubble: standard MIRAI bubble with body "Bu məlumat yalnız adminlər üçün açıqdır."
+
+### 10.20 Telegram (Profil → Telegram tab) — US-TG-01..03
+
+```
+┌──────────────────────────────────┐
+│  Telegram bağlantısı             │
+│                                  │
+│  ⚪ Qoşulmayıb                    │
+│  [Telegram-ı qoş — primary]      │
+└──────────────────────────────────┘
+```
+
+After click:
+```
+┌──────────────────────────────────┐
+│  Kodu Reflect botuna göndərin:   │
+│       ┌───────────┐              │
+│       │  4 8 2 1 9 3│             │
+│       └───────────┘              │
+│  [Bot-u aç →]                    │
+│  10 dəq ərzində istifadə edin    │
+└──────────────────────────────────┘
+```
+
+After successful link:
+```
+┌──────────────────────────────────┐
+│  ✅ Qoşulub  • @talifa            │
+│  Bağlandı: 03 May 2026           │
+│  [Bağlantını kəs — danger]       │
+└──────────────────────────────────┘
+```
+
+Notification preferences for Telegram channel managed in §10.18 Bildirişlər matrix.
+
+### 10.21 Sənədlər (now under Layihə detail / Müştəri drawer) — REQ-PROJ-03
+
+Sənəd Arxivi nav item is removed (PRD §4); documents render embedded inside Project detail and Müştəri drawer tabs.
+
+**Project Sənədlər tab columns:** İkon + Başlıq / Kateqoriya / Tarix / Mənbə / Paylaş
+
+- Mənbə badge variants:
+  - `Drive linki` — gray `pill--default`
+  - `Avtomatik` — `pill--brand`
+  - `Yükləndi` — `pill--success`
+- Paylaş icon → copy share-token URL → toast
+- Row click → preview drawer:
+  - Drive: iframe embed attempt; fallback `Drive-da aç` button
+  - Auto-generated: rendered HTML template + `PDF yüklə`
+  - Bottom: share-token QR code
+
+---
+
+## 11. Tailwind Config
+
+Drop-in `tailwind.config.cjs` mirroring tokens from §2–4. Component classes (e.g. `.btn`, `.card`) live in `src/index.css` via `@layer components`; Tailwind utilities apply on top.
+
+```js
+// tailwind.config.cjs
+const { fontFamily } = require('tailwindcss/defaultTheme')
+
+module.exports = {
+  content: ['./index.html', './src/**/*.{js,jsx,ts,tsx}'],
+  theme: {
+    extend: {
+      fontFamily: {
+        sans: ['Rubik', ...fontFamily.sans],
+      },
+      colors: {
+        brand: {
+          DEFAULT: '#5A4EFF',
+          hover:   '#4A3EEF',
+          light:   '#EEE9FF',
+          border:  '#C4BAFF',
+        },
+        canvas: {
+          DEFAULT: '#F4F5F7',
+          mirai:   '#EBEBEB',
+          dots:    '#D1D5DB',
+        },
+        sidebar: {
+          DEFAULT:   '#0F0F0F',
+          hover:     '#1F1F1F',
+          border:    '#2A2A2A',
+          text:      '#A1A1AA',
+          active:    '#FFFFFF',
+          indicator: '#5A4EFF',
+        },
+        n: {
+          900: '#1A1A1A', 800: '#2D2D2D', 700: '#4B5563',
+          600: '#6B7280', 400: '#9CA3AF', 300: '#D1D5DB',
+          200: '#E5E7EB', 100: '#F9FAFB', 0:   '#FFFFFF',
+        },
+        // Task statuses
+        status: {
+          ideas: '#A78BFA', queued: '#94A3B8', active: '#3B82F6',
+          review: '#D97706', expert: '#8B5CF6', done: '#22C55E', cancel: '#EF4444',
+        },
+        // Health
+        health: { ok: '#22C55E', warn: '#D97706', crit: '#EF4444' },
+        // Semantic
+        success: '#22C55E', warning: '#D97706', danger: '#EF4444', info: '#3B82F6',
+      },
+      fontSize: {
+        '2xs':  '10px',
+        xs:     '11px',
+        sm:     '13px',
+        base:   '15px',
+        lg:     '17px',
+        xl:     '20px',
+        '2xl':  '24px',
+        '3xl':  '32px',
+        '4xl':  '48px',
+        '5xl':  '64px',
+      },
+      spacing: {
+        1:  '4px',  2:  '8px',  3:  '12px', 4:  '16px',
+        5:  '20px', 6:  '24px', 8:  '32px', 10: '40px',
+        12: '48px', 16: '64px', 20: '80px',
+      },
+      borderRadius: {
+        xs:    '4px',
+        sm:    '8px',
+        md:    '12px',
+        lg:    '16px',
+        xl:    '20px',
+        '2xl': '28px',
+        full:  '9999px',
+      },
+      boxShadow: {
+        xs:     '0 1px 2px rgba(0,0,0,0.05)',
+        sm:     '0 2px 8px rgba(0,0,0,0.06)',
+        md:     '0 4px 16px rgba(0,0,0,0.08)',
+        lg:     '0 8px 32px rgba(0,0,0,0.10)',
+        xl:     '0 16px 48px rgba(0,0,0,0.14)',
+        brand:  '0 4px 20px rgba(90,78,255,0.20)',
+        hover:  '0 8px 24px rgba(90,78,255,0.12)',
+        drawer: '-8px 0 32px rgba(0,0,0,0.12)',
+      },
+      backgroundImage: {
+        dots:           'radial-gradient(circle, #D1D5DB 1px, transparent 1px)',
+        'grad-mirai-1': 'radial-gradient(circle at 40% 40%, #FFB5C8, #EEA0FF)',
+        'grad-mirai-2': 'radial-gradient(circle at 60% 50%, #FFE082, #FFA07A)',
+        'grad-mirai-3': 'radial-gradient(circle at 50% 40%, #FFD700, #FFFFFF)',
+        'grad-folder':  'linear-gradient(135deg, #FFE082 0%, #EEA0FF 55%, #B5C8FF 100%)',
+        'grad-feature': 'linear-gradient(135deg, #5A4EFF 0%, #9B7FFF 100%)',
+        'grad-border':  'linear-gradient(135deg, #FFB347 0%, #EEA0FF 50%, #5A4EFF 100%)',
+        'grad-green':   'linear-gradient(135deg, #4ADE80 0%, #22C55E 100%)',
+      },
+      backgroundSize: { dots: '20px 20px' },
+      letterSpacing: {
+        tight:   '-0.02em',
+        normal:  '0',
+        wide:    '0.04em',
+        widest:  '0.08em',
+      },
+      animation: {
+        'page-enter':    'page-enter 200ms cubic-bezier(0.4,0,0.2,1)',
+        'card-enter':    'card-enter 200ms cubic-bezier(0.4,0,0.2,1) both',
+        'modal-enter':   'modal-enter 200ms cubic-bezier(0.4,0,0.2,1)',
+        'drawer-enter':  'drawer-enter 250ms cubic-bezier(0.4,0,0.2,1)',
+        'toast-enter':   'toast-enter 200ms ease',
+        'shimmer':       'shimmer 1.5s ease-in-out infinite',
+        'pulse':         'pulse 1.2s ease-in-out infinite',
+        'realtime':      'realtime-flash 1500ms ease-out',
+        'status-pulse':  'status-pulse 300ms ease-out',
+        'blob-1':        'blob-drift-1 8s ease-in-out infinite',
+        'blob-2':        'blob-drift-2 10s ease-in-out infinite',
+        'blob-3':        'blob-drift-3 12s ease-in-out infinite',
+      },
+      keyframes: {
+        'page-enter':   { from: { opacity: '0', transform: 'translateY(8px)'  }, to: { opacity: '1', transform: 'translateY(0)' } },
+        'card-enter':   { from: { opacity: '0', transform: 'translateY(12px)' }, to: { opacity: '1', transform: 'translateY(0)' } },
+        'shimmer':      { from: { backgroundPosition: '-200% 0' }, to: { backgroundPosition: '200% 0' } },
+        'realtime-flash': { '0%': { background: '#EEE9FF' }, '100%': { background: 'transparent' } },
+        'status-pulse': { '0%, 100%': { transform: 'scale(1)' }, '50%': { transform: 'scale(1.08)' } },
+      },
+      zIndex: {
+        sticky: '10', sidebar: '50', fab: '100',
+        dropdown: '150', backdrop: '200', modal: '201',
+        drawer: '201', toast: '500', tooltip: '600',
+      },
+    },
+  },
+  plugins: [],
+}
+```
+
+---
+
+## 12. Global CSS — `src/index.css`
+
+```css
+@import url('https://fonts.googleapis.com/css2?family=Rubik:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Reset ─────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 16px; scroll-behavior: smooth; }
+body {
+  font-family: 'Rubik', system-ui, -apple-system, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  color: #1A1A1A;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── App canvas with dots ──────────────────────── */
+.app-canvas {
+  background-color: #F4F5F7;
+  background-image: radial-gradient(circle, #D1D5DB 1px, transparent 1px);
+  background-size: 20px 20px;
+  min-height: 100vh;
+}
+
+/* ── Tabular numerals ──────────────────────────── */
+.tabular { font-variant-numeric: tabular-nums; }
+
+/* ── Truncation utilities ──────────────────────── */
+.truncate-1, .truncate-2, .truncate-3 {
+  display: -webkit-box; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.truncate-1 { -webkit-line-clamp: 1; }
+.truncate-2 { -webkit-line-clamp: 2; }
+.truncate-3 { -webkit-line-clamp: 3; }
+
+/* ── Focus ring ────────────────────────────────── */
+:focus-visible {
+  outline: 3px solid #5A4EFF;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+:focus:not(:focus-visible) { outline: none; }
+
+/* ── Custom scrollbar ──────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #9CA3AF; }
+
+/* ── Selection ─────────────────────────────────── */
+::selection { background: #EEE9FF; color: #5A4EFF; }
+
+/* ── Reduced motion ────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .mirai-blob-1, .mirai-blob-2, .mirai-blob-3 { animation: none; }
+}
+
+/* Component layer (truncated — see §6 for full definitions) */
+@layer components {
+  .card { @apply bg-n-0 border border-n-200 rounded-lg shadow-sm transition-all; padding: 20px 24px; }
+  .card:hover { @apply -translate-y-0.5 shadow-hover; }
+  .btn { @apply inline-flex items-center justify-center gap-1.5 font-medium rounded-sm cursor-pointer transition-all; }
+  .btn--primary { @apply bg-brand text-white shadow-brand; padding: 10px 18px; }
+  .btn--primary:hover { @apply bg-brand-hover; }
+  /* …rest of component layer per §6… */
+}
+```
+
+---
+
+## 13. Design Definition of Done
+
+Every feature PR must pass this checklist before merge. It complements PRD §11.3 (functional DoD).
+
+### 13.1 Per-component
+- [ ] Uses tokens from §2 — no hex values inline
+- [ ] Uses spacing from §4 — no arbitrary px values
+- [ ] Typography matches §3.3 usage table for the context
+- [ ] Hover, focus, active, disabled states all defined
+- [ ] `:focus-visible` outline present and visible
+- [ ] Touch target ≥ 40 × 40px (§8.6)
+- [ ] AZ strings sourced from `locales/az.json`
+
+### 13.2 Per-page
+- [ ] Empty state designed and implemented (§6.15)
+- [ ] Loading state uses skeleton matching layout (§7.8)
+- [ ] Error state implemented (toast / inline / full-page per type)
+- [ ] 403 RLS-denied state for non-admin attempts (§6.15)
+- [ ] Realtime updates animated via `.row--just-updated` (§7.9)
+- [ ] Mobile (≤768px) layout verified
+- [ ] Keyboard navigation: Tab order correct, Esc closes overlays, Cmd+K reachable
+
+### 13.3 Cross-cutting (Rule #4 — Hidden ≠ secure)
+- [ ] Any admin-only data field uses `cell--masked` for non-admins (never absent)
+- [ ] Underlying API/RLS verified to deny non-admin access (PRD §9.1)
+- [ ] Sidebar nav variant correct for current role (§5.1.2)
+- [ ] All financial values use tabular numerals
+- [ ] All dates render Asia/Baku via `Intl.*` (§9.2)
+
+### 13.4 Accessibility audit
+- [ ] Contrast pairs verified (§8.1) — no `#F59E0B` on text
+- [ ] ARIA labels on status badges, avatar stacks, drag cards, progress rings
+- [ ] Live regions for realtime updates (`aria-live="polite"`)
+- [ ] Reduced motion respected (§8.5)
+- [ ] Form inputs: visible label + `aria-invalid` + `aria-describedby` for errors
+
+### 13.5 Visual audit (PRD §10.5)
+- [ ] Before/after screenshots in PR for any data-touching change
+- [ ] Cards animate in via stagger (§7.4) — capped at 200ms
+- [ ] No new gradient surfaces outside Rule #2 (MIRAI / folder hero / featured widget)
+- [ ] Sidebar remains `#0F0F0F` (Rule #1)
+- [ ] One primary button per page surface (§6.5)
+
+### 13.6 Performance
+- [ ] LCP ≤ 1.5s on Vercel CDN (PRD §3.5)
+- [ ] No layout shift during skeleton → content swap
+- [ ] Images: `loading="lazy"` for below-fold, `width`/`height` set to prevent CLS
+- [ ] Font loaded with `display=swap`
+
+---
+
+*Last updated: 2026-05-03*
+*Owner: Talifa İsgəndərli*
+*Review cycle: after each module's first implementation; full review at v1.0 release*
