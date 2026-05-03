@@ -13,12 +13,23 @@ import {
   IconAlertCircle, IconAt, IconClock, IconHistory
 } from '@tabler/icons-react'
 
-// ─── Constants ───────────────────────────────────── v2.1───────────────────────────
+// ─── Constants ───────────────────────────────────── v3.0 (7-status)──────────────
 const COLUMNS = [
-  { key: 'not_started', label: 'Başlanmayıb', color: '#94a3b8', bg: '#f8fafc', border: '#e2e8f0' },
-  { key: 'in_progress',  label: 'İcrada',      color: '#3b82f6', bg: '#eff6ff', border: '#bfdbfe' },
-  { key: 'review',       label: 'Yoxlanılır',  color: '#f59e0b', bg: '#fffbeb', border: '#fde68a' },
-  { key: 'done',         label: 'Tamamlandı',  color: '#22c55e', bg: '#f0fdf4', border: '#bbf7d0' },
+  { key: 'İdeyalar',     label: 'İdeyalar',     color: '#a78bfa', bg: '#faf5ff', border: '#e9d5ff' },
+  { key: 'başlanmayıb',  label: 'Başlanmayıb',  color: '#94a3b8', bg: '#f8fafc', border: '#e2e8f0' },
+  { key: 'İcrada',       label: 'İcrada',       color: '#3b82f6', bg: '#eff6ff', border: '#bfdbfe' },
+  { key: 'Yoxlamada',    label: 'Yoxlamada',    color: '#f59e0b', bg: '#fffbeb', border: '#fde68a' },
+  { key: 'Ekspertizada', label: 'Ekspertizada', color: '#8b5cf6', bg: '#f5f3ff', border: '#ddd6fe' },
+  { key: 'Tamamlandı',   label: 'Tamamlandı',   color: '#22c55e', bg: '#f0fdf4', border: '#bbf7d0' },
+  { key: 'Cancelled',    label: 'Ləğv edildi',  color: '#ef4444', bg: '#fef2f2', border: '#fecaca' },
+]
+
+const CANCEL_REASONS = [
+  'Müştəri imtina etdi',
+  'Layihə dəyişdi',
+  'Texniki problem',
+  'Yenidən planlaşdırılır',
+  'Digər',
 ]
 const PRIORITIES = [
   { key: 'high',   label: 'Kritik', color: '#ef4444', bg: '#fef2f2' },
