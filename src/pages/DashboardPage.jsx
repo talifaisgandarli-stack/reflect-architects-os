@@ -16,6 +16,9 @@ export default function DashboardPage() {
   const { profile } = useAuth()
   const [loading, setLoading] = useState(true)
   const [filterYear, setFilterYear] = useState(new Date().getFullYear())
+  const [teamMembers, setTeamMembers] = useState([])
+  const [todayEvents, setTodayEvents] = useState([])
+  const [recentNotices, setRecentNotices] = useState([])
   const [filterMonth, setFilterMonth] = useState(0) // 0 = hamisi
   const [stats, setStats] = useState({
     totalPortfolio: 0, totalIncome: 0, totalDebt: 0,
@@ -29,6 +32,19 @@ export default function DashboardPage() {
   })
 
   useEffect(() => { loadDashboard() }, [filterYear, filterMonth])
+
+  useEffect(() => {
+    const todayStr = new Date().toISOString().split('T')[0]
+    Promise.all([
+      supabase.from('profiles').select('id, full_name, is_active').eq('is_active', true).order('full_name').limit(20),
+      supabase.from('events').select('id, title, event_type, start_time').eq('start_date', todayStr).order('start_time').limit(6),
+      supabase.from('notices').select('id, title, content, created_at, icon').order('created_at', { ascending: false }).limit(3),
+    ]).then(([mRes, eRes, nRes]) => {
+      setTeamMembers(mRes.data || [])
+      setTodayEvents(eRes.data || [])
+      setRecentNotices(nRes.data || [])
+    })
+  }, [])
 
   async function loadDashboard() {
     try {
@@ -184,6 +200,106 @@ export default function DashboardPage() {
           )}
         </p>
       </div>
+
+      {/* Team Avatar Row */}
+      {teamMembers.length > 0 && (
+        <div
+          className="bg-white p-4"
+          style={{ border: '1px solid #E8E9ED', borderRadius: '12px' }}
+        >
+          <div className="text-[10px] font-medium uppercase tracking-wide mb-3" style={{ color: '#6B7280' }}>
+            Komanda
+          </div>
+          <div className="flex flex-wrap gap-3">
+            {teamMembers.map(m => {
+              const initials = m.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
+              const isMe = m.id === profile?.id
+              return (
+                <div key={m.id} className="flex flex-col items-center gap-1" style={{ minWidth: '48px' }}>
+                  <div className="relative">
+                    <div
+                      className="w-12 h-12 rounded-full flex items-center justify-center text-white text-sm font-semibold"
+                      style={{ backgroundColor: isMe ? '#4F6BFB' : '#0F1117' }}
+                    >
+                      {initials}
+                    </div>
+                    <div
+                      className="absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white"
+                      style={{ backgroundColor: '#16A34A' }}
+                    />
+                  </div>
+                  <span className="text-[10px] text-center leading-tight" style={{ color: '#6B7280', maxWidth: '52px' }}>
+                    {m.full_name.split(' ')[0]}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Today's Events + Recent Notices row */}
+      {(todayEvents.length > 0 || recentNotices.length > 0) && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+          {/* Today's Events */}
+          <div
+            className="bg-white p-4"
+            style={{ border: '1px solid #E8E9ED', borderRadius: '12px' }}
+          >
+            <div className="text-[10px] font-medium uppercase tracking-wide mb-3" style={{ color: '#6B7280' }}>
+              Bugünün görüşləri
+            </div>
+            {todayEvents.length === 0 ? (
+              <p className="text-xs" style={{ color: '#D1D5E0' }}>Bu gün üçün hadisə yoxdur</p>
+            ) : (
+              <div className="space-y-2">
+                {todayEvents.map(e => (
+                  <div key={e.id} className="flex items-start gap-2.5">
+                    <div
+                      className="w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0"
+                      style={{ backgroundColor: '#4F6BFB' }}
+                    />
+                    <div>
+                      <div className="text-xs font-medium" style={{ color: '#0F1117' }}>{e.title}</div>
+                      {e.start_time && (
+                        <div className="text-[10px]" style={{ color: '#6B7280' }}>{e.start_time.slice(0, 5)}</div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Recent Notices */}
+          <div
+            className="bg-white p-4"
+            style={{ border: '1px solid #E8E9ED', borderRadius: '12px' }}
+          >
+            <div className="text-[10px] font-medium uppercase tracking-wide mb-3" style={{ color: '#6B7280' }}>
+              Son elanlar
+            </div>
+            {recentNotices.length === 0 ? (
+              <p className="text-xs" style={{ color: '#D1D5E0' }}>Hələ elan yoxdur</p>
+            ) : (
+              <div className="space-y-2.5">
+                {recentNotices.map(n => (
+                  <div key={n.id} className="flex items-start gap-2.5">
+                    <span className="flex-shrink-0 text-base leading-none mt-0.5">{n.icon || '📢'}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-medium truncate" style={{ color: '#0F1117' }}>{n.title}</div>
+                      <div className="text-[10px]" style={{ color: '#6B7280' }}>
+                        {new Date(n.created_at).toLocaleDateString('az-AZ', { day: 'numeric', month: 'short' })}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Filter */}
       <div className="flex gap-2 items-center">

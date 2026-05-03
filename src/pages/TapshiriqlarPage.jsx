@@ -8,17 +8,28 @@ import { notify } from '../lib/notify'
 import { logActivity } from '../lib/logActivity'
 import {
   IconPlus, IconX, IconEdit, IconTrash, IconCheck, IconSend,
-  IconLayoutKanban, IconList, IconSearch, IconArchive,
+  IconLayoutKanban, IconList, IconUser, IconSearch, IconArchive,
   IconCalendar, IconFlag, IconChevronDown, IconMessage,
   IconAlertCircle, IconAt, IconClock, IconHistory
 } from '@tabler/icons-react'
 
-// ─── Constants ───────────────────────────────────── v2.1───────────────────────────
+// ─── Constants ───────────────────────────────────── v3.0 (7-status)──────────────
 const COLUMNS = [
-  { key: 'not_started', label: 'Başlanmayıb', color: '#94a3b8', bg: '#f8fafc', border: '#e2e8f0' },
-  { key: 'in_progress',  label: 'İcrada',      color: '#3b82f6', bg: '#eff6ff', border: '#bfdbfe' },
-  { key: 'review',       label: 'Yoxlanılır',  color: '#f59e0b', bg: '#fffbeb', border: '#fde68a' },
-  { key: 'done',         label: 'Tamamlandı',  color: '#22c55e', bg: '#f0fdf4', border: '#bbf7d0' },
+  { key: 'İdeyalar',     label: 'İdeyalar',     color: '#a78bfa', bg: '#faf5ff', border: '#e9d5ff' },
+  { key: 'başlanmayıb',  label: 'Başlanmayıb',  color: '#94a3b8', bg: '#f8fafc', border: '#e2e8f0' },
+  { key: 'İcrada',       label: 'İcrada',       color: '#3b82f6', bg: '#eff6ff', border: '#bfdbfe' },
+  { key: 'Yoxlamada',    label: 'Yoxlamada',    color: '#f59e0b', bg: '#fffbeb', border: '#fde68a' },
+  { key: 'Ekspertizada', label: 'Ekspertizada', color: '#8b5cf6', bg: '#f5f3ff', border: '#ddd6fe' },
+  { key: 'Tamamlandı',   label: 'Tamamlandı',   color: '#22c55e', bg: '#f0fdf4', border: '#bbf7d0' },
+  { key: 'Cancelled',    label: 'Ləğv edildi',  color: '#ef4444', bg: '#fef2f2', border: '#fecaca' },
+]
+
+const CANCEL_REASONS = [
+  'Müştəri imtina etdi',
+  'Layihə dəyişdi',
+  'Texniki problem',
+  'Yenidən planlaşdırılır',
+  'Digər',
 ]
 const PRIORITIES = [
   { key: 'high',   label: 'Kritik', color: '#ef4444', bg: '#fef2f2' },
@@ -71,6 +82,8 @@ function MentionInput({ value, onChange, onMentionsChange, members, placeholder,
     if (lastAt === -1) { setShow(false); return }
     const afterAt = v.slice(lastAt + 1)
     if (lastAt === v.length - 1) { setShow(true); setQuery(''); return }
+    // Don't trigger dropdown inside an already-inserted @[uuid] token
+    if (afterAt.startsWith('[')) { setShow(false); return }
     if (!afterAt.includes(' ') || afterAt.length < 30) {
       setShow(true)
       setQuery(afterAt)
@@ -81,10 +94,10 @@ function MentionInput({ value, onChange, onMentionsChange, members, placeholder,
 
   function pick(m) {
     const lastAt = value.lastIndexOf('@')
-    onChange(value.slice(0, lastAt) + '@' + m.full_name + ' ')
+    // Store @[uuid] in text — stable even if name changes
+    onChange(value.slice(0, lastAt) + '@[' + m.id + '] ')
     setShow(false)
     setQuery('')
-    // Track picked user by ID — stable, independent of name changes
     const updated = mentionIds.includes(m.id) ? mentionIds : [...mentionIds, m.id]
     setMentionIds(updated)
     onMentionsChange?.(updated)
@@ -206,10 +219,10 @@ function QuickAdd({ status, projects, members, onSave, onCancel }) {
 // ─── Task Form (full) ─────────────────────────────────────────────────────────
 function TaskForm({ open, onClose, onSave, task, projects, members, defaultStatus }) {
   const { isAdmin } = useAuth()
-  const [form, setForm] = useState({ title:'', description:'', project_id:'', assignee_ids:[], status: defaultStatus||'not_started', priority:'medium', due_date:'', tags:[], is_hidden:false })
+  const [form, setForm] = useState({ title:'', description:'', project_id:'', assignee_ids:[], status: defaultStatus||'başlanmayıb', priority:'medium', due_date:'', tags:[], is_hidden:false })
   useEffect(() => {
-    if (task) setForm({ title:task.title||'', description:task.description||'', project_id:task.project_id||'', assignee_ids:task.assignee_ids||[], status:task.status||'not_started', priority:task.priority||'medium', due_date:task.due_date||'', tags:task.tags||[], is_hidden:task.is_hidden||false })
-    else setForm({ title:'', description:'', project_id:'', assignee_ids:[], status:defaultStatus||'not_started', priority:'medium', due_date:'', tags:[], is_hidden:false })
+    if (task) setForm({ title:task.title||'', description:task.description||'', project_id:task.project_id||'', assignee_ids:task.assignee_ids||[], status:task.status||'başlanmayıb', priority:task.priority||'medium', due_date:task.due_date||'', tags:task.tags||[], is_hidden:task.is_hidden||false })
+    else setForm({ title:'', description:'', project_id:'', assignee_ids:[], status:defaultStatus||'başlanmayıb', priority:'medium', due_date:'', tags:[], is_hidden:false })
   }, [task, open, defaultStatus])
   const [formErrors, setFormErrors] = useState([])
   const set = (k,v) => setForm(f => ({...f,[k]:v}))
@@ -726,8 +739,12 @@ function DetailPanel({ task, projects, members, onClose, onEdit, onDelete, onSta
                   const author = members.find(m => m.id === c.author_id)
                   const isMe = c.author_id === user?.id
                   const mentions = c.metadata?.mentions || []
-                  // Highlight mentions in text
-                  const highlighted = c.content.replace(/@([\w\s]+?)(?= |$)/g, (match) => `__MENTION__${match}__END__`)
+                  // Decode @[uuid] → @FirstName; keep backward compat for old @full_name format
+                  const decoded = c.content.replace(/@\[([0-9a-f-]{36})\]/g, (_, id) => {
+                    const mb = members.find(m => m.id === id)
+                    return '@' + (mb?.full_name?.split(' ')[0] || '?')
+                  })
+                  const highlighted = decoded.replace(/@([\w\s]+?)(?= |$)/g, (match) => `__MENTION__${match}__END__`)
                   const parts = highlighted.split(/__MENTION__|__END__/)
                   return (
                     <div key={c.id} className={`flex gap-2.5 ${isMe ? 'flex-row-reverse' : ''}`}>
@@ -855,12 +872,12 @@ function KanbanCard({ task, projects, members, checkCounts, commentCounts, onCli
   const filteredMember = filterUser && filterUser !== 'all' ? members.find(m => m.id === filterUser) : null
   const days = daysLeft(task.due_date)
   const pr = prio(task.priority)
-  const isDone = task.status === 'done'
+  const isDone = task.status === 'Tamamlandı'
   const overdue = !isDone && days !== null && days < 0
   const cc = checkCounts[task.id] || { done:0, total:0, overdueItems:[], assigneeItems:{} }
   const overdueChecks = (cc.overdueItems||[]).length
   const myChecks = filterUser && filterUser !== 'all' ? (cc.assigneeItems||{})[filterUser] : null
-  const hasSubtaskOverdue = overdueChecks > 0 && task.status !== 'done'
+  const hasSubtaskOverdue = overdueChecks > 0 && task.status !== 'Tamamlandı'
   const cmt = commentCounts[task.id] || 0
 
   return (
@@ -1156,7 +1173,8 @@ export default function TapshiriqlarPage() {
   const [filterUser,    setFilterUser]    = useState('all')
   const [search,        setSearch]        = useState('')
   const [modalOpen,     setModalOpen]     = useState(false)
-  const [defaultSt,     setDefaultSt]     = useState('not_started')
+  const [defaultSt,     setDefaultSt]     = useState('başlanmayıb')
+  const [cancelDialog,  setCancelDialog]  = useState(null) // { task, newStatus }
   const [editTask,      setEditTask]      = useState(null)
   const [deleteTask,    setDeleteTask]    = useState(null)
   const [doneWarn,      setDoneWarn]      = useState(null) // { task, newStatus, incomplete }
@@ -1317,7 +1335,7 @@ export default function TapshiriqlarPage() {
       return
     }
     logActivity(task.id, user?.id, 'status dəyişdi', { old_status: oldStatus, new_status: newStatus })
-    if (newStatus === 'done') {
+    if (newStatus === 'Tamamlandı') {
       const allAssignees = (task.assignee_ids||[]).length > 0 ? task.assignee_ids : (task.assignee_id ? [task.assignee_id] : [])
       for (const uid of allAssignees) {
         if (uid !== user?.id) notify(uid, task.title, 'Tapşırıq tamamlandı kimi işarələndi', 'success', '/tapshiriqlar?task=' + task.id)
@@ -1327,12 +1345,29 @@ export default function TapshiriqlarPage() {
 
   async function handleStatusChange(task, newStatus) {
     if (task.status === newStatus) return
-    if (newStatus === 'done') {
+    if (newStatus === 'Cancelled') { setCancelDialog({ task, newStatus }); return }
+    if (newStatus === 'Tamamlandı') {
       const cc = checkCounts[task.id]
       const incomplete = (cc?.total || 0) - (cc?.done || 0)
       if (incomplete > 0) { setDoneWarn({ task, newStatus, incomplete }); return }
     }
     await _doStatusChange(task, newStatus)
+  }
+
+  async function handleCancelConfirm(reason) {
+    if (!cancelDialog) return
+    const { task } = cancelDialog
+    setCancelDialog(null)
+    const oldStatus = task.status
+    setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: 'Cancelled', cancel_reason: reason } : t))
+    if (detailTask?.id === task.id) setDetailTask(prev => ({ ...prev, status: 'Cancelled', cancel_reason: reason }))
+    const { error } = await supabase.from('tasks').update({ status: 'Cancelled', cancel_reason: reason }).eq('id', task.id)
+    if (error) {
+      setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: oldStatus, cancel_reason: null } : t))
+      addToast('Əməliyyat alınmadı', 'error'); return
+    }
+    logActivity(task.id, user?.id, `ləğv edildi: ${reason}`, { old_status: oldStatus, cancel_reason: reason })
+    addToast('Tapşırıq ləğv edildi', 'info')
   }
 
   async function handleDeadlineChange(task, newDue) {
@@ -1344,7 +1379,7 @@ export default function TapshiriqlarPage() {
   }
 
   async function archiveDone() {
-    const doneTasks = tasks.filter(t => t.status === 'done' && !t.archived)
+    const doneTasks = tasks.filter(t => (t.status === 'Tamamlandı' || t.status === 'Cancelled') && !t.archived)
     if (!doneTasks.length) { addToast('Arxivlənəcək tamamlanmış tapşırıq yoxdur','info'); return }
     const now = new Date()
     const ids = doneTasks.map(t => t.id)
@@ -1391,7 +1426,7 @@ export default function TapshiriqlarPage() {
       await Promise.all(withPos.map(t => supabase.from('tasks').update({ position: t.position }).eq('id', t.id)))
       return
     }
-    if (targetColKey === 'done') {
+    if (targetColKey === 'Tamamlandı') {
       const cc = checkCounts[dragTaskId]
       const incomplete = (cc?.total || 0) - (cc?.done || 0)
       if (incomplete > 0) {
@@ -1423,14 +1458,14 @@ export default function TapshiriqlarPage() {
     if (filterOverdue) {
       const d = daysLeft(t.due_date)
       const hasOverdueCheck = (checkCounts[t.id]?.overdueItems||[]).length > 0
-      if (t.status==='done' && !hasOverdueCheck) return false
+      if (t.status==='Tamamlandı' && !hasOverdueCheck) return false
       if (d!==null && d>=0 && !hasOverdueCheck) return false
       if (d===null && !hasOverdueCheck) return false
     }
     return true
   })
   const tasksByCol = Object.fromEntries(COLUMNS.map(c => [c.key, filtered.filter(t => t.status===c.key)]))
-  const overdueCount = activeTasks.filter(t => { const d=daysLeft(t.due_date); return t.status!=='done'&&d!==null&&d<0 }).length
+  const overdueCount = activeTasks.filter(t => { const d=daysLeft(t.due_date); return t.status!=='Tamamlandı'&&d!==null&&d<0 }).length
   const overdueSubtaskCount = (() => {
     const todayLocal = new Date()
     todayLocal.setHours(0,0,0,0)
@@ -1540,7 +1575,7 @@ export default function TapshiriqlarPage() {
               className="hidden md:flex items-center gap-1.5 px-3 py-1.5 border border-[#e8e8e4] rounded-lg text-xs text-[#555] hover:border-[#0f172a] transition-colors">
               Tamamlananları arxivlə
             </button>
-            <Button onClick={() => { setEditTask(null); setDefaultSt('not_started'); setModalOpen(true) }} size="sm">
+            <Button onClick={() => { setEditTask(null); setDefaultSt('başlanmayıb'); setModalOpen(true) }} size="sm">
               <IconPlus size={14} /> <span className="hidden sm:inline">Yeni tapşırıq</span>
             </Button>
           </div>
@@ -1683,13 +1718,13 @@ export default function TapshiriqlarPage() {
                   const pr = prio(task.priority)
                   const cl = col(task.status)
                   const cc = checkCounts[task.id]||{done:0,total:0}
-                  const overdue = task.status!=='done'&&d!==null&&d<0
+                  const overdue = task.status!=='Tamamlandı'&&d!==null&&d<0
                   return (
                     <tr key={task.id} className={`border-b border-[#f5f5f0] hover:bg-[#fafaf8] cursor-pointer ${overdue?'bg-red-50/20':''}`}
                       onClick={() => setDetailTask(task)}>
                       <td className="px-3 py-3"><div className="w-[3px] h-6 rounded-full" style={{background:pr.color}}/></td>
                       <td className="py-3 pr-4">
-                        <div className={`text-xs font-medium ${task.status==='done'?'line-through text-[#bbb]':'text-[#0f172a]'}`}>{task.title}</div>
+                        <div className={`text-xs font-medium ${task.status==='Tamamlandı'?'line-through text-[#bbb]':'text-[#0f172a]'}`}>{task.title}</div>
                         {project && <div className="text-[9px] mt-0.5" style={{color:projClr(project.id,projects)}}>{project.name}</div>}
                       </td>
                       <td className="py-3 pr-4">

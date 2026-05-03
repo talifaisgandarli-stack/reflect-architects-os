@@ -25,50 +25,99 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f5f5f0] flex items-center justify-center p-4">
-      <div className="w-full max-w-sm">
+    <div
+      className="min-h-screen flex items-center justify-center p-4"
+      style={{
+        backgroundColor: '#F2F3F7',
+        backgroundImage: 'radial-gradient(circle, #D1D5E0 1px, transparent 1px)',
+        backgroundSize: '20px 20px',
+      }}
+    >
+      <div className="w-full max-w-sm animate-fade-in">
 
-        {/* Logo */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 bg-[#0f172a] rounded-xl mb-4">
-            <span className="text-white text-xl font-bold">RA</span>
+        {/* Card */}
+        <div
+          className="bg-white px-8 py-10"
+          style={{
+            borderRadius: '16px',
+            boxShadow: '0 4px 24px rgba(0,0,0,0.06)',
+            border: '1px solid #E8E9ED',
+          }}
+        >
+          {/* Logo + Title */}
+          <div className="text-center mb-8">
+            <h1
+              className="text-3xl tracking-tight"
+              style={{ fontWeight: 800, color: '#0F1117', fontFamily: 'Inter, sans-serif' }}
+            >
+              Reflect
+            </h1>
+            <p className="mt-1.5 text-sm" style={{ color: '#6B7280' }}>
+              Arxitektorlar üçün əməliyyat sistemi.
+            </p>
           </div>
-          <h1 className="text-xl font-bold text-[#0f172a]">Reflect Architects</h1>
-          <p className="text-sm text-[#888] mt-1">İdarəetmə sisteminə daxil olun</p>
-        </div>
 
-        {/* Form */}
-        <div className="bg-white border border-[#e8e8e4] rounded-xl p-6 shadow-sm">
+          {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-xs font-600 text-[#444] uppercase tracking-wide mb-1.5">
+              <label
+                className="block text-xs font-medium uppercase tracking-wide mb-1.5"
+                style={{ color: '#6B7280' }}
+              >
                 E-poçt
               </label>
               <input
                 type="email"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
-                className="w-full px-3 py-2.5 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a] transition-colors"
+                className="w-full px-3 py-2.5 text-sm transition-all duration-150 outline-none"
+                style={{
+                  border: '1px solid #E8E9ED',
+                  borderRadius: '8px',
+                  color: '#0F1117',
+                  backgroundColor: '#fff',
+                }}
+                onFocus={e => e.target.style.borderColor = '#4F6BFB'}
+                onBlur={e => e.target.style.borderColor = '#E8E9ED'}
                 placeholder="ad@reflect.az"
                 autoComplete="email"
               />
             </div>
             <div>
-              <label className="block text-xs font-600 text-[#444] uppercase tracking-wide mb-1.5">
+              <label
+                className="block text-xs font-medium uppercase tracking-wide mb-1.5"
+                style={{ color: '#6B7280' }}
+              >
                 Şifrə
               </label>
               <input
                 type="password"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
-                className="w-full px-3 py-2.5 border border-[#e8e8e4] rounded-lg text-sm focus:outline-none focus:border-[#0f172a] transition-colors"
+                className="w-full px-3 py-2.5 text-sm transition-all duration-150 outline-none"
+                style={{
+                  border: '1px solid #E8E9ED',
+                  borderRadius: '8px',
+                  color: '#0F1117',
+                  backgroundColor: '#fff',
+                }}
+                onFocus={e => e.target.style.borderColor = '#4F6BFB'}
+                onBlur={e => e.target.style.borderColor = '#E8E9ED'}
                 placeholder="••••••••"
                 autoComplete="current-password"
               />
             </div>
 
             {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 text-xs px-3 py-2.5 rounded-lg">
+              <div
+                className="text-xs px-3 py-2.5"
+                style={{
+                  backgroundColor: '#FEF2F2',
+                  border: '1px solid #FECACA',
+                  color: '#DC2626',
+                  borderRadius: '8px',
+                }}
+              >
                 {error}
               </div>
             )}
@@ -76,14 +125,22 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-[#0f172a] text-white py-2.5 rounded-lg text-sm font-medium hover:bg-[#1e293b] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full py-2.5 text-sm font-medium text-white transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{
+                backgroundColor: '#4F6BFB',
+                borderRadius: '8px',
+              }}
+              onMouseEnter={e => { if (!loading) e.target.style.backgroundColor = '#3D56E8' }}
+              onMouseLeave={e => { e.target.style.backgroundColor = '#4F6BFB' }}
+              onMouseDown={e => { e.target.style.transform = 'scale(0.97)' }}
+              onMouseUp={e => { e.target.style.transform = 'scale(1)' }}
             >
               {loading ? 'Daxil olunur...' : 'Daxil ol'}
             </button>
           </form>
         </div>
 
-        <p className="text-center text-xs text-[#aaa] mt-6">
+        <p className="text-center text-xs mt-6" style={{ color: '#D1D5E0' }}>
           Reflect Architects · Bakı, Azərbaycan
         </p>
       </div>

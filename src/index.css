@@ -1,23 +1,87 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 * { box-sizing: border-box; }
-body { background-color: #f5f5f0; color: #0f172a; font-family: 'Inter', system-ui, sans-serif; }
+body { background-color: #F2F3F7; color: #0F1117; font-family: 'Inter', system-ui, sans-serif; }
 
+/* ── Scrollbar ─────────────────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #e8e8e4; border-radius: 2px; }
-::-webkit-scrollbar-thumb:hover { background: #d0d0cc; }
+::-webkit-scrollbar-thumb { background: #E8E9ED; border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: #D1D5E0; }
 
-.toast-enter { animation: slideIn 0.2s ease; }
-@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+/* ── Skeleton shimmer (cool neutral) ──────────────────────────────────────── */
+.skeleton {
+  background: linear-gradient(90deg, #E8E9ED 25%, #F2F3F7 50%, #E8E9ED 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite linear;
+}
+@keyframes shimmer {
+  0%   { background-position:  200% 0; }
+  100% { background-position: -200% 0; }
+}
 
-.skeleton { background: linear-gradient(90deg, #f0f0ec 25%, #e8e8e4 50%, #f0f0ec 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; }
-@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+/* ── Entrance animations ──────────────────────────────────────────────────── */
+.fade-in {
+  animation: fadeIn 200ms ease;
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
 
-.sidebar-item { transition: background-color 0.15s ease, color 0.15s ease; }
-.fade-in { animation: fadeIn 0.2s ease; }
-@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+.slide-in-right {
+  animation: slideInRight 300ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes slideInRight {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+
+.slide-in-down {
+  animation: slideInDown 150ms ease;
+}
+@keyframes slideInDown {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Toast ────────────────────────────────────────────────────────────────── */
+.toast-enter {
+  animation: toastIn 300ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes toastIn {
+  from { transform: translateX(100%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+
+/* ── Card hover ───────────────────────────────────────────────────────────── */
+.card-hover {
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+.card-hover:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+
+/* ── Slide panel overlay ──────────────────────────────────────────────────── */
+.slide-panel {
+  transform: translateX(100%);
+  transition: transform 300ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.slide-panel.open {
+  transform: translateX(0);
+}
+
+/* ── Button press ─────────────────────────────────────────────────────────── */
+button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+/* ── Global transition default ───────────────────────────────────────────── */
+.transition-base {
+  transition: all 150ms ease;
+}
