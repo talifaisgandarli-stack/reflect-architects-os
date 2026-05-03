@@ -16,21 +16,26 @@ RETURNS text[] LANGUAGE sql IMMUTABLE AS $$
   END
 $$;
 
--- Add column if it doesn't exist yet
-ALTER TABLE projects ADD COLUMN IF NOT EXISTS phases text[] DEFAULT '{}';
-
--- If column is jsonb, convert it (idempotent: no-op if already text[])
+-- Add column if missing; convert jsonb→text[] if it already exists as jsonb.
+-- Order matters: DROP DEFAULT → ALTER TYPE → SET DEFAULT (Postgres requirement).
 DO $$
+DECLARE v_type text;
 BEGIN
-  IF EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_name = 'projects' AND column_name = 'phases'
-      AND data_type = 'jsonb'
-  ) THEN
-    -- Run as dynamic SQL so ALTER TABLE executes outside PL/pgSQL USING restriction
+  SELECT data_type INTO v_type
+  FROM information_schema.columns
+  WHERE table_name = 'projects' AND column_name = 'phases';
+
+  IF v_type IS NULL THEN
+    -- Column doesn't exist — add it
+    EXECUTE 'ALTER TABLE projects ADD COLUMN phases text[] DEFAULT ''{}''';
+
+  ELSIF v_type = 'jsonb' THEN
+    -- Must drop default BEFORE changing type (Postgres 42804 guard)
+    EXECUTE 'ALTER TABLE projects ALTER COLUMN phases DROP DEFAULT';
     EXECUTE 'ALTER TABLE projects ALTER COLUMN phases TYPE text[] USING _tmp_phases_convert(phases)';
     EXECUTE 'ALTER TABLE projects ALTER COLUMN phases SET DEFAULT ''{}''';
   END IF;
+  -- If already text[] → nothing to do
 END $$;
 
 DROP FUNCTION IF EXISTS _tmp_phases_convert(jsonb);
