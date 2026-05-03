@@ -413,7 +413,11 @@ create table mirai_usage (
 **Limitlər:**
 - Admin: 100 sual/gün
 - User: 30 sual/gün
-- Şirkət aylıq hard limit: $10 USD (env: `MIRAI_MONTHLY_BUDGET_USD`)
+- Şirkət aylıq hard limit: **$5 USD** (env: `MIRAI_MONTHLY_BUDGET_USD`) — AUTHOR APPROVED 2026-05-03
+  - $0 → $4: tam Claude Haiku 4.5
+  - $4 → $4.50: admin Telegram xəbərdarlığı
+  - $4.50 → $5: avtomatik Groq llama-3.3 fallback
+  - $5: hard stop, yalnız local heuristics
 
 ### 10 Optimization (məcburi)
 
@@ -426,8 +430,8 @@ create table mirai_usage (
 | 5 | **Batch Endpoint** | Saatlıq proaktiv analiz (Telegram xəbərdarlıq) cron ilə |
 | 6 | **Session Compression** | 10 mesajdan sonra conversation xülasəyə endirilir |
 | 7 | **Local Heuristics First** | "Balans neçədir?" → SQL cavab verir, AI çağırılmır |
-| 8 | **Monthly Budget Cap** | `MIRAI_MONTHLY_BUDGET_USD=10`, hard stop |
-| 9 | **Token Counter Dashboard** | Maliyyə Mərkəzindəki widget: bu ay $X / $10 |
+| 8 | **Monthly Budget Cap** | `MIRAI_MONTHLY_BUDGET_USD=5`, hard stop → Groq fallback |
+| 9 | **Token Counter Dashboard** | Maliyyə Mərkəzindəki widget: bu ay $X / $5 |
 | 10 | **Free Fallback** | Limit dolarsa → Groq llama-3.3-70b (pulsuz) |
 
 ### Xərc proqnoz
@@ -437,7 +441,7 @@ create table mirai_usage (
 | Minimal (2 admin, 5 user) | ~400 sual/ay | ~$1.20 (~₼2.04) |
 | Real (3 admin, 10 user) | ~800 sual/ay | ~$2.30 (~₼3.91) |
 | Aktiv (5 admin, 15 user) | ~1,500 sual/ay | ~$4.60 (~₼7.82) |
-| Maksimum (hard limit) | — | $10 → Groq fallback |
+| Maksimum (hard limit) | — | **$5** → Groq fallback |
 
 **Model:** Claude Haiku 4.5 ($0.25/1M input, $1.25/1M output)
 **Embedding:** text-embedding-3-small ($0.02/1M tokens)
