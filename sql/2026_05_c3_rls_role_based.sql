@@ -62,7 +62,7 @@ CREATE POLICY "salary_history_admin_all" ON salary_history
 -- Optionally allow employees to see their own salary history (read-only)
 CREATE POLICY "salary_history_self_read" ON salary_history
   FOR SELECT TO authenticated
-  USING (profile_id = auth.uid());
+  USING (employee_id = auth.uid());
 
 -- ─── performance_reviews: admin write, employee read own ──────────────────────
 ALTER TABLE performance_reviews ENABLE ROW LEVEL SECURITY;
@@ -77,7 +77,7 @@ CREATE POLICY "performance_reviews_admin_all" ON performance_reviews
 
 CREATE POLICY "performance_reviews_self_read" ON performance_reviews
   FOR SELECT TO authenticated
-  USING (profile_id = auth.uid());
+  USING (employee_id = auth.uid());
 
 -- ─── Financial tables: admin-only writes, all-read for transparency ───────────
 DO $$
@@ -144,8 +144,8 @@ DROP POLICY IF EXISTS "leave_requests_self_or_admin" ON leave_requests;
 
 CREATE POLICY "leave_requests_self_or_admin" ON leave_requests
   FOR ALL TO authenticated
-  USING (profile_id = auth.uid() OR public.is_admin())
-  WITH CHECK (profile_id = auth.uid() OR public.is_admin());
+  USING (member_id = auth.uid() OR public.is_admin())
+  WITH CHECK (member_id = auth.uid() OR public.is_admin());
 
 -- ─── notifications: user sees own, admin sees all ─────────────────────────────
 ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
@@ -153,8 +153,8 @@ DROP POLICY IF EXISTS "notifications_self_or_admin" ON notifications;
 
 CREATE POLICY "notifications_self_or_admin" ON notifications
   FOR ALL TO authenticated
-  USING (profile_id = auth.uid() OR public.is_admin())
-  WITH CHECK (profile_id = auth.uid() OR public.is_admin());
+  USING (user_id = auth.uid() OR public.is_admin())
+  WITH CHECK (user_id = auth.uid() OR public.is_admin());
 
 -- ─── system_settings + roles: admin-only ──────────────────────────────────────
 ALTER TABLE system_settings ENABLE ROW LEVEL SECURITY;
