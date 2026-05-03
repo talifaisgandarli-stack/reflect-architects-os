@@ -2,28 +2,28 @@
 -- Run after 2026_05_invoices_extended.sql
 
 -- A1: link incomes back to invoices for auto-create + cascade
-ALTER TABLE incomes ADD COLUMN IF NOT EXISTS invoice_id UUID REFERENCES invoices(id) ON DELETE CASCADE;
-CREATE INDEX IF NOT EXISTS idx_incomes_invoice_id ON incomes(invoice_id);
+alter table incomes add column if not exists invoice_id uuid references invoices(id) on delete cascade;
+create index if not exists idx_incomes_invoice_id on incomes(invoice_id);
 
 -- A10: pipeline lost reason + stage validation metadata
-ALTER TABLE clients ADD COLUMN IF NOT EXISTS lost_reason TEXT;
-ALTER TABLE clients ADD COLUMN IF NOT EXISTS lost_at     TIMESTAMPTZ;
+alter table clients add column if not exists lost_reason text;
+alter table clients add column if not exists lost_at     timestamptz;
 
--- A3: backfill phases array from legacy phase column for any project still using single field
-UPDATE projects
-   SET phases = to_jsonb(ARRAY[phase])
- WHERE (phases IS NULL OR jsonb_array_length(phases) = 0)
-   AND phase IS NOT NULL;
+-- A3: backfill phases array from legacy phase column
+-- phases is text[] (converted by 2026_05_phases_consolidation.sql), not jsonb
+update projects
+   set phases = array[phase]::text[]
+ where (phases is null or cardinality(phases) = 0)
+   and phase is not null;
 
 -- A8-A9: holiday calendar for vacation workday computation
-CREATE TABLE IF NOT EXISTS holidays (
-  date DATE PRIMARY KEY,
-  name TEXT NOT NULL,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+create table if not exists holidays (
+  date date primary key,
+  name text not null,
+  created_at timestamptz default now()
 );
 
--- Seed common AZ public holidays (2026) — admins can edit later
-INSERT INTO holidays (date, name) VALUES
+insert into holidays (date, name) values
   ('2026-01-01', 'Yeni İl'),
   ('2026-01-02', 'Yeni İl (2)'),
   ('2026-01-20', '20 Yanvar — Ümumxalq Hüzn günü'),
@@ -40,17 +40,14 @@ INSERT INTO holidays (date, name) VALUES
   ('2026-10-18', 'Müstəqilliyin bərpası günü'),
   ('2026-11-09', 'Dövlət Bayrağı günü'),
   ('2026-11-12', 'Konstitusiya günü')
-ON CONFLICT (date) DO NOTHING;
+on conflict (date) do nothing;
 
--- RLS for holidays: read-only for authenticated users; writes via service_role only
-ALTER TABLE holidays ENABLE ROW LEVEL SECURITY;
+alter table holidays enable row level security;
 
-DROP POLICY IF EXISTS "holidays_select_all" ON holidays;
-DROP POLICY IF EXISTS "holidays_insert_admin" ON holidays;
-DROP POLICY IF EXISTS "holidays_update_admin" ON holidays;
-DROP POLICY IF EXISTS "holidays_delete_admin" ON holidays;
+drop policy if exists "holidays_select_all"    on holidays;
+drop policy if exists "holidays_insert_admin"  on holidays;
+drop policy if exists "holidays_update_admin"  on holidays;
+drop policy if exists "holidays_delete_admin"  on holidays;
 
-CREATE POLICY "holidays_select_all" ON holidays
-  FOR SELECT USING (true);
--- No INSERT/UPDATE/DELETE policies → only service_role (which bypasses RLS) can mutate.
--- Admins can edit holidays via Supabase dashboard or a future admin API endpoint.
+create policy "holidays_select_all" on holidays for select using (true);
+-- No INSERT/UPDATE/DELETE policies — only service_role (bypasses RLS) can mutate.
