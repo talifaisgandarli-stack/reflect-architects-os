@@ -145,6 +145,9 @@ export default function DebitorBorclarPage() {
     if (!form.name.trim() || !form.expected_amount) { addToast('Ad və məbləğ daxil edin', 'error'); return }
     const expected = Number(form.expected_amount)
     const paid = Number(form.paid_amount) || 0
+    if (expected <= 0) { addToast('Məbləğ sıfırdan böyük olmalıdır', 'error'); return }
+    if (paid < 0) { addToast('Ödənilmiş məbləğ mənfi ola bilməz', 'error'); return }
+    if (paid > expected * 1.5) { addToast('Ödənilmiş məbləğ gözlənilən məbləğin 1.5 mislinə yaxın — yoxlayın', 'warning') }
     const isTransfer = form.payment_method === 'transfer'
     const data = {
       name: form.name.trim(), project_id: form.project_id || null, client_id: form.client_id || null,
@@ -168,7 +171,13 @@ export default function DebitorBorclarPage() {
   }
 
   async function markPaid(rec) {
-    await supabase.from('receivables').update({ paid: true }).eq('id', rec.id)
+    const fullAmount = Number(rec.amount_with_edv || rec.expected_amount || 0)
+    const { error } = await supabase.from('receivables').update({
+      paid: true,
+      paid_amount: fullAmount,
+      paid_date: new Date().toISOString().split('T')[0],
+    }).eq('id', rec.id)
+    if (error) { addToast('Əməliyyat alınmadı', 'error'); return }
     addToast('Ödənildi olaraq işarələndi', 'success')
     await loadData()
   }

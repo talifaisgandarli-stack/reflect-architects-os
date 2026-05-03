@@ -44,8 +44,11 @@ function PageLoader() {
   return (
     <div className="flex-1 flex items-center justify-center min-h-64">
       <div className="flex flex-col items-center gap-3">
-        <div className="w-6 h-6 border-2 border-[#0f172a] border-t-transparent rounded-full animate-spin" />
-        <span className="text-xs text-[#bbb]">Yüklənir...</span>
+        <div
+          className="w-6 h-6 border-2 border-t-transparent rounded-full animate-spin"
+          style={{ borderColor: '#E8E9ED', borderTopColor: '#4F6BFB' }}
+        />
+        <span className="text-xs" style={{ color: '#6B7280' }}>Yüklənir...</span>
       </div>
     </div>
   )
@@ -104,18 +107,24 @@ export default function App() {
               <Route path="hesabatlar"            element={<AdminRoute><Suspense fallback={<PageLoader />}><HesabatlarPage /></Suspense></AdminRoute>} />
               <Route path="sabit-xercler"         element={<AdminRoute><Suspense fallback={<PageLoader />}><SabitXerclerPage /></Suspense></AdminRoute>} />
               <Route path="isci-heyeti"           element={<Suspense fallback={<PageLoader />}><IshciHeyetiPage /></Suspense>} />
-              <Route path="emek-haqqi"            element={<AdminRoute><Suspense fallback={<PageLoader />}><EmekHaqqiPage /></Suspense></AdminRoute>} />
+              <Route path="emek-haqqi"            element={<Suspense fallback={<PageLoader />}><EmekHaqqiPage /></Suspense>} />
               <Route path="performans"            element={<Suspense fallback={<PageLoader />}><PerformansPage /></Suspense>} />
-              <Route path="karyera-strukturu"     element={<AdminRoute><Suspense fallback={<PageLoader />}><HierarchyPage /></Suspense></AdminRoute>} />
+              <Route path="karyera-strukturu"     element={<Suspense fallback={<PageLoader />}><HierarchyPage /></Suspense>} />
               <Route path="elanlar"               element={<Suspense fallback={<PageLoader />}><ElanlarLovhesiPage /></Suspense>} />
               <Route path="hadiseler"             element={<Suspense fallback={<PageLoader />}><HadiselerTeqvimiPage /></Suspense>} />
               <Route path="mezuniyyet"            element={<Suspense fallback={<PageLoader />}><MezuniyyetCedveliPage /></Suspense>} />
               <Route path="avadanliq"             element={<Suspense fallback={<PageLoader />}><AvadanliqPage /></Suspense>} />
               <Route path="hedef-netice"          element={<Suspense fallback={<PageLoader />}><HedefNeticeOKRPage /></Suspense>} />
               <Route path="mezmun-planlamasi"     element={<AdminRoute><Suspense fallback={<PageLoader />}><MezmunPlanlamasiPage /></Suspense></AdminRoute>} />
+              <Route path="parametrler"           element={<AdminRoute><Suspense fallback={<PageLoader />}><ParametrlerPage /></Suspense></AdminRoute>} />
+              {/* New consolidated routes (Part 2 will build full pages) */}
+              <Route path="musteriler"            element={<AdminRoute><Navigate to="/sifarisci-idareetme" replace /></AdminRoute>} />
+              <Route path="maliyye-merkezi"       element={<AdminRoute><Navigate to="/daxilolmalar" replace /></AdminRoute>} />
+              <Route path="arxiv"                 element={<Suspense fallback={<PageLoader />}><SendArxiviPage /></Suspense>} />
+              {/* Legacy routes — kept for backward compat, not in nav */}
               <Route path="sened-arxivi"          element={<Suspense fallback={<PageLoader />}><SendArxiviPage /></Suspense>} />
               <Route path="qaynaqlar"             element={<Suspense fallback={<PageLoader />}><QaynaqlarPage /></Suspense>} />
-              <Route path="parametrler"           element={<AdminRoute><Suspense fallback={<PageLoader />}><ParametrlerPage /></Suspense></AdminRoute>} />
+              <Route path="hesab-fakturalar"      element={<AdminRoute><Suspense fallback={<PageLoader />}><HesabFakturalarPage /></Suspense></AdminRoute>} />
               <Route path="sistem-arxivi"         element={<AdminRoute><CS t="Sistem Arxivi" /></AdminRoute>} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />

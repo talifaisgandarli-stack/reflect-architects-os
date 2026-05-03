@@ -1,102 +1,131 @@
-// Stat/KPI card
+// ── StatCard ─────────────────────────────────────────────────────────────────
 export function StatCard({ label, value, sub, variant = 'default' }) {
   const colors = {
-    default: 'text-[#0f172a]',
-    success: 'text-green-600',
-    danger: 'text-red-600',
-    warning: 'text-yellow-600',
+    default: '#0F1117',
+    success: '#16A34A',
+    danger:  '#DC2626',
+    warning: '#D97706',
   }
   return (
-    <div className="bg-white border border-[#e8e8e4] rounded-lg p-4">
-      <div className="text-[10px] font-600 text-[#aaa] uppercase tracking-wide mb-1.5">{label}</div>
-      <div className={`text-xl font-bold ${colors[variant]}`}>{value}</div>
-      {sub && <div className="text-[11px] text-[#aaa] mt-1">{sub}</div>}
+    <div
+      className="bg-white p-4 card-hover"
+      style={{ border: '1px solid #E8E9ED', borderRadius: '12px' }}
+    >
+      <div className="text-[10px] font-medium uppercase tracking-wide mb-1.5" style={{ color: '#6B7280' }}>
+        {label}
+      </div>
+      <div className="text-xl font-semibold tabular-nums" style={{ color: colors[variant] || colors.default }}>
+        {value}
+      </div>
+      {sub && <div className="text-[11px] mt-1" style={{ color: '#6B7280' }}>{sub}</div>}
     </div>
   )
 }
 
-// Status badge
+// ── Badge ─────────────────────────────────────────────────────────────────────
 export function Badge({ children, variant = 'default', size = 'md' }) {
   const variants = {
-    default: 'bg-gray-100 text-gray-700',
-    success: 'bg-green-100 text-green-800',
-    danger: 'bg-red-100 text-red-800',
-    warning: 'bg-yellow-100 text-yellow-800',
-    info: 'bg-blue-100 text-blue-800',
-    dark: 'bg-[#0f172a] text-white',
+    default: { backgroundColor: '#F2F3F7', color: '#6B7280' },
+    success: { backgroundColor: '#DCFCE7', color: '#16A34A' },
+    danger:  { backgroundColor: '#FEE2E2', color: '#DC2626' },
+    warning: { backgroundColor: '#FEF3C7', color: '#D97706' },
+    info:    { backgroundColor: '#EEF2FF', color: '#4F6BFB' },
+    dark:    { backgroundColor: '#0F1117', color: '#FFFFFF' },
   }
-  const sizes = { sm: 'text-[9px] px-1.5 py-0.5', md: 'text-[10px] px-2 py-0.5', lg: 'text-xs px-2.5 py-1' }
+  const sizes = {
+    sm: { fontSize: '9px',  padding: '2px 6px' },
+    md: { fontSize: '11px', padding: '2px 8px' },
+    lg: { fontSize: '12px', padding: '4px 10px' },
+  }
   return (
-    <span className={`inline-flex items-center font-medium rounded-md ${variants[variant]} ${sizes[size]}`}>
+    <span
+      className="inline-flex items-center font-medium rounded-md"
+      style={{ ...variants[variant], ...sizes[size] }}
+    >
       {children}
     </span>
   )
 }
 
-// Page header
+// ── PageHeader ────────────────────────────────────────────────────────────────
 export function PageHeader({ title, subtitle, action }) {
   return (
     <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-5">
       <div className="min-w-0">
-        <h1 className="text-lg font-bold text-[#0f172a] truncate">{title}</h1>
-        {subtitle && <p className="text-xs text-[#888] mt-0.5">{subtitle}</p>}
+        <h1 className="text-xl font-semibold truncate" style={{ color: '#0F1117' }}>{title}</h1>
+        {subtitle && <p className="text-xs mt-0.5" style={{ color: '#6B7280' }}>{subtitle}</p>}
       </div>
       {action && <div className="flex-shrink-0">{action}</div>}
     </div>
   )
 }
 
-// Button
-export function Button({ children, onClick, variant = 'primary', size = 'md', disabled, className = '' }) {
+// ── Button ────────────────────────────────────────────────────────────────────
+export function Button({ children, onClick, variant = 'primary', size = 'md', disabled, className = '', type = 'button' }) {
+  const base = 'inline-flex items-center gap-2 font-medium rounded-lg transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed'
   const variants = {
-    primary: 'bg-[#0f172a] text-white hover:bg-[#1e293b]',
-    secondary: 'bg-white text-[#0f172a] border border-[#e8e8e4] hover:bg-[#f5f5f0]',
-    danger: 'bg-red-600 text-white hover:bg-red-700',
-    ghost: 'text-[#0f172a] hover:bg-[#f5f5f0]',
+    primary:   { backgroundColor: '#4F6BFB', color: '#FFFFFF' },
+    secondary: { backgroundColor: '#FFFFFF', color: '#0F1117', border: '1px solid #E8E9ED' },
+    danger:    { backgroundColor: '#DC2626', color: '#FFFFFF' },
+    ghost:     { backgroundColor: 'transparent', color: '#0F1117' },
   }
-  const sizes = { sm: 'text-xs px-3 py-1.5', md: 'text-sm px-4 py-2', lg: 'text-sm px-5 py-2.5' }
+  const sizes = {
+    sm: 'text-xs px-3 py-1.5',
+    md: 'text-sm px-4 py-2',
+    lg: 'text-sm px-5 py-2.5',
+  }
   return (
     <button
+      type={type}
       onClick={onClick}
       disabled={disabled}
-      className={`inline-flex items-center gap-2 font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${variants[variant]} ${sizes[size]} ${className}`}
+      className={`${base} ${sizes[size]} ${className}`}
+      style={variants[variant]}
     >
       {children}
     </button>
   )
 }
 
-// Card wrapper
-export function Card({ children, className = '' }) {
+// ── Card ──────────────────────────────────────────────────────────────────────
+export function Card({ children, className = '', hover = false }) {
   return (
-    <div className={`bg-white border border-[#e8e8e4] rounded-lg ${className}`}>
+    <div
+      className={`bg-white ${hover ? 'card-hover' : ''} ${className}`}
+      style={{ border: '1px solid #E8E9ED', borderRadius: '12px' }}
+    >
       {children}
     </div>
   )
 }
 
-// Empty state
+// ── EmptyState ────────────────────────────────────────────────────────────────
 export function EmptyState({ icon: Icon, title, description, action }) {
   return (
     <div className="flex flex-col items-center justify-center py-12 sm:py-20 px-4 text-center">
       {Icon && (
-        <div className="w-14 h-14 rounded-full bg-[#f5f5f0] flex items-center justify-center mb-4">
-          <Icon size={26} className="text-[#999]" strokeWidth={1.5} />
+        <div
+          className="w-14 h-14 rounded-full flex items-center justify-center mb-4"
+          style={{ backgroundColor: '#F2F3F7' }}
+        >
+          <Icon size={26} strokeWidth={1.5} style={{ color: '#D1D5E0' }} />
         </div>
       )}
-      <h3 className="text-sm font-semibold text-[#0f172a] mb-1">{title}</h3>
-      {description && <p className="text-xs text-[#888] mb-4 max-w-sm leading-relaxed">{description}</p>}
+      <h3 className="text-sm font-semibold mb-1" style={{ color: '#0F1117' }}>{title}</h3>
+      {description && (
+        <p className="text-xs mb-4 max-w-sm leading-relaxed" style={{ color: '#6B7280' }}>{description}</p>
+      )}
       {action && <div className="mt-2">{action}</div>}
     </div>
   )
 }
 
-// Skeleton loader
+// ── Skeleton ──────────────────────────────────────────────────────────────────
 export function Skeleton({ className = '' }) {
   return <div className={`skeleton rounded ${className}`} />
 }
 
-// Page-level loading scaffolds
+// ── PageLoadingShell ──────────────────────────────────────────────────────────
 export function PageLoadingShell({ stats = 4, children }) {
   return (
     <div className="p-4 lg:p-6 space-y-4 fade-in">
@@ -110,7 +139,11 @@ export function PageLoadingShell({ stats = 4, children }) {
       {stats > 0 && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {[...Array(stats)].map((_, i) => (
-            <div key={i} className="bg-white border border-[#e8e8e4] rounded-lg p-4 space-y-2">
+            <div
+              key={i}
+              className="bg-white p-4 space-y-2"
+              style={{ border: '1px solid #E8E9ED', borderRadius: '12px' }}
+            >
               <Skeleton className="h-3 w-20" />
               <Skeleton className="h-6 w-24" />
               <Skeleton className="h-3 w-16" />
@@ -125,12 +158,22 @@ export function PageLoadingShell({ stats = 4, children }) {
 
 export function TableSkeleton({ rows = 6, cols = 5 }) {
   return (
-    <div className="bg-white border border-[#e8e8e4] rounded-lg overflow-hidden">
-      <div className="border-b border-[#e8e8e4] px-4 py-3 grid gap-3" style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
+    <div className="bg-white overflow-hidden" style={{ border: '1px solid #E8E9ED', borderRadius: '12px' }}>
+      <div
+        className="px-4 py-3 grid gap-3"
+        style={{ gridTemplateColumns: `repeat(${cols}, 1fr)`, borderBottom: '1px solid #E8E9ED' }}
+      >
         {[...Array(cols)].map((_, i) => <Skeleton key={i} className="h-3 w-20" />)}
       </div>
       {[...Array(rows)].map((_, r) => (
-        <div key={r} className="border-b border-[#f5f5f0] last:border-0 px-4 py-3 grid gap-3" style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
+        <div
+          key={r}
+          className="px-4 py-3 grid gap-3"
+          style={{
+            gridTemplateColumns: `repeat(${cols}, 1fr)`,
+            borderBottom: r < rows - 1 ? '1px solid #F2F3F7' : 'none',
+          }}
+        >
           {[...Array(cols)].map((_, c) => <Skeleton key={c} className="h-3 w-full" />)}
         </div>
       ))}
@@ -139,11 +182,21 @@ export function TableSkeleton({ rows = 6, cols = 5 }) {
 }
 
 export function CardGridSkeleton({ count = 6, cols = 3 }) {
-  const colClass = { 1: 'grid-cols-1', 2: 'sm:grid-cols-2', 3: 'sm:grid-cols-2 lg:grid-cols-3', 4: 'sm:grid-cols-2 lg:grid-cols-4' }[cols] || 'sm:grid-cols-2 lg:grid-cols-3'
+  const colClass = {
+    1: 'grid-cols-1',
+    2: 'sm:grid-cols-2',
+    3: 'sm:grid-cols-2 lg:grid-cols-3',
+    4: 'sm:grid-cols-2 lg:grid-cols-4',
+  }[cols] || 'sm:grid-cols-2 lg:grid-cols-3'
+
   return (
     <div className={`grid grid-cols-1 ${colClass} gap-4`}>
       {[...Array(count)].map((_, i) => (
-        <div key={i} className="bg-white border border-[#e8e8e4] rounded-lg p-4 space-y-3">
+        <div
+          key={i}
+          className="bg-white p-4 space-y-3"
+          style={{ border: '1px solid #E8E9ED', borderRadius: '12px' }}
+        >
           <Skeleton className="h-3 w-16" />
           <Skeleton className="h-5 w-3/4" />
           <Skeleton className="h-3 w-full" />
@@ -157,23 +210,28 @@ export function CardGridSkeleton({ count = 6, cols = 3 }) {
   )
 }
 
-// Confirm dialog
+// ── ConfirmDialog ─────────────────────────────────────────────────────────────
 export function ConfirmDialog({ open, title, message, onConfirm, onCancel, danger }) {
   if (!open) return null
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm fade-in">
+      <div className="bg-white w-full max-w-sm fade-in" style={{ borderRadius: '16px', boxShadow: '0 4px 24px rgba(0,0,0,0.12)' }}>
         <div className="p-5">
-          <h3 className="text-sm font-bold text-[#0f172a] mb-2">{title}</h3>
-          <p className="text-xs text-[#666] leading-relaxed">{message}</p>
+          <h3 className="text-sm font-semibold mb-2" style={{ color: '#0F1117' }}>{title}</h3>
+          <p className="text-xs leading-relaxed" style={{ color: '#6B7280' }}>{message}</p>
         </div>
-        <div className="flex gap-2 p-4 border-t border-[#f0f0ec]">
-          <button onClick={onCancel} className="flex-1 text-sm px-4 py-2 border border-[#e8e8e4] rounded-lg hover:bg-[#f5f5f0] transition-colors">
+        <div className="flex gap-2 p-4" style={{ borderTop: '1px solid #E8E9ED' }}>
+          <button
+            onClick={onCancel}
+            className="flex-1 text-sm px-4 py-2 rounded-lg transition-all duration-150"
+            style={{ border: '1px solid #E8E9ED', color: '#0F1117', backgroundColor: '#FFFFFF' }}
+          >
             Ləğv et
           </button>
           <button
             onClick={onConfirm}
-            className={`flex-1 text-sm px-4 py-2 rounded-lg text-white transition-colors ${danger ? 'bg-red-600 hover:bg-red-700' : 'bg-[#0f172a] hover:bg-[#1e293b]'}`}
+            className="flex-1 text-sm px-4 py-2 rounded-lg text-white transition-all duration-150"
+            style={{ backgroundColor: danger ? '#DC2626' : '#4F6BFB' }}
           >
             {danger ? 'Sil' : 'Təsdiqlə'}
           </button>
@@ -183,16 +241,30 @@ export function ConfirmDialog({ open, title, message, onConfirm, onCancel, dange
   )
 }
 
-// Modal wrapper
+// ── Modal ─────────────────────────────────────────────────────────────────────
 export function Modal({ open, onClose, title, children, size = 'md' }) {
   if (!open) return null
-  const sizes = { sm: 'max-w-sm', md: 'max-w-lg', lg: 'max-w-2xl', xl: 'max-w-4xl' }
+  const maxWidths = { sm: '384px', md: '512px', lg: '672px', xl: '896px' }
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-start justify-center p-2 sm:p-4 overflow-y-auto">
-      <div className={`bg-white rounded-xl shadow-2xl w-full ${sizes[size]} fade-in my-2 sm:my-auto`}>
-        <div className="flex items-center justify-between px-4 sm:px-5 py-3 sm:py-4 border-b border-[#e8e8e4] sticky top-0 bg-white rounded-t-xl z-10">
-          <h3 className="text-sm font-bold text-[#0f172a] truncate pr-2">{title}</h3>
-          <button onClick={onClose} className="text-[#aaa] hover:text-[#555] transition-colors text-lg leading-none flex-shrink-0 w-8 h-8 flex items-center justify-center -mr-2">✕</button>
+      <div
+        className="bg-white w-full fade-in my-2 sm:my-8"
+        style={{ maxWidth: maxWidths[size], borderRadius: '16px', boxShadow: '0 4px 24px rgba(0,0,0,0.12)' }}
+      >
+        <div
+          className="flex items-center justify-between px-4 sm:px-5 py-3 sm:py-4 sticky top-0 bg-white rounded-t-2xl z-10"
+          style={{ borderBottom: '1px solid #E8E9ED' }}
+        >
+          <h3 className="text-sm font-semibold truncate pr-2" style={{ color: '#0F1117' }}>{title}</h3>
+          <button
+            onClick={onClose}
+            className="text-lg leading-none flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg transition-colors duration-150"
+            style={{ color: '#6B7280' }}
+            onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F2F3F7'}
+            onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+          >
+            ✕
+          </button>
         </div>
         <div className="p-4 sm:p-5">{children}</div>
       </div>

@@ -286,6 +286,7 @@ export default function SabitXerclerPage() {
   async function handleSave(form) {
     if (!form.name.trim() || !form.amount) { addToast('Ad və məbləğ daxil edin', 'error'); return }
     const amt = Number(form.amount)
+    if (amt <= 0) { addToast('Məbləğ sıfırdan böyük olmalıdır', 'error'); return }
     const isT = form.payment_method === 'transfer'
     const data = {
       name: form.name.trim(), amount: amt,

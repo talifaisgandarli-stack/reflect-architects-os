@@ -1,87 +1,101 @@
-import { useState } from 'react'
-import { NavLink, useNavigate, useLocation } from 'react-router-dom'
+import { NavLink } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import {
-  IconLayoutDashboard, IconBuildings, IconCheckbox, IconClock,
-  IconFileText, IconUsers, IconArrowRight, IconContract,
-  IconPhoto, IconArrowUp, IconArrowDown, IconUsersGroup,
-  IconMailDollar, IconArrowsExchange, IconUserCircle,
-  IconChartBar, IconRefresh, IconWallet,
-  IconSpeakerphone, IconCalendar, IconUmbrella, IconDeviceLaptop,
-  IconTarget, IconBrandInstagram, IconFolder, IconBook,
-  IconSettings, IconDatabase, IconChevronDown, IconChevronRight,
-  IconLogout, IconSearch, IconBell, IconHeartHandshake, IconStar, IconSitemap,
-  IconHome
+  IconLayoutDashboard, IconBuildings, IconCheckbox,
+  IconArchive, IconHeartHandshake, IconUsers,
+  IconCash, IconUsersGroup, IconWallet,
+  IconStar, IconUmbrella, IconCalendar,
+  IconSpeakerphone, IconDeviceLaptop,
+  IconTarget, IconSitemap, IconBrandInstagram,
+  IconSettings, IconLogout, IconHome,
 } from '@tabler/icons-react'
 
-const NAV_GROUPS = [
+// ── NAV DEFİNİTİON (final spec 2026-05-03) ──────────────────────────────────
+
+const ADMIN_GROUPS = [
   {
-    label: 'Layihə İdarəetməsi',
+    label: 'İŞ',
     items: [
-      { to: '/', icon: IconLayoutDashboard, label: 'Admin Dashboard', exact: true, adminOnly: true },
-      { to: '/employee-dashboard', icon: IconHome, label: 'Dashboard', exact: true, employeeOnly: true },
+      { to: '/', icon: IconLayoutDashboard, label: 'Dashboard', exact: true },
       { to: '/layiheler', icon: IconBuildings, label: 'Layihələr' },
       { to: '/tapshiriqlar', icon: IconCheckbox, label: 'Tapşırıqlar' },
-      { to: '/icazeler', icon: IconFileText, label: 'İcazə və Razılaşmalar' },
+      { to: '/arxiv', icon: IconArchive, label: 'Arxiv' },
       { to: '/podrat-isleri', icon: IconHeartHandshake, label: 'Podrat İşləri' },
-    ]
+    ],
   },
   {
-    label: 'Sifarişçilər',
-    adminOnly: true,
+    label: 'MÜŞTƏRİLƏR',
     items: [
-      { to: '/sifarisci-idareetme', icon: IconUsers, label: 'Sifarişçi İdarəetməsi' },
-      { to: '/pipeline', icon: IconArrowRight, label: 'Sifarişçi Pipeline' },
-      { to: '/kommersiya-teklifleri', icon: IconFileText, label: 'Kommersiya Təklifləri' },
-      { to: '/muqavileler', icon: IconContract, label: 'Müqavilələr' },
-      { to: '/portfel', icon: IconPhoto, label: 'Portfel' },
-    ]
+      { to: '/musteriler', icon: IconUsers, label: 'Müştərilər' },
+    ],
   },
   {
-    label: 'Maliyyə',
-    adminOnly: true,
+    label: 'MALİYYƏ MƏRKƏZİ',
     items: [
-      { to: '/daxilolmalar', icon: IconArrowUp, label: 'Daxilolmalar' },
-      { to: '/hesab-fakturalar', icon: IconFileText, label: 'Hesab-fakturalar' },
-      { to: '/xercler', icon: IconArrowDown, label: 'Xərclər' },
-      { to: '/debitor-borclar', icon: IconMailDollar, label: 'Debitor Borclar' },
-      { to: '/daxili-kocurmeler', icon: IconArrowsExchange, label: 'Daxili Köçürmələr' },
-      { to: '/tesisci-borclari', icon: IconUserCircle, label: 'Təsisçi Borcları' },
-      { to: '/hesabatlar', icon: IconChartBar, label: 'Hesabatlar' },
-      { to: '/sabit-xercler', icon: IconRefresh, label: 'Sabit Xərclər' },
-    ]
+      { to: '/maliyye-merkezi', icon: IconCash, label: 'Maliyyə Mərkəzi' },
+    ],
   },
   {
-    label: 'Komanda',
+    label: 'KOMANDA',
     items: [
       { to: '/isci-heyeti', icon: IconUsersGroup, label: 'İşçi Heyəti' },
-      { to: '/emek-haqqi', icon: IconWallet, label: 'Əmək haqqı' },
+      { to: '/emek-haqqi', icon: IconWallet, label: 'Əmək Haqqı' },
       { to: '/performans', icon: IconStar, label: 'Performans' },
-      { to: '/karyera-strukturu', icon: IconSitemap, label: 'Karyera Strukturu', adminOnly: true },
-      { to: '/elanlar', icon: IconSpeakerphone, label: 'Elanlar Lövhəsi' },
-      { to: '/hadiseler', icon: IconCalendar, label: 'Hadisələr Təqvimi' },
-      { to: '/mezuniyyet', icon: IconUmbrella, label: 'Məzuniyyət Cədvəli' },
+      { to: '/mezuniyyet', icon: IconUmbrella, label: 'Məzuniyyət' },
+      { to: '/hadiseler', icon: IconCalendar, label: 'Təqvim' },
+      { to: '/elanlar', icon: IconSpeakerphone, label: 'Elanlar' },
       { to: '/avadanliq', icon: IconDeviceLaptop, label: 'Avadanlıq' },
-    ]
+    ],
   },
   {
-    label: 'Şirkət',
+    label: 'ŞİRKƏT',
     items: [
-      { to: '/hedef-netice', icon: IconTarget, label: 'Hədəf və Nəticələr' },
-      { to: '/mezmun-planlamasi', icon: IconBrandInstagram, label: 'Məzmun Planlaması', adminOnly: true },
-      { to: '/sened-arxivi', icon: IconFolder, label: 'Sənəd Arxivi' },
-      { to: '/qaynaqlar', icon: IconBook, label: 'Qaynaqlar' },
-    ]
+      { to: '/hedef-netice', icon: IconTarget, label: 'OKR' },
+      { to: '/karyera-strukturu', icon: IconSitemap, label: 'Karyera Strukturu' },
+      { to: '/mezmun-planlamasi', icon: IconBrandInstagram, label: 'Məzmun Planlaması' },
+    ],
   },
   {
-    label: 'Sistem',
-    adminOnly: true,
+    label: 'SİSTEM',
     items: [
       { to: '/parametrler', icon: IconSettings, label: 'Parametrlər' },
-      { to: '/sistem-arxivi', icon: IconDatabase, label: 'Sistem Arxivi' },
-    ]
+    ],
   },
 ]
+
+const USER_GROUPS = [
+  {
+    label: 'İŞ',
+    items: [
+      { to: '/employee-dashboard', icon: IconHome, label: 'Dashboard', exact: true },
+      { to: '/layiheler', icon: IconBuildings, label: 'Layihələr' },
+      { to: '/tapshiriqlar', icon: IconCheckbox, label: 'Tapşırıqlar' },
+      { to: '/arxiv', icon: IconArchive, label: 'Arxiv' },
+      { to: '/podrat-isleri', icon: IconHeartHandshake, label: 'Podrat İşləri' },
+    ],
+  },
+  {
+    label: 'KOMANDA',
+    items: [
+      { to: '/isci-heyeti', icon: IconUsersGroup, label: 'İşçi Heyəti' },
+      { to: '/emek-haqqi', icon: IconWallet, label: 'Əmək Haqqı' },
+      { to: '/performans', icon: IconStar, label: 'Performans' },
+      { to: '/mezuniyyet', icon: IconUmbrella, label: 'Məzuniyyət' },
+      { to: '/hadiseler', icon: IconCalendar, label: 'Təqvim' },
+      { to: '/elanlar', icon: IconSpeakerphone, label: 'Elanlar' },
+      { to: '/avadanliq', icon: IconDeviceLaptop, label: 'Avadanlıq' },
+    ],
+  },
+  {
+    label: 'ŞİRKƏT',
+    items: [
+      { to: '/hedef-netice', icon: IconTarget, label: 'OKR' },
+      { to: '/karyera-strukturu', icon: IconSitemap, label: 'Karyera Strukturu' },
+    ],
+  },
+]
+
+// ── COMPONENTS ───────────────────────────────────────────────────────────────
 
 function NavItem({ item }) {
   return (
@@ -89,19 +103,26 @@ function NavItem({ item }) {
       to={item.to}
       end={item.exact}
       className={({ isActive }) =>
-        `sidebar-item flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs font-medium cursor-pointer group ${
+        `flex items-center gap-2.5 px-3 py-1.5 rounded-md text-[13px] transition-all duration-150 cursor-pointer group ${
           isActive
-            ? 'bg-[#0f172a] text-white'
-            : 'text-[#555] hover:bg-[#f5f5f0] hover:text-[#0f172a]'
+            ? 'bg-white/10 text-white'
+            : 'text-[#8B8FA8] hover:text-white hover:bg-white/6'
         }`
       }
     >
       {({ isActive }) => (
         <>
-          <item.icon size={14} className={isActive ? 'text-white' : 'text-[#999] group-hover:text-[#0f172a]'} />
-          <span className="flex-1 truncate">{item.label}</span>
+          <item.icon
+            size={15}
+            className="flex-shrink-0 transition-colors duration-150"
+            style={{ color: isActive ? '#FFFFFF' : '#8B8FA8' }}
+          />
+          <span className="flex-1 truncate font-[400]">{item.label}</span>
           {item.badge && (
-            <span className="bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">
+            <span
+              className="text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full"
+              style={{ backgroundColor: '#DC2626' }}
+            >
               {item.badge}
             </span>
           )}
@@ -112,81 +133,89 @@ function NavItem({ item }) {
 }
 
 function NavGroup({ group }) {
-  const [open, setOpen] = useState(true)
   return (
-    <div className="mb-3">
-      <button
-        onClick={() => setOpen(!open)}
-        className="w-full flex items-center gap-1 px-2.5 py-1 text-[9px] font-700 text-[#bbb] uppercase tracking-widest hover:text-[#888] transition-colors"
+    <div className="mb-4">
+      <div
+        className="px-3 py-1 text-[10px] font-[500] tracking-widest uppercase mb-1"
+        style={{ color: '#4B5060' }}
       >
-        {open ? <IconChevronDown size={10} /> : <IconChevronRight size={10} />}
         {group.label}
-      </button>
-      {open && (
-        <div className="space-y-0.5 mt-1">
-          {group.items.map(item => <NavItem key={item.to} item={item} />)}
-        </div>
-      )}
+      </div>
+      <div className="space-y-0.5">
+        {group.items.map(item => <NavItem key={item.to} item={item} />)}
+      </div>
     </div>
   )
 }
 
-export default function Sidebar({ onSearch, onClose }) {
-  const navigate = useNavigate()
+// ── MAIN SIDEBAR ─────────────────────────────────────────────────────────────
+
+export default function Sidebar() {
   const { profile, signOut, isAdmin } = useAuth()
 
   const initials = profile?.full_name
     ?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || '??'
 
-  const filteredGroups = NAV_GROUPS
-    .filter(group => isAdmin || !group.adminOnly)
-    .map(group => ({
-      ...group,
-      items: group.items.filter(item => {
-        if (item.adminOnly && !isAdmin) return false
-        if (item.employeeOnly && isAdmin) return false
-        return true
-      })
-    }))
-    .filter(group => group.items.length > 0)
+  const groups = isAdmin ? ADMIN_GROUPS : USER_GROUPS
 
   return (
-    <div className="flex flex-col h-full bg-white border-r border-[#e8e8e4]">
+    <div
+      className="flex flex-col h-full select-none"
+      style={{ backgroundColor: '#1A1D23', width: '220px' }}
+    >
       {/* Logo */}
-      <div className="px-4 py-4 border-b border-[#f0f0ec] flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 bg-[#0f172a] rounded-lg flex items-center justify-center">
-            <span className="text-white text-[9px] font-black tracking-wider">RA</span>
-          </div>
-          <div>
-            <div className="text-xs font-bold text-[#0f172a] leading-tight">Reflect</div>
-            <div className="text-[9px] text-[#aaa] leading-tight">Architects OS</div>
-          </div>
+      <div
+        className="px-4 py-5 flex items-center gap-3 flex-shrink-0"
+        style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}
+      >
+        <div
+          className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+          style={{ backgroundColor: '#4F6BFB' }}
+        >
+          <span className="text-white text-[9px] font-black tracking-wider">RA</span>
         </div>
-        <button onClick={onSearch} className="p-1.5 rounded-md hover:bg-[#f5f5f0] text-[#aaa] hover:text-[#555]">
-          <IconSearch size={14} />
-        </button>
+        <div>
+          <div className="text-[13px] font-semibold text-white leading-tight">Reflect</div>
+          <div className="text-[10px] leading-tight" style={{ color: '#4B5060' }}>Architects OS</div>
+        </div>
       </div>
 
       {/* Nav */}
-      <div className="flex-1 overflow-y-auto px-3 py-3">
-        {filteredGroups.map(group => (
+      <div className="flex-1 overflow-y-auto px-2 py-4 scrollbar-thin">
+        {groups.map(group => (
           <NavGroup key={group.label} group={group} />
         ))}
       </div>
 
-      {/* User */}
-      <div className="px-3 py-3 border-t border-[#f0f0ec]">
-        <div className="flex items-center gap-2.5 px-2 py-2 rounded-lg hover:bg-[#f5f5f0] cursor-pointer group">
-          <div className="w-7 h-7 rounded-full bg-[#0f172a] flex items-center justify-center flex-shrink-0">
+      {/* User footer */}
+      <div
+        className="px-2 py-3 flex-shrink-0"
+        style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}
+      >
+        <div className="flex items-center gap-2.5 px-3 py-2 rounded-md cursor-pointer group hover:bg-white/6 transition-colors duration-150">
+          <div
+            className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0"
+            style={{ backgroundColor: '#4F6BFB' }}
+          >
             <span className="text-white text-[10px] font-bold">{initials}</span>
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-xs font-medium text-[#0f172a] truncate">{profile?.full_name || 'İstifadəçi'}</div>
-            <div className="text-[10px] text-[#aaa] truncate">{isAdmin ? 'Admin' : 'İşçi'}</div>
+            <div className="text-[12px] font-medium text-white truncate">
+              {profile?.full_name || 'İstifadəçi'}
+            </div>
+            <div className="text-[10px] truncate" style={{ color: '#4B5060' }}>
+              {isAdmin ? 'Admin' : 'İşçi'}
+            </div>
           </div>
-          <button onClick={signOut} className="opacity-0 group-hover:opacity-100 p-1 text-[#aaa] hover:text-red-500 transition-opacity">
-            <IconLogout size={13} />
+          <button
+            onClick={signOut}
+            className="opacity-0 group-hover:opacity-100 p-1 rounded transition-all duration-150"
+            style={{ color: '#8B8FA8' }}
+            onMouseEnter={e => e.currentTarget.style.color = '#DC2626'}
+            onMouseLeave={e => e.currentTarget.style.color = '#8B8FA8'}
+            title="Çıxış"
+          >
+            <IconLogout size={14} />
           </button>
         </div>
       </div>

@@ -6,12 +6,22 @@ export default function ProtectedRoute({ children }) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#f5f5f0] flex items-center justify-center">
+      <div
+        className="min-h-screen flex items-center justify-center"
+        style={{
+          backgroundColor: '#F2F3F7',
+          backgroundImage: 'radial-gradient(circle, #D1D5E0 1px, transparent 1px)',
+          backgroundSize: '20px 20px',
+        }}
+      >
         <div className="text-center">
-          <div className="w-10 h-10 bg-[#0f172a] rounded-xl flex items-center justify-center mx-auto mb-3">
+          <div
+            className="w-10 h-10 rounded-xl flex items-center justify-center mx-auto mb-3"
+            style={{ backgroundColor: '#4F6BFB' }}
+          >
             <span className="text-white text-sm font-bold">RA</span>
           </div>
-          <div className="text-xs text-[#aaa]">Yüklənir...</div>
+          <div className="text-xs" style={{ color: '#6B7280' }}>Yüklənir...</div>
         </div>
       </div>
     )

@@ -7,8 +7,7 @@ const supabase = createClient(
 
 const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY
 const BOT_TOKEN      = process.env.TELEGRAM_BOT_TOKEN
-const TG_API       = `https://api.telegram.org/bot${BOT_TOKEN}`
-const NICAT_EMAIL  = 'nusalov.n@reflect.az'
+const TG_API         = `https://api.telegram.org/bot${BOT_TOKEN}`
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -79,6 +78,20 @@ async function db(table, query) {
   }
 }
 
+// BD head email — stored in system_settings as 'bd_head_email'
+// Falls back to empty (notifications silently skipped) if not configured.
+let _bdHeadEmail = null
+async function getBdHeadEmail() {
+  if (_bdHeadEmail !== null) return _bdHeadEmail
+  const { data } = await supabase
+    .from('system_settings')
+    .select('value')
+    .eq('key', 'bd_head_email')
+    .single()
+  _bdHeadEmail = data?.value || ''
+  return _bdHeadEmail
+}
+
 async function getProfiles(filter) {
   const { data } = await supabase
     .from('profiles')
@@ -88,7 +101,10 @@ async function getProfiles(filter) {
   const all = data || []
   if (filter === 'admins') return all.filter(p => (p.roles?.level ?? 99) <= 2)
   if (filter === 'bd')     return all.filter(p => (p.roles?.level ?? 99) <= 3)
-  if (filter === 'nicat')  return all.filter(p => p.email === NICAT_EMAIL)
+  if (filter === 'bd_head') {
+    const email = await getBdHeadEmail()
+    return email ? all.filter(p => p.email === email) : []
+  }
   return all
 }
 
@@ -101,9 +117,12 @@ function date(d) {
 }
 
 function days(due) {
-  const t = new Date(); t.setHours(0,0,0,0)
-  const d = new Date(due); d.setHours(0,0,0,0)
-  return Math.floor((d - t) / 86400000)
+  // Use Bakı (UTC+4) midnight to avoid off-by-one near midnight UTC
+  const bakuNow = new Date(Date.now() + BAKU_OFFSET)
+  const bakuToday = new Date(bakuNow.getUTCFullYear(), bakuNow.getUTCMonth(), bakuNow.getUTCDate())
+  const d = new Date(due)
+  const dLocal = new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())
+  return Math.floor((dLocal - bakuToday) / 86400000)
 }
 
 const BAKU_OFFSET = 4 * 3600000 // UTC+4
@@ -382,9 +401,9 @@ export default async function handler(req, res) {
     // 4. NİCAT GÜNÜN GÖRÜŞÜ — 09:30
     // ══════════════════════════════════════════════════════════════════════════
     if (type === 'nicat_events') {
-      const nicats = await getProfiles('nicat')
+      const nicats = await getProfiles('bd_head')
       const nicat  = nicats[0]
-      if (!nicat) return res.json({ success: false, note: 'Nicat not found or no Telegram' })
+      if (!nicat) return res.json({ success: false, note: 'BD head not found or no Telegram. Set bd_head_email in system_settings.' })
 
       const td = today()
       const { data: events } = await supabase

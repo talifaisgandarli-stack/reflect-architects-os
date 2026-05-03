@@ -276,7 +276,7 @@ export default function MainLayout() {
   const initials = profile?.full_name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'RA'
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#fafaf8]">
+    <div className="flex h-screen overflow-hidden" style={{ backgroundColor: '#F2F3F7' }}>
 
       {/* Mobile overlay */}
       {sidebarOpen && (
@@ -288,7 +288,7 @@ export default function MainLayout() {
 
       {/* Sidebar */}
       <div className={`
-        fixed lg:static inset-y-0 left-0 z-50 lg:z-auto
+        fixed lg:static inset-y-0 left-0 z-50 lg:z-auto flex-shrink-0
         transform transition-transform duration-200 ease-in-out
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
@@ -302,7 +302,10 @@ export default function MainLayout() {
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
 
         {/* Top bar */}
-        <div className="h-11 bg-white border-b border-[#e8e8e4] flex items-center px-3 lg:px-5 gap-3 flex-shrink-0">
+        <div
+          className="h-11 flex items-center px-3 lg:px-5 gap-3 flex-shrink-0"
+          style={{ backgroundColor: '#FFFFFF', borderBottom: '1px solid #E8E9ED' }}
+        >
 
           {/* Hamburger */}
           <button
@@ -351,17 +354,27 @@ export default function MainLayout() {
 
           {/* User */}
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 bg-[#0f172a] rounded-full flex items-center justify-center flex-shrink-0">
+            <div
+              className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0"
+              style={{ backgroundColor: '#4F6BFB' }}
+            >
               <span className="text-white text-[9px] font-bold">{initials}</span>
             </div>
-            <span className="text-xs text-[#0f172a] font-medium hidden sm:block">
+            <span className="text-xs font-medium hidden sm:block" style={{ color: '#0F1117' }}>
               {profile?.full_name?.split(' ')[0] || 'İstifadəçi'}
             </span>
           </div>
         </div>
 
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto">
+        {/* Content — dot grid background */}
+        <div
+          className="flex-1 overflow-y-auto"
+          style={{
+            backgroundColor: '#F2F3F7',
+            backgroundImage: 'radial-gradient(circle, #D1D5E0 1px, transparent 1px)',
+            backgroundSize: '20px 20px',
+          }}
+        >
           <Outlet />
         </div>
       </div>

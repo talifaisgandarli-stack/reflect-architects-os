@@ -57,9 +57,10 @@ export function AuthProvider({ children }) {
   const roleLevel = (profile && profile.roles && typeof profile.roles.level === 'number')
     ? profile.roles.level
     : 99
-  const isAdmin = roleLevel <= 2
+  const isCreator = profile?.is_creator === true
+  const isAdmin = isCreator || roleLevel <= 2
 
-  const value = { user, profile, loading, isAdmin, roleLevel, signIn, signOut }
+  const value = { user, profile, loading, isAdmin, isCreator, roleLevel, signIn, signOut }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

@@ -71,6 +71,8 @@ function MentionInput({ value, onChange, onMentionsChange, members, placeholder,
     if (lastAt === -1) { setShow(false); return }
     const afterAt = v.slice(lastAt + 1)
     if (lastAt === v.length - 1) { setShow(true); setQuery(''); return }
+    // Don't trigger dropdown inside an already-inserted @[uuid] token
+    if (afterAt.startsWith('[')) { setShow(false); return }
     if (!afterAt.includes(' ') || afterAt.length < 30) {
       setShow(true)
       setQuery(afterAt)
@@ -81,10 +83,10 @@ function MentionInput({ value, onChange, onMentionsChange, members, placeholder,
 
   function pick(m) {
     const lastAt = value.lastIndexOf('@')
-    onChange(value.slice(0, lastAt) + '@' + m.full_name + ' ')
+    // Store @[uuid] in text — stable even if name changes
+    onChange(value.slice(0, lastAt) + '@[' + m.id + '] ')
     setShow(false)
     setQuery('')
-    // Track picked user by ID — stable, independent of name changes
     const updated = mentionIds.includes(m.id) ? mentionIds : [...mentionIds, m.id]
     setMentionIds(updated)
     onMentionsChange?.(updated)
@@ -726,8 +728,12 @@ function DetailPanel({ task, projects, members, onClose, onEdit, onDelete, onSta
                   const author = members.find(m => m.id === c.author_id)
                   const isMe = c.author_id === user?.id
                   const mentions = c.metadata?.mentions || []
-                  // Highlight mentions in text
-                  const highlighted = c.content.replace(/@([\w\s]+?)(?= |$)/g, (match) => `__MENTION__${match}__END__`)
+                  // Decode @[uuid] → @FirstName; keep backward compat for old @full_name format
+                  const decoded = c.content.replace(/@\[([0-9a-f-]{36})\]/g, (_, id) => {
+                    const mb = members.find(m => m.id === id)
+                    return '@' + (mb?.full_name?.split(' ')[0] || '?')
+                  })
+                  const highlighted = decoded.replace(/@([\w\s]+?)(?= |$)/g, (match) => `__MENTION__${match}__END__`)
                   const parts = highlighted.split(/__MENTION__|__END__/)
                   return (
                     <div key={c.id} className={`flex gap-2.5 ${isMe ? 'flex-row-reverse' : ''}`}>
