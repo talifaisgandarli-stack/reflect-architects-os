@@ -1156,6 +1156,40 @@ function ArchiveModal({ open, onClose, tasks, projects, members, checkCounts, on
   )
 }
 
+// ─── CancelDialog ─────────────────────────────────────────────────────────────
+function CancelDialog({ open, task, onConfirm, onClose }) {
+  const [reason, setReason] = useState(CANCEL_REASONS[0])
+  if (!open) return null
+  return (
+    <Modal open={open} onClose={onClose} title="Tapşırığı ləğv et">
+      <div className="p-4 space-y-4">
+        <p className="text-sm text-[#555]">
+          <span className="font-medium text-[#0f172a]">"{task?.title}"</span> tapşırığını ləğv etmək üçün səbəb seçin:
+        </p>
+        <div className="space-y-2.5">
+          {CANCEL_REASONS.map(r => (
+            <label key={r} className="flex items-center gap-2.5 cursor-pointer">
+              <input type="radio" name="cancel_reason" value={r} checked={reason === r}
+                onChange={() => setReason(r)} className="w-4 h-4 accent-[#ef4444]" />
+              <span className={`text-sm ${reason === r ? 'text-[#0f172a] font-medium' : 'text-[#555]'}`}>{r}</span>
+            </label>
+          ))}
+        </div>
+        <div className="flex gap-2 pt-2">
+          <button onClick={onClose}
+            className="flex-1 px-4 py-2 text-sm border border-[#e8e8e4] rounded-lg text-[#555] hover:bg-[#f5f5f0] transition-colors">
+            Geri
+          </button>
+          <button onClick={() => onConfirm(reason)}
+            className="flex-1 px-4 py-2 text-sm bg-[#ef4444] text-white rounded-lg hover:bg-[#dc2626] transition-colors font-medium">
+            Ləğv edildi kimi işarələ
+          </button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export default function TapshiriqlarPage() {
   const { addToast } = useToast()
@@ -1458,14 +1492,14 @@ export default function TapshiriqlarPage() {
     if (filterOverdue) {
       const d = daysLeft(t.due_date)
       const hasOverdueCheck = (checkCounts[t.id]?.overdueItems||[]).length > 0
-      if (t.status==='Tamamlandı' && !hasOverdueCheck) return false
+      if ((t.status==='Tamamlandı' || t.status==='Cancelled') && !hasOverdueCheck) return false
       if (d!==null && d>=0 && !hasOverdueCheck) return false
       if (d===null && !hasOverdueCheck) return false
     }
     return true
   })
   const tasksByCol = Object.fromEntries(COLUMNS.map(c => [c.key, filtered.filter(t => t.status===c.key)]))
-  const overdueCount = activeTasks.filter(t => { const d=daysLeft(t.due_date); return t.status!=='Tamamlandı'&&d!==null&&d<0 }).length
+  const overdueCount = activeTasks.filter(t => { const d=daysLeft(t.due_date); return t.status!=='Tamamlandı'&&t.status!=='Cancelled'&&d!==null&&d<0 }).length
   const overdueSubtaskCount = (() => {
     const todayLocal = new Date()
     todayLocal.setHours(0,0,0,0)
@@ -1564,8 +1598,9 @@ export default function TapshiriqlarPage() {
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <div className="flex border border-[#e8e8e4] rounded-lg overflow-hidden">
-              <button onClick={() => setView('kanban')} className={`px-2.5 py-1.5 transition-colors ${view==='kanban'?'bg-[#0f172a] text-white':'text-[#555] hover:bg-[#f5f5f0]'}`}><IconLayoutKanban size={14}/></button>
-              <button onClick={() => setView('list')}   className={`px-2.5 py-1.5 transition-colors ${view==='list'  ?'bg-[#0f172a] text-white':'text-[#555] hover:bg-[#f5f5f0]'}`}><IconList size={14}/></button>
+              <button onClick={() => setView('kanban')}  className={`px-2.5 py-1.5 transition-colors ${view==='kanban'  ?'bg-[#0f172a] text-white':'text-[#555] hover:bg-[#f5f5f0]'}`}><IconLayoutKanban size={14}/></button>
+              <button onClick={() => setView('list')}    className={`px-2.5 py-1.5 transition-colors ${view==='list'    ?'bg-[#0f172a] text-white':'text-[#555] hover:bg-[#f5f5f0]'}`}><IconList size={14}/></button>
+              <button onClick={() => setView('mytasks')} className={`px-2.5 py-1.5 transition-colors ${view==='mytasks' ?'bg-[#4F6BFB] text-white':'text-[#555] hover:bg-[#f5f5f0]'}`} title="Mənim tapşırıqlarım"><IconUser size={14}/></button>
             </div>
             <button onClick={() => setArchiveOpen(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 border border-[#e8e8e4] rounded-lg text-xs text-[#555] hover:border-[#0f172a] transition-colors">
@@ -1779,6 +1814,104 @@ export default function TapshiriqlarPage() {
         </div>
       )}
 
+      {/* ── My Tasks view ── */}
+      {view === 'mytasks' && (() => {
+        const myTasks = activeTasks.filter(t =>
+          (t.assignee_ids||[]).includes(user?.id) || t.assignee_id === user?.id
+        ).filter(t => t.status !== 'Cancelled' && t.status !== 'Tamamlandı')
+        const myDone = activeTasks.filter(t =>
+          ((t.assignee_ids||[]).includes(user?.id) || t.assignee_id === user?.id) &&
+          (t.status === 'Tamamlandı' || t.status === 'Cancelled')
+        )
+        const activeStatuses = COLUMNS.filter(c => c.key !== 'Tamamlandı' && c.key !== 'Cancelled')
+        return (
+          <div className="flex-1 overflow-auto px-4 lg:px-6 py-4 space-y-4">
+            {myTasks.length === 0 && myDone.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-20 text-center">
+                <div className="w-12 h-12 bg-[#f5f5f0] rounded-full flex items-center justify-center mb-3">
+                  <IconUser size={22} className="text-[#bbb]" />
+                </div>
+                <p className="text-sm font-medium text-[#0f172a]">Sizə tapşırılmış tapşırıq yoxdur</p>
+                <p className="text-xs text-[#aaa] mt-1">Sizə tapşırıq təyin edildikdə burada görünəcək</p>
+              </div>
+            )}
+            {activeStatuses.map(colDef => {
+              const colTasks = myTasks.filter(t => t.status === colDef.key)
+              if (colTasks.length === 0) return null
+              return (
+                <div key={colDef.key}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-2 h-2 rounded-full" style={{background: colDef.color}} />
+                    <span className="text-xs font-semibold text-[#0f172a]">{colDef.label}</span>
+                    <span className="text-[10px] text-[#aaa] bg-[#f5f5f0] px-1.5 py-0.5 rounded-full">{colTasks.length}</span>
+                  </div>
+                  <div className="bg-white border border-[#e8e8e4] rounded-2xl overflow-hidden">
+                    {colTasks.map((task, idx) => {
+                      const project = projects.find(p => p.id === task.project_id)
+                      const d = daysLeft(task.due_date)
+                      const overdue = d !== null && d < 0
+                      const cc = checkCounts[task.id]||{done:0,total:0}
+                      return (
+                        <div key={task.id}
+                          className={`flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-[#fafaf8] transition-colors ${idx < colTasks.length-1 ? 'border-b border-[#f5f5f0]' : ''}`}
+                          onClick={() => setDetailTask(task)}>
+                          <div className="w-[3px] h-8 rounded-full flex-shrink-0" style={{background: prio(task.priority).color}} />
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs font-medium text-[#0f172a] truncate">{task.title}</div>
+                            {project && <div className="text-[9px] mt-0.5" style={{color: projClr(project.id, projects)}}>{project.name}</div>}
+                          </div>
+                          {cc.total > 0 && (
+                            <span className="text-[9px] text-[#aaa] flex-shrink-0">{cc.done}/{cc.total}</span>
+                          )}
+                          {task.due_date && (
+                            <span className={`text-[9px] flex-shrink-0 font-medium ${overdue ? 'text-[#ef4444]' : 'text-[#94a3b8]'}`}>
+                              {overdue ? `${Math.abs(d)}g gecikmiş` : d === 0 ? 'Bu gün' : `${d}g qaldı`}
+                            </span>
+                          )}
+                          <select
+                            value={task.status}
+                            onClick={e => e.stopPropagation()}
+                            onChange={e => handleStatusChange(task, e.target.value)}
+                            className="text-[9px] border border-[#e8e8e4] rounded-lg px-1.5 py-1 bg-white text-[#555] cursor-pointer flex-shrink-0">
+                            {COLUMNS.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
+                          </select>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })}
+            {myDone.length > 0 && (
+              <details className="group">
+                <summary className="flex items-center gap-2 cursor-pointer mb-2 list-none">
+                  <div className="w-2 h-2 rounded-full bg-[#94a3b8]" />
+                  <span className="text-xs font-semibold text-[#94a3b8]">Tamamlanmış / Ləğv edilmiş</span>
+                  <span className="text-[10px] text-[#aaa] bg-[#f5f5f0] px-1.5 py-0.5 rounded-full">{myDone.length}</span>
+                </summary>
+                <div className="bg-white border border-[#e8e8e4] rounded-2xl overflow-hidden opacity-60">
+                  {myDone.map((task, idx) => {
+                    const project = projects.find(p => p.id === task.project_id)
+                    const cl = col(task.status)
+                    return (
+                      <div key={task.id}
+                        className={`flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-[#fafaf8] ${idx < myDone.length-1 ? 'border-b border-[#f5f5f0]' : ''}`}
+                        onClick={() => setDetailTask(task)}>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs text-[#bbb] line-through truncate">{task.title}</div>
+                          {project && <div className="text-[9px] mt-0.5 text-[#ccc]">{project.name}</div>}
+                        </div>
+                        <span className="text-[9px] px-1.5 py-0.5 rounded-full flex-shrink-0" style={{background:cl.bg,color:cl.color}}>{cl.label}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </details>
+            )}
+          </div>
+        )
+      })()}
+
       {detailTask && (
         <DetailPanel task={detailTask} projects={projects} members={members}
           onClose={() => setDetailTask(null)}
@@ -1797,6 +1930,8 @@ export default function TapshiriqlarPage() {
         message={`Bu tapşırıqda ${doneWarn?.incomplete} tamamlanmamış alt tapşırıq var. Yenə də "Tamamlandı" kimi işarələmək istəyirsiniz?`}
         onConfirm={() => { const w = doneWarn; setDoneWarn(null); _doStatusChange(w.task, w.newStatus) }}
         onCancel={() => setDoneWarn(null)} />
+      <CancelDialog open={!!cancelDialog} task={cancelDialog?.task}
+        onConfirm={handleCancelConfirm} onClose={() => setCancelDialog(null)} />
       <ArchiveModal open={archiveOpen} onClose={() => setArchiveOpen(false)}
         tasks={tasks} projects={projects} members={members} checkCounts={checkCounts} onUnarchive={handleUnarchive} />
     </div>
