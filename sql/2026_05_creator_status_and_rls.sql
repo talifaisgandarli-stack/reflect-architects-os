@@ -67,8 +67,8 @@ CREATE POLICY "okrs_write_role_based" ON okrs
 
 -- ── 7. Seed system_settings for bd_head_email ────────────────────────────────
 -- Set real email after running this migration
-INSERT INTO system_settings (key, value, label, description)
-VALUES ('bd_head_email', '', 'BD Rəhbərinin E-poçtu', 'Günlük görüş brifinqi bu e-poçta göndərilir')
+INSERT INTO system_settings (key, value)
+VALUES ('bd_head_email', '')
 ON CONFLICT (key) DO NOTHING;
 
 -- ── Verification ──────────────────────────────────────────────────────────────
