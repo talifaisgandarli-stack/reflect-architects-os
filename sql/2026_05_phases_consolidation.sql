@@ -3,38 +3,37 @@
 -- Keeps phase column (NOT dropped per zero-data-loss rule).
 -- Idempotent: safe to re-run.
 
--- 1. Add phases column (text[]) — or convert if it already exists as jsonb
--- Note: ALTER COLUMN TYPE USING cannot contain subqueries in Postgres,
--- so we create a helper function first, use it, then drop it.
+-- 1. Add phases column or convert from jsonb → text[]
+-- CRITICAL: ALTER TABLE ... USING cannot use subqueries, even inside a DO block.
+-- Solution: create helper function at top level, call it in USING, then drop it.
 
-CREATE OR REPLACE FUNCTION _tmp_jsonb_to_text_arr(j jsonb)
+CREATE OR REPLACE FUNCTION _tmp_phases_convert(j jsonb)
 RETURNS text[] LANGUAGE sql IMMUTABLE AS $$
   SELECT CASE
     WHEN j IS NULL OR j::text = 'null' OR jsonb_array_length(j) = 0
-      THEN '{}'::text[]
+    THEN '{}'::text[]
     ELSE ARRAY(SELECT jsonb_array_elements_text(j))
   END
 $$;
 
+-- Add column if it doesn't exist yet
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS phases text[] DEFAULT '{}';
+
+-- If column is jsonb, convert it (idempotent: no-op if already text[])
 DO $$
 BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_name = 'projects' AND column_name = 'phases'
-  ) THEN
-    ALTER TABLE projects ADD COLUMN phases text[] DEFAULT '{}';
-  ELSIF EXISTS (
+  IF EXISTS (
     SELECT 1 FROM information_schema.columns
     WHERE table_name = 'projects' AND column_name = 'phases'
       AND data_type = 'jsonb'
   ) THEN
-    ALTER TABLE projects ALTER COLUMN phases TYPE text[]
-      USING _tmp_jsonb_to_text_arr(phases);
-    ALTER TABLE projects ALTER COLUMN phases SET DEFAULT '{}';
+    -- Run as dynamic SQL so ALTER TABLE executes outside PL/pgSQL USING restriction
+    EXECUTE 'ALTER TABLE projects ALTER COLUMN phases TYPE text[] USING _tmp_phases_convert(phases)';
+    EXECUTE 'ALTER TABLE projects ALTER COLUMN phases SET DEFAULT ''{}''';
   END IF;
 END $$;
 
-DROP FUNCTION IF EXISTS _tmp_jsonb_to_text_arr(jsonb);
+DROP FUNCTION IF EXISTS _tmp_phases_convert(jsonb);
 
 -- 2. Backfill: where phases is empty but phase exists
 UPDATE projects
