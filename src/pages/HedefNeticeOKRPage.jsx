@@ -228,7 +228,7 @@ export default function HedefNeticeOKRPage() {
   const [editOkr,    setEditOkr]    = useState(null)
   const [deleteOkr,  setDeleteOkr]  = useState(null)
   const [filterQ,    setFilterQ]    = useState('all')
-  const [activeTab,  setActiveTab]  = useState('company')
+  const [activeTab,  setActiveTab]  = useState(isAdmin ? 'company' : 'personal')
   const [selectedId, setSelectedId] = useState(null) // personal tab-da seçilmiş işçi
   const year = new Date().getFullYear()
 

@@ -147,7 +147,7 @@ export default function HesabatlarPage() {
           <div className="flex items-center gap-2">
             <select value={year} onChange={e => setYear(Number(e.target.value))}
               className="px-3 py-1.5 border border-[#e8e8e4] rounded-lg text-xs focus:outline-none focus:border-[#0f172a]">
-              {[2024, 2025, 2026, 2027].map(y => <option key={y} value={y}>{y}</option>)}
+              {Array.from({length: 5}, (_, i) => new Date().getFullYear() - 2 + i).map(y => <option key={y} value={y}>{y}</option>)}
             </select>
             <select value={filterMonth} onChange={e => setFilterMonth(Number(e.target.value))}
               className="px-3 py-1.5 border border-[#e8e8e4] rounded-lg text-xs focus:outline-none focus:border-[#0f172a]">

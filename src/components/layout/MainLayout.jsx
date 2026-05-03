@@ -156,7 +156,7 @@ export default function MainLayout() {
       const results = [
         ...(tRes.data || []).filter(t => isAdmin || !t.is_hidden).map(t => ({ type: 'task', id: t.id, label: t.title, sub: t.status, link: '/tapshiriqlar?task=' + t.id })),
         ...(pRes.data || []).map(p => ({ type: 'project', id: p.id, label: p.name, sub: p.status, link: '/layiheler' })),
-        ...(cRes.data || []).map(c => ({ type: 'client', id: c.id, label: c.full_name, sub: c.status, link: '/sifarisci-idareetme' })),
+        ...(cRes.data || []).map(c => ({ type: 'client', id: c.id, label: c.full_name, sub: c.status, link: '/musteriler' })),
       ]
       setSearchResults(results)
       setSearchBusy(false)

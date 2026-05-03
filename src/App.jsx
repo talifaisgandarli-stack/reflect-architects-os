@@ -90,12 +90,12 @@ export default function App() {
               <Route index element={
                 <Suspense fallback={<PageLoader />}><RoleBasedDashboard /></Suspense>
               } />
-              <Route path="employee-dashboard" element={<Suspense fallback={<PageLoader />}><EmployeeDashboardPage /></Suspense>} />
+              <Route path="employee-dashboard" element={<AdminRoute><Suspense fallback={<PageLoader />}><EmployeeDashboardPage /></Suspense></AdminRoute>} />
               <Route path="layiheler"             element={<Suspense fallback={<PageLoader />}><LayihelerPage /></Suspense>} />
               <Route path="tapshiriqlar"          element={<Suspense fallback={<PageLoader />}><TapshiriqlarPage /></Suspense>} />
               <Route path="icazeler"              element={<CS t="İcazə və Razılaşmalar" />} />
-              <Route path="sifarisci-idareetme"   element={<AdminRoute><Suspense fallback={<PageLoader />}><SifarisciIdareetmesiPage /></Suspense></AdminRoute>} />
-              <Route path="pipeline"              element={<AdminRoute><Suspense fallback={<PageLoader />}><PipelinePage /></Suspense></AdminRoute>} />
+              <Route path="sifarisci-idareetme"   element={<Navigate to="/musteriler" replace />} />
+              <Route path="pipeline"              element={<Navigate to="/musteriler" replace />} />
               <Route path="kommersiya-teklifleri" element={<AdminRoute><Suspense fallback={<PageLoader />}><KommersiyaTeklifleriPage /></Suspense></AdminRoute>} />
               <Route path="muqavileler"           element={<AdminRoute><Suspense fallback={<PageLoader />}><MuqavilelerPage /></Suspense></AdminRoute>} />
               <Route path="portfel"               element={<Suspense fallback={<PageLoader />}><PortfelPage /></Suspense>} />
@@ -126,7 +126,6 @@ export default function App() {
               {/* Legacy routes — kept for backward compat, not in nav */}
               <Route path="sened-arxivi"          element={<Suspense fallback={<PageLoader />}><SendArxiviPage /></Suspense>} />
               <Route path="qaynaqlar"             element={<Suspense fallback={<PageLoader />}><QaynaqlarPage /></Suspense>} />
-              <Route path="hesab-fakturalar"      element={<AdminRoute><Suspense fallback={<PageLoader />}><HesabFakturalarPage /></Suspense></AdminRoute>} />
               <Route path="sistem-arxivi"         element={<AdminRoute><CS t="Sistem Arxivi" /></AdminRoute>} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />

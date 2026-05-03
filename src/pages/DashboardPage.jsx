@@ -51,8 +51,8 @@ export default function DashboardPage() {
       const [projectsRes, incomesRes, debtsRes, expensesRes, tasksRes] = await Promise.all([
         supabase.from('projects').select('id, name, contract_value, status, deadline, client_id, clients(name)'),
         supabase.from('incomes').select('amount, payment_date, payment_method, edv_amount, amount_with_edv'),
-        supabase.from('receivables').select('expected_amount, paid_amount, expected_date, paid'),
-        supabase.from('expenses').select('amount, payment_method, category, edv_amount, amount_with_edv'),
+        supabase.from('receivables').select('expected_amount, paid_amount, expected_date, paid, project_id, projects(name, clients(name))'),
+        supabase.from('expenses').select('amount, expense_date, payment_method, category, edv_amount, amount_with_edv'),
         supabase.from('tasks').select('status, due_date'),
       ])
 
@@ -110,10 +110,9 @@ export default function DashboardPage() {
         t.due_date && t.due_date < today.toISOString().split('T')[0] && t.status !== 'done'
       ).length
 
-      const currentYear = new Date().getFullYear()
       const monthlyIncome = MONTHS.map((month, idx) => {
-        const total = incomes
-          .filter(i => getLocalYear(i.payment_date) === currentYear && getLocalMonth(i.payment_date) === idx + 1)
+        const total = allIncomes
+          .filter(i => getLocalYear(i.payment_date) === filterYear && getLocalMonth(i.payment_date) === idx + 1)
           .reduce((s, i) => s + Number(i.amount || 0), 0)
         return { month, amount: total }
       })
@@ -139,7 +138,7 @@ export default function DashboardPage() {
       const aging = { '0–30 gün': 0, '31–60 gün': 0, '60+ gün': 0 }
       const overdueReceivables = []
       const todayStr = today.toISOString().split('T')[0]
-      debts.filter(d => !d.paid).forEach(d => {
+      debts.filter(d => !d.paid && matchesPeriod(d.expected_date)).forEach(d => {
         if (!d.expected_date) return
         const days = daysBetween(d.expected_date, todayStr) ?? 0
         const amount = (Number(d.expected_amount) || 0) - (Number(d.paid_amount) || 0)
@@ -305,7 +304,7 @@ export default function DashboardPage() {
       <div className="flex gap-2 items-center">
         <select value={filterYear} onChange={e => setFilterYear(Number(e.target.value))}
           className="px-3 py-1.5 border border-[#e8e8e4] rounded-lg text-xs focus:outline-none focus:border-[#0f172a]">
-          {[2024, 2025, 2026, 2027].map(y => <option key={y} value={y}>{y}</option>)}
+          {Array.from({length: 5}, (_, i) => new Date().getFullYear() - 2 + i).map(y => <option key={y} value={y}>{y}</option>)}
         </select>
         <select value={filterMonth} onChange={e => setFilterMonth(Number(e.target.value))}
           className="px-3 py-1.5 border border-[#e8e8e4] rounded-lg text-xs focus:outline-none focus:border-[#0f172a]">
@@ -397,7 +396,7 @@ export default function DashboardPage() {
       {/* Charts row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card className="p-4">
-          <div className="text-xs font-bold text-[#0f172a] mb-3">Aylıq daxilolmalar — {new Date().getFullYear()}</div>
+          <div className="text-xs font-bold text-[#0f172a] mb-3">Aylıq daxilolmalar — {filterYear}</div>
           <ResponsiveContainer width="100%" height={160}>
             <BarChart data={stats.monthlyIncome} barSize={20}>
               <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#aaa' }} axisLine={false} tickLine={false} />
@@ -511,8 +510,8 @@ export default function DashboardPage() {
             <div className="space-y-2">
               {stats.overdueReceivables.slice(0, 4).map((r, i) => (
                 <div key={i} className="flex items-center gap-3 py-1.5 border-b border-[#f5f5f0] last:border-0">
-                  <div className="flex-1">
-                    <div className="text-xs font-medium text-[#0f172a]">Alacaq</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-medium text-[#0f172a] truncate">{r.projects?.name || r.projects?.clients?.name || 'Alacaq'}</div>
                     <div className="text-[10px] text-[#aaa]">{r.days} gün gecikmiş</div>
                   </div>
                   <div className="text-xs font-bold text-red-600">{fmt(Number(r.expected_amount) - Number(r.paid_amount))}</div>
