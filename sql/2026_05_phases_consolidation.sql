@@ -4,6 +4,18 @@
 -- Idempotent: safe to re-run.
 
 -- 1. Add phases column (text[]) — or convert if it already exists as jsonb
+-- Note: ALTER COLUMN TYPE USING cannot contain subqueries in Postgres,
+-- so we create a helper function first, use it, then drop it.
+
+CREATE OR REPLACE FUNCTION _tmp_jsonb_to_text_arr(j jsonb)
+RETURNS text[] LANGUAGE sql IMMUTABLE AS $$
+  SELECT CASE
+    WHEN j IS NULL OR j::text = 'null' OR jsonb_array_length(j) = 0
+      THEN '{}'::text[]
+    ELSE ARRAY(SELECT jsonb_array_elements_text(j))
+  END
+$$;
+
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -16,16 +28,13 @@ BEGIN
     WHERE table_name = 'projects' AND column_name = 'phases'
       AND data_type = 'jsonb'
   ) THEN
-    -- Convert jsonb → text[]: extract string elements, fall back to empty array
     ALTER TABLE projects ALTER COLUMN phases TYPE text[]
-      USING CASE
-        WHEN phases IS NULL OR phases = 'null'::jsonb OR jsonb_array_length(phases) = 0
-          THEN '{}'::text[]
-        ELSE ARRAY(SELECT jsonb_array_elements_text(phases))
-      END;
+      USING _tmp_jsonb_to_text_arr(phases);
     ALTER TABLE projects ALTER COLUMN phases SET DEFAULT '{}';
   END IF;
 END $$;
+
+DROP FUNCTION IF EXISTS _tmp_jsonb_to_text_arr(jsonb);
 
 -- 2. Backfill: where phases is empty but phase exists
 UPDATE projects
