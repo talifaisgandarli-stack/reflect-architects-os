@@ -147,15 +147,268 @@ Lead(10%) → Təklif(30%) → Müzakirə(50%) → İmzalanıb(75%) → İcrada(
 
 ---
 
-## 📋 PART 3 — PLANLANIR (Növbəti sessiya)
+## 📋 PART 3 — PLANLANIR
 
-- **MIRAI** — 6 admin persona + 1 user persona (Claude Haiku 4.5, $5/ay budget)
-  - Admin: Chief Architect, CFO, BD Director, HR Director, Operations, Risk Advisor
-  - User: Project Support (yalnız əməliyyati məlumat, maliyyə yox)
-  - Spec: `.claude/skills/world-class-tech-team/docs/mirai-spec.md`
-- **Telegram onboarding** — token → bot → chat_id flow
-- **Təqvim** — Google Calendar parity
-- **pgvector RAG** — AZDNT normativ PDF-lər (Supabase pgvector extension)
+> Full spec: `.claude/skills/world-class-tech-team/docs/mirai-spec.md`
+
+### 1. MIRAI — Chief AI Officer (Claude Haiku 4.5)
+
+**Arxitektura:** Pop-up chat box (sağ-aşağı, 56px dairə, hər səhifədə)
+
+**6 Admin persona + auto-routing:**
+```
+CFO           → Maliyyə Mərkəzi + "cash/forecast/P&L" sualları
+HR            → İşçi Heyəti + "performans/məzuniyyət/survey"
+COO           → Tapşırıqlar + "deadline risk/blok/əməliyyat"
+CCO           → Müştəri + "e-poçt/komunikasiya/şikayət"
+CMO           → Pipeline + "marketinq/portfolio/trend"
+Chief Architect → Normativ suallar + AZ tikinti hüququ (admin+user)
+```
+
+**1 User persona:** yalnız Chief Architect — maliyyə bloku aktiv
+
+**Context Engine** — hər mesajda system prompt-a inject:
+```
+[CONTEXT]
+Page: /projects/abc123
+Entity: Layihə "Nəriman Towers" (status: icrada, P&L: ₼57K net)
+User: Admin (Talifa İsgəndərli)
+Cash: Bank ₼145K | Kassa ₼8.5K
+Active deadlines: 2 (3 gün + 12 gün)
+```
+Bu context **prompt caching** ilə 90% ucuz saxlanır.
+
+**Tool Layer (read-only + explicit approve ilə write):**
+- `query_financials` — admin only
+- `query_tasks` — deadline risk, blok
+- `query_clients` — pipeline status
+- `query_team` — admin only (yük, məzuniyyət)
+- `search_knowledge` — RAG: AZ qanun + normativ
+- `analyze_document` — PDF/image analiz (max 5MB, max 3 fayl)
+- `send_telegram` — explicit approve tələb edir
+- `create_task` — preview → approve flow
+- `draft_email` — draft edir (göndərmir)
+
+**Privacy Filter (user üçün blok edilən mövzular):**
+- Maliyyə balansı, P&L, gəlir/xərc
+- Digər işçilərin maaşı/performansı
+- Müştəri ödəniş məlumatları
+- Pipeline dəyərləri
+
+**Suggestion chips** (active page-ə görə 3 sürətli sual):
+```
+Maliyyə Mərkəzindəyirsə: [Bu ayın P&L-i?] [Forecast riskləri?] [Cash cockpit izah et]
+Tapşırıqlardayırsa:      [Bu həftə nə bloklanıb?] [Deadline riski?] [Prioritet sırala]
+```
+
+**Cost Guardian — $5/ay hard limit (AUTHOR APPROVED 2026-05-03):**
+```
+$0 → $4.00   : tam Claude Haiku 4.5
+$4 → $4.50   : admin Telegram xəbərdarlığı
+$4.50 → $5   : Groq llama-3.3-70b fallback
+$5+          : hard stop, yalnız local heuristics
+```
+Rate limit: admin 100 sual/gün, user 30 sual/gün
+
+**Xərc proqnoz:**
+| Ssenari | Aylıq xərc |
+|---------|-----------|
+| Minimal (2 admin, 5 user) | ~$1.20 |
+| Real (3 admin, 10 user) | ~$2.30 |
+| Aktiv (5 admin, 15 user) | ~$4.60 |
+| Hard limit | $5 → Groq |
+
+**DB schema (MIRAI üçün):**
+```sql
+create table mirai_sessions (
+  id uuid primary key,
+  user_id uuid references profiles(id),
+  persona text,              -- cfo|hr|coo|cco|cmo|chief_architect
+  page_context text, entity_type text, entity_id uuid,
+  compressed_history jsonb,  -- 10 mesajdan sonra xülasə
+  last_active_at timestamptz
+);
+
+create table mirai_messages (
+  id uuid primary key,
+  session_id uuid references mirai_sessions(id),
+  role text,                 -- user|assistant|tool
+  content text,
+  tokens_input int, tokens_output int, cost_usd numeric,
+  cached boolean default false
+);
+
+create table mirai_usage (
+  user_id uuid references profiles(id),
+  date date,
+  request_count int default 0,
+  token_input_total int default 0,
+  cost_usd numeric default 0,
+  unique(user_id, date)
+);
+```
+
+**UI component:**
+```jsx
+// Sağ-aşağı pop-up (Intercom style)
+// 400px wide × 500px tall
+// Header: persona dropdown (admin) + [✕]
+// Footer: [📎 fayl] [input] [→ göndər]
+// Genişlət: 800×600 panel
+// Mobile: full-screen bottom sheet
+```
+
+---
+
+### 2. RAG Engine — AZ Bilik Bazası
+
+**pgvector extension** (Supabase-də aktivdir)
+
+```sql
+create table mirai_knowledge (
+  id uuid primary key,
+  source_type text,  -- law|normative|practice|case
+  source_name text,
+  content text,
+  embedding vector(1536),  -- text-embedding-3-small
+  locale text default 'az',
+  valid_from date, valid_until date,
+  tags text[]
+);
+create index on mirai_knowledge using ivfflat (embedding vector_cosine_ops);
+```
+
+**Bilik bazası məzmunu (Talifa manual yükləyir):**
+- AZ Şəhərsalma + Tikinti Qanunu
+- Vergi Məcəlləsi (VAT, gəlir vergisi)
+- Əmək Məcəlləsi (məzuniyyət, işdən çıxarma)
+- SNiP seriyası (2.08.01-89, 2.07.01-89)
+- AZS EN seriyası (Eurocode)
+- Yanğın + Accessibility normativləri
+- Bakı-spesifik icazə prosedurları
+- Podrat bazar qiymətləri (AZN, 2024-2026)
+
+**RAG query flow:**
+```
+sual → embed (text-embedding-3-small) → cosine top-5 → inject [REFERENCES] → cavab + istinad
+Xərc: ~$0.002/sual (negligible)
+```
+
+---
+
+### 3. Telegram — Yenidən Qurulur
+
+**Köhnə kod silinir** (şablon mesajlar → MIRAI-based)
+
+**Yeni onboarding (chat_id problemi həlli):**
+```
+Parametrlər → [Telegram Bağla] → 
+unique token yaranır →
+https://t.me/ReflectBot?start=TOKEN açılır →
+User /start göndərir → bot chat_id alır →
+profiles.telegram_chat_id yazılır → "✅ Bağlandı"
+```
+
+**MIRAI proaktiv xəbərdarlıqlar (09:00 cron):**
+```
+📋 Bugün 2 deadline: Nəriman Towers: 3 gün ⚠️ · Botanika: ₼25K gözlənilir
+💰 Cash: ₼153,500 · ⚠️ 90-gün: ₼165K (min ₼210K altında)
+```
+
+**Trigger-based xəbərdarlıqlar:**
+- Deadline-a 7 gün → xəbərdarlıq
+- Cash min tələbin 80%-nə düşəndə
+- Tapşırıq 3 gündən artıq blokda
+- Müştəri cavabı 5+ gün gəlməyəndə
+- Outsource done→paid-i unutanda (2 gün sonra)
+- Max 3 mesaj/gün/istifadəçi, quiet hours: 22:00-08:00
+
+**DB schema:**
+```sql
+create table telegram_notifications (
+  id uuid primary key,
+  recipient_user_id uuid references profiles(id),
+  telegram_chat_id text,
+  message_text text,
+  trigger_type text,  -- proactive|deadline|cash|blocked
+  entity_type text, entity_id uuid,
+  sent_at timestamptz, read_at timestamptz,
+  mirai_generated boolean default true
+);
+```
+
+---
+
+### 4. Performans Tracking — HR persona
+
+**Admin üçün (aylıq, real-time):**
+- Task completion rate (hədəfə görə %)
+- Orta completion time vs norm
+- Bloklanmış tapşırıqlar sayı + səbəb
+- `is_blame_excluded`: sifarişçi gecikmələri sayılmır
+
+**User üçün (yalnız il sonu):**
+- Admin manual göndərir (export → PDF → Telegram/email)
+- Öz balını görür, başqasınınkını görmür
+
+**360° Survey:**
+```sql
+create table performance_surveys (
+  id uuid primary key,
+  survey_year int,
+  subject_user_id uuid references profiles(id),
+  reviewer_user_id uuid references profiles(id),  -- NULL = anonim
+  scores jsonb,  -- {teamwork:4, quality:5, deadline:3, ...}
+  comment text,
+  manager_review text,
+  final_score numeric
+);
+```
+**Performans formulu:** Task score 40% + 360° survey 30% + Manager 30%
+**UI:** Gauge chart: 0-40 qırmızı / 40-70 sarı / 70-100 yaşıl
+**2026-dan əvvəl:** "Bu il üçün məlumat yoxdur" boş state
+
+---
+
+### 5. Elanlar — MIRAI CMO Feed
+
+```
+MIRAI CMO (həftəlik cron) →
+  ArchDaily/Dezeen/Archinect RSS + Award calendar →
+  relevance filter (memarlıq + AZ/regional) →
+  Elanlar-a post (mirai_generated: true, approved: false) →
+  Admin görür → "Yayımla / Rədd et" →
+  Approve sonra komanda görür
+```
+Award calendar: Aga Khan (mart), WAF (iyun), Dezeen (may), Architizer A+ (yanvar), RIBA (fevral)
+
+---
+
+### 6. Təqvim — Google Calendar Parity
+
+**Mövcuddur:** Ay/Həftə/Gün görünüşü, recurring (RFC 5545 RRULE), multi-day  
+**Əlavə ediləcək:**
+- `.ics` fayl export + `mailto:` link (server-side-sız)
+- "Meet yarat" → `https://meet.new` açır → user linki kopyalayır
+- Xarici iştirakçı: email field → `.ics` auto-generate
+- *(Gələcəkdə: Google Calendar API OAuth)*
+
+---
+
+### Part 3 icra ardıcıllığı (16 iş günü)
+
+| # | Modul | Gün |
+|---|-------|-----|
+| 1 | MIRAI pop-up UI + persona router + privacy filter | 2 |
+| 2 | Context Engine (page-aware injection + caching) | 1 |
+| 3 | Tool Layer: query_financials + query_tasks | 2 |
+| 4 | Cost Guardian (rate limit + budget cap + usage table) | 1 |
+| 5 | Session Compression + Cached Reports | 1 |
+| 6 | RAG Engine (pgvector + knowledge table + embed pipeline) | 3 |
+| 7 | Telegram yenidən qurma (onboarding + MIRAI trigger) | 2 |
+| 8 | File Analysis (PDF/image upload → vision) | 1 |
+| 9 | Performans Tracking + 360° Survey UI | 2 |
+| 10 | Groq fallback + Token Dashboard widget | 1 |
 
 ---
 
