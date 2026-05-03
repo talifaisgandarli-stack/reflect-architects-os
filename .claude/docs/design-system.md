@@ -515,4 +515,1020 @@ PRD §9.5 browser support: latest 2 of Chrome / Edge / Safari / Firefox; iOS Saf
 
 ---
 
-*Part 1 ends here.* Part 2 (components, motion, accessibility, i18n, state patterns) follows in the same file when generated. Implementation can begin from Part 1 alone — tokens, layout, sidebar, and color contracts are complete.
+## 6. Component Library
+
+Every component below is a primitive used across multiple PRD modules. Page-specific compositions live in §9 (Part 3).
+
+### 6.1 Cards
+
+The card is the universal content surface. Five variants cover every visual context.
+
+**Base card** — default content surface (project list rows, dashboard widgets, finance metric tiles).
+
+```css
+.card {
+  background: var(--color-n000);
+  border: 1px solid var(--color-n200);
+  border-radius: var(--radius-lg);     /* 16px */
+  padding: var(--padding-card);         /* 20px 24px */
+  box-shadow: var(--shadow-sm);
+  transition: transform 150ms cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-hover);
+}
+.card--static:hover { transform: none; box-shadow: var(--shadow-sm); }
+```
+
+Use `--static` for table-like cards where hover lift would feel jittery (e.g. compact rows, archive list).
+
+**Folder card** — Layihələr grid (PRD §9.4 / US-PROJ-01). 120px gradient hero per phase + white body.
+
+```css
+.card--folder {
+  background: var(--color-n000);
+  border: 1px solid var(--color-n200);
+  border-radius: var(--radius-xl);     /* 20px */
+  overflow: hidden;
+  padding: 0;
+}
+.card--folder__header {
+  height: 120px;
+  background: var(--grad-folder);       /* default; overridden inline per phase */
+}
+.card--folder__body { padding: 16px 20px; }
+```
+
+```jsx
+<div
+  className="card--folder__header"
+  style={{ background: PHASE_GRADIENTS[project.currentPhase] }}
+/>
+```
+
+**Featured card** — gradient border for the one primary metric on a page (Cash Cockpit balance, dashboard pinned widget).
+
+```css
+.card--featured {
+  position: relative;
+  border-radius: var(--radius-xl);
+  padding: 2px;                          /* gradient border thickness */
+  background: var(--grad-border);
+  box-shadow: var(--shadow-md);
+}
+.card--featured__inner {
+  background: var(--color-n000);
+  border-radius: calc(var(--radius-xl) - 2px);
+  padding: var(--padding-card);
+  height: 100%;
+}
+```
+
+**Accent card** — hero stat on a gradient fill (dashboard "Aktiv Layihələr").
+
+```css
+.card--accent {
+  background: var(--grad-feature);
+  border: none;
+  border-radius: var(--radius-xl);
+  padding: var(--padding-card);
+  color: white;
+  box-shadow: var(--shadow-brand);
+}
+.card--accent .card__label  { color: rgba(255,255,255,0.7); }
+.card--accent .card__number { color: white; }
+```
+
+**Depth-stack card** — wallet-style stacked illusion (Maliyyə Cash Cockpit hero).
+
+```css
+.card--stack { position: relative; }
+.card--stack::before,
+.card--stack::after {
+  content: '';
+  position: absolute;
+  border-radius: var(--radius-xl);
+  background: var(--color-n000);
+  border: 1px solid var(--color-n200);
+}
+.card--stack::before { inset: -6px 12px;  z-index: -1; opacity: 0.6; }
+.card--stack::after  { inset: -12px 20px; z-index: -2; opacity: 0.3; }
+```
+
+### 6.2 Kanban Task Card (PRD MOD 4 / US-TASK-01..08)
+
+```
+┌──────────────────────────────────┐  border-radius: 12px
+│ [Project pill]              [⋯] │  11px font, project color
+│                                  │
+│ Task title — Rubik 600 15px      │
+│ (max 2 lines, ellipsis after)    │
+│                                  │
+│ [Deadline badge]  [Avatar stack] │  multi-assignee per REQ-TASK-02
+└──────────────────────────────────┘
+```
+
+```css
+.task-card {
+  background: var(--color-n000);
+  border: 1px solid var(--color-n200);
+  border-radius: var(--radius-md);     /* 12px */
+  padding: 14px 16px;
+  cursor: grab;
+  box-shadow: var(--shadow-xs);
+  transition: box-shadow 100ms ease, transform 100ms ease;
+  user-select: none;
+}
+.task-card:hover {
+  box-shadow: var(--shadow-sm);
+  border-color: var(--color-n300);
+}
+.task-card--dragging {
+  box-shadow: var(--shadow-lg);
+  transform: rotate(2deg) scale(1.02);
+  cursor: grabbing;
+  z-index: 999;
+}
+
+.task-card--overdue   { border-left: 3px solid var(--color-health-crit); }
+.task-card--soon      { border-left: 3px solid var(--color-health-warn); }
+.task-card--expertise { border-left: 3px solid var(--color-status-expert); }
+.task-card--archived  { opacity: 0.65; }
+.task-card--cancelled { opacity: 0.55; filter: grayscale(0.4); }
+```
+
+**Deadline badge inside card:**
+```css
+.deadline-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: var(--text-xs); font-weight: 500;
+  padding: 3px 8px; border-radius: var(--radius-full);
+}
+.deadline-badge--ok      { color: var(--color-n600);       background: var(--color-n100); }
+.deadline-badge--soon    { color: var(--color-warning);    background: var(--color-warning-bg); }
+.deadline-badge--overdue { color: var(--color-danger);     background: var(--color-danger-bg); }
+```
+
+### 6.3 Status Badge
+
+Used in: kanban column headers, archive list, dashboard task rows, project status chip.
+
+```css
+.status-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs); font-weight: 600;
+  border: 1px solid; white-space: nowrap;
+}
+.status-badge::before {
+  content: ''; width: 6px; height: 6px;
+  border-radius: 50%; background: currentColor; flex-shrink: 0;
+}
+```
+
+```jsx
+<span
+  className="status-badge"
+  style={{
+    color:        TASK_STATUS[status].text,
+    background:   TASK_STATUS[status].bg,
+    borderColor:  TASK_STATUS[status].border,
+  }}
+  aria-label={`Status: ${TASK_STATUS[status].label}`}
+>
+  {TASK_STATUS[status].label}
+</span>
+```
+
+### 6.4 Avatar System (multi-assignee aware — REQ-TASK-02)
+
+```css
+.avatar {
+  border-radius: var(--radius-full);
+  object-fit: cover;
+  flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 600; letter-spacing: -0.01em;
+  color: white;
+}
+.avatar--xs { width: 20px; height: 20px; font-size: 8px;  }
+.avatar--sm { width: 24px; height: 24px; font-size: 9px;  }
+.avatar--md { width: 32px; height: 32px; font-size: 12px; }
+.avatar--lg { width: 40px; height: 40px; font-size: 15px; }
+.avatar--xl { width: 48px; height: 48px; font-size: 18px; }
+
+/* Stack for assignee_ids[] */
+.avatar-stack { display: flex; align-items: center; }
+.avatar-stack .avatar         { border: 2px solid var(--color-n000); margin-left: -8px; }
+.avatar-stack .avatar:first-child { margin-left: 0; }
+.avatar-stack .overflow-badge {
+  height: 24px; padding: 0 7px;
+  background: var(--color-n100);
+  border: 2px solid var(--color-n000);
+  border-radius: var(--radius-full);
+  font-size: var(--text-2xs); font-weight: 600;
+  color: var(--color-n600);
+  margin-left: -8px;
+  display: flex; align-items: center;
+}
+```
+
+**Stack rule (PRD §6.8):** show first 3 avatars + "+N" overflow badge. Stack is read left-to-right (first assignee = leftmost).
+
+**Deterministic gradient backgrounds** for users without uploaded avatars:
+
+```js
+const AVATAR_GRADIENTS = [
+  'linear-gradient(135deg, #667EEA, #764BA2)',
+  'linear-gradient(135deg, #F093FB, #F5576C)',
+  'linear-gradient(135deg, #4FACFE, #00F2FE)',
+  'linear-gradient(135deg, #43E97B, #38F9D7)',
+  'linear-gradient(135deg, #FA709A, #FEE140)',
+  'linear-gradient(135deg, #A18CD1, #FBC2EB)',
+  'linear-gradient(135deg, #FCC5E4, #F9AABB)',
+  'linear-gradient(135deg, #FDB99B, #CF392B)',
+];
+
+export function getAvatarGradient(userId) {
+  const sum = userId.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+  return AVATAR_GRADIENTS[sum % AVATAR_GRADIENTS.length];
+}
+export function getInitials(name) {
+  return name.split(' ').slice(0, 2).map(n => n[0]).join('').toUpperCase();
+}
+```
+
+ARIA: avatar stacks announce as `aria-label="Assigned to: Anar, Leyla and 2 others"`.
+
+### 6.5 Buttons
+
+```css
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  font-weight: 500; font-size: var(--text-base);
+  border-radius: var(--radius-sm);
+  cursor: pointer; border: none;
+  transition: background 120ms ease, box-shadow 120ms ease, transform 80ms ease;
+  white-space: nowrap; text-decoration: none;
+}
+.btn:active   { transform: scale(0.98); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
+
+.btn--primary {
+  background: var(--color-brand); color: white;
+  padding: var(--padding-btn-md);
+  box-shadow: var(--shadow-brand);
+}
+.btn--primary:hover { background: var(--color-brand-hover); box-shadow: 0 6px 24px rgba(90,78,255,0.30); }
+
+.btn--secondary {
+  background: var(--color-n000); color: var(--color-n900);
+  border: 1px solid var(--color-n200);
+  padding: var(--padding-btn-md);
+}
+.btn--secondary:hover { background: var(--color-n100); border-color: var(--color-n300); }
+
+.btn--ghost {
+  background: transparent; color: var(--color-n600);
+  padding: var(--padding-btn-md);
+}
+.btn--ghost:hover { background: var(--color-n100); color: var(--color-n900); }
+
+.btn--danger {
+  background: var(--color-danger); color: white;
+  padding: var(--padding-btn-md);
+}
+
+.btn--sm { padding: var(--padding-btn-sm); font-size: var(--text-sm); border-radius: var(--radius-xs); }
+.btn--lg { padding: var(--padding-btn-lg); font-size: var(--text-lg); }
+
+/* MIRAI launch FAB */
+.btn--fab {
+  width: 48px; height: 48px;
+  border-radius: var(--radius-full);
+  background: var(--color-brand); color: white;
+  box-shadow: var(--shadow-brand);
+  position: fixed; bottom: 32px; right: 32px;
+  z-index: var(--z-fab);
+  font-size: 22px;
+}
+.btn--fab:hover { box-shadow: 0 8px 32px rgba(90,78,255,0.35); transform: scale(1.05); }
+```
+
+**Primary button rule:** at most one `--primary` per page surface. Secondary actions use `--secondary`; tertiary use `--ghost`.
+
+### 6.6 Pills / Tags
+
+```css
+.pill {
+  display: inline-flex; align-items: center;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs); font-weight: 500;
+  white-space: nowrap;
+}
+.pill--default { background: var(--color-n100);        color: var(--color-n600);  }
+.pill--brand   { background: var(--color-brand-light); color: var(--color-brand); }
+.pill--success { background: var(--color-success-bg);  color: var(--color-success); }
+.pill--warning { background: var(--color-warning-bg);  color: var(--color-warning); }
+.pill--danger  { background: var(--color-danger-bg);   color: var(--color-danger);  }
+.pill--ai      { background: #EFF6FF; color: #3B82F6; border: 1px solid #BFDBFE; gap: 4px; }
+.pill--ai::before {
+  content: ''; width: 6px; height: 6px; border-radius: 50%;
+  background: currentColor;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+```
+
+`pill--ai` is reserved for MIRAI-generated content (Elanlar with `mirai_generated=true`, ICP Fit cells, forecast widget).
+
+### 6.7 Inputs & Forms
+
+```css
+.input {
+  width: 100%;
+  padding: var(--padding-input);
+  border: 1px solid var(--color-n200);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-base);
+  color: var(--color-n900);
+  background: var(--color-n000);
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+  outline: none;
+}
+.input::placeholder { color: var(--color-n400); }
+.input:hover  { border-color: var(--color-n300); }
+.input:focus  { border-color: var(--color-brand); box-shadow: 0 0 0 3px var(--color-brand-light); }
+.input--error { border-color: var(--color-danger); }
+.input--error:focus { box-shadow: 0 0 0 3px var(--color-danger-bg); }
+
+.label {
+  display: block;
+  font-size: var(--text-sm); font-weight: 500;
+  color: var(--color-n800);
+  margin-bottom: 6px;
+}
+.label--required::after { content: ' *'; color: var(--color-danger); }
+
+.field-error {
+  font-size: var(--text-xs);
+  color: var(--color-danger);
+  margin-top: 4px;
+}
+.field-help {
+  font-size: var(--text-xs);
+  color: var(--color-n600);
+  margin-top: 4px;
+}
+```
+
+**Validation timing:**
+- `onBlur` for text/number/date — never `onChange` (avoids mid-typing red flashes)
+- `onChange` for selects, radios, toggles
+- Submit-time for cross-field rules (e.g. `expertise_deadline > today`)
+
+**AZ error copy patterns:**
+- Required: "Bu sahə tələb olunur"
+- Numeric: "Məbləğ müsbət olmalıdır" (PRD US-FIN-01)
+- Overpayment: "Ödəniş qalıq məbləği aşır" (PRD US-FIN-02)
+- Date: "Tarix bu gündən sonra olmalıdır"
+
+### 6.8 Data Table (Attio-style)
+
+Used in: Müştərilər table view, Maliyyə tabs, Sənədlər list, Arxiv, İşçi Heyəti, Avadanlıq.
+
+```css
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+.data-table th {
+  padding: 10px 16px; text-align: left;
+  font-size: var(--text-xs); font-weight: 600;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--color-n400);
+  border-bottom: 1px solid var(--color-n200);
+  white-space: nowrap;
+  position: sticky; top: 0;
+  background: var(--color-n000);
+  z-index: var(--z-sticky);
+}
+.data-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--color-n100);
+  color: var(--color-n900);
+  vertical-align: middle;
+}
+.data-table tr:hover td { background: var(--color-n100); }
+
+/* Numeric columns — right align, tabular numerals */
+.data-table td.numeric {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+/* Sortable header */
+.data-table th.sortable { cursor: pointer; user-select: none; }
+.data-table th.sortable::after {
+  content: ''; display: inline-block; margin-left: 6px;
+  border: 4px solid transparent;
+  vertical-align: middle;
+  opacity: 0.3;
+}
+.data-table th.sortable--asc::after  { border-bottom-color: currentColor; opacity: 1; }
+.data-table th.sortable--desc::after { border-top-color:    currentColor; opacity: 1; }
+
+/* AI-loading cell */
+.cell--ai-loading {
+  color: var(--color-n400); font-style: italic;
+  display: flex; align-items: center; gap: 6px;
+}
+.cell--ai-loading::before {
+  content: ''; width: 8px; height: 8px;
+  border-radius: 50%; background: var(--color-brand);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+/* Masked cell (non-admin viewing admin column — PRD US-FIN-04) */
+.cell--masked {
+  color: var(--color-n400);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.1em;
+}
+.cell--masked::after { content: '—'; }
+```
+
+**Masking rule (Rule #4):** when a non-admin renders a finance table that includes admin-only columns (e.g. Outsource amount), the column must still appear with `cell--masked` rendering "—". The API returns `null` for the field; UI never receives the real value. This preserves layout consistency and audit trail.
+
+### 6.9 Circular Progress (dashboard widget, OKR health, project completion)
+
+```css
+.ring-progress {
+  position: relative;
+  width: 120px; height: 120px;
+}
+.ring-progress svg { transform: rotate(-90deg); }
+.ring-progress__track {
+  fill: none; stroke-width: 8;
+  stroke: var(--color-n200);
+}
+.ring-progress--on-accent .ring-progress__track {
+  stroke: rgba(255,255,255,0.2);
+}
+.ring-progress__bar {
+  fill: none; stroke-width: 8; stroke-linecap: round;
+  stroke: var(--color-brand);
+  transition: stroke-dashoffset 600ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.ring-progress--on-accent .ring-progress__bar { stroke: white; }
+.ring-progress__label {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  font-weight: 700;
+}
+```
+
+OKR health colors (PRD §5 MOD 9.1): `≥70%` `--color-success`, `40–69%` `--color-warning`, `<40%` `--color-danger`.
+
+### 6.10 Toggle Switch
+
+```css
+.toggle { position: relative; width: 40px; height: 22px; }
+.toggle input { opacity: 0; width: 0; height: 0; }
+.toggle__slider {
+  position: absolute; inset: 0;
+  background: var(--color-n300);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: background 200ms ease;
+}
+.toggle__slider::after {
+  content: '';
+  position: absolute; left: 3px; top: 3px;
+  width: 16px; height: 16px;
+  border-radius: 50%; background: white;
+  box-shadow: var(--shadow-xs);
+  transition: transform 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.toggle input:checked + .toggle__slider          { background: var(--color-brand); }
+.toggle input:checked + .toggle__slider::after   { transform: translateX(18px); }
+.toggle input:focus-visible + .toggle__slider    { box-shadow: 0 0 0 3px var(--color-brand-light); }
+```
+
+### 6.11 Modal / Drawer
+
+```css
+.modal-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.45);
+  backdrop-filter: blur(4px);
+  z-index: var(--z-backdrop);
+  animation: fade-in 200ms ease;
+}
+
+.modal {
+  position: fixed; top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--color-n000);
+  border-radius: var(--radius-xl);
+  padding: var(--padding-modal);
+  min-width: 480px; max-width: 640px;
+  max-height: 90vh; overflow-y: auto;
+  box-shadow: var(--shadow-lg);
+  z-index: var(--z-modal);
+  animation: modal-enter 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+@keyframes modal-enter {
+  from { opacity: 0; transform: translate(-50%, calc(-50% + 12px)); }
+  to   { opacity: 1; transform: translate(-50%, -50%); }
+}
+
+.drawer {
+  position: fixed; top: 0; right: 0;
+  width: 480px; height: 100vh;
+  background: var(--color-n000);
+  box-shadow: var(--shadow-drawer);
+  z-index: var(--z-drawer);
+  overflow-y: auto;
+  padding: 32px;
+  animation: drawer-enter 250ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.drawer--lg { width: 640px; }
+@keyframes drawer-enter {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+```
+
+**Behaviour rules (PRD US-CRM-04):**
+- Drawer keeps the parent page visible behind (no backdrop blur for drawers, only modals)
+- Esc closes; clicking outside closes (configurable per use-case)
+- Focus trapped inside; first focusable element receives focus on open
+- On close, focus returns to the trigger element
+- Slide-in animation is 250ms; never longer (feels sluggish)
+
+### 6.12 Toasts
+
+```css
+.toast-container {
+  position: fixed; bottom: 24px; right: 24px;
+  z-index: var(--z-toast);
+  display: flex; flex-direction: column; gap: 8px;
+  pointer-events: none;
+}
+.toast {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 18px;
+  background: var(--color-n900); color: white;
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm); font-weight: 500;
+  box-shadow: var(--shadow-lg);
+  pointer-events: all;
+  min-width: 280px; max-width: 420px;
+  animation: toast-enter 200ms ease;
+}
+.toast--success { background: var(--color-success); }
+.toast--error   { background: var(--color-danger); }
+.toast--warning { background: var(--color-warning); color: var(--color-n900); }
+@keyframes toast-enter {
+  from { opacity: 0; transform: translateY(8px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+```
+
+**Auto-dismiss:** success 3s, warning 5s, error never (manual close required). PRD §6.7: errors are toast for transient, inline for validation, full-page for 500.
+
+### 6.13 Connector Lines (Müştərilər pipeline workflow)
+
+```css
+.workflow-canvas {
+  position: relative;
+  background: var(--color-canvas);
+  background-image: radial-gradient(circle, var(--color-canvas-dots) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+.workflow-node {
+  background: var(--color-n000);
+  border: 1px solid var(--color-n200);
+  border-radius: var(--radius-md);
+  padding: 14px 18px;
+  box-shadow: var(--shadow-sm);
+  position: relative;
+}
+.workflow-node__title { font-size: var(--text-base); font-weight: 600; color: var(--color-n900); }
+.workflow-node__body  { font-size: var(--text-sm);  color: var(--color-n600); margin-top: 6px; }
+.workflow-node__ai-badge { position: absolute; top: 14px; right: 14px; }
+```
+
+Connector SVG: stroke `--color-brand-border` (`#C4BAFF`), `stroke-width: 2`, cubic-bezier curves between node centers.
+
+### 6.14 Cmd+K Universal Search (PRD §6.2)
+
+```
+┌──────────────────────────────────────────────┐  fixed center, top: 20vh
+│ 🔍  Axtar tapşırıq, layihə, müştəri…    Esc │  white card, radius-xl, shadow-xl
+├──────────────────────────────────────────────┤
+│ TAPŞIRIQLAR                                  │  group label, --text-xs uppercase
+│   ▸ "Çertyoj hazırlığı" — Layihə X         │  active row: --color-brand-light bg
+│   ▸ "Spesifikasiya"     — Layihə Y          │
+│ LAYİHƏLƏR                                    │
+│   ▸ "Bakı Konsert Zalı"                     │
+│ MÜŞTƏRİLƏR                                   │
+│   ▸ "Studio Aslan"                          │
+└──────────────────────────────────────────────┘
+```
+
+```css
+.cmdk {
+  position: fixed; top: 20vh; left: 50%;
+  transform: translateX(-50%);
+  width: min(640px, 90vw);
+  background: var(--color-n000);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-xl);
+  z-index: var(--z-modal);
+  overflow: hidden;
+}
+.cmdk__input {
+  width: 100%;
+  padding: 18px 20px;
+  border: none; outline: none;
+  font-size: var(--text-lg);
+  border-bottom: 1px solid var(--color-n200);
+}
+.cmdk__group-label {
+  padding: 10px 20px 6px;
+  font-size: var(--text-xs); font-weight: 600;
+  letter-spacing: var(--tracking-widest);
+  color: var(--color-n400);
+  text-transform: uppercase;
+}
+.cmdk__row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 20px;
+  cursor: pointer;
+  font-size: var(--text-base);
+}
+.cmdk__row--active { background: var(--color-brand-light); }
+.cmdk__row__entity {
+  font-size: var(--text-xs); color: var(--color-n600);
+  margin-left: auto;
+}
+```
+
+Keyboard: ↑/↓ navigates, Enter opens, Esc closes. Returns top 8 grouped results from `/api/search` (PRD §6.2).
+
+### 6.15 Empty / Loading / Error States
+
+PRD §6.7. Each page has all three; never ship a blank fallback.
+
+**Empty state pattern:**
+```jsx
+<div className="empty-state">
+  <div className="empty-state__icon">{IconOrBlob}</div>          {/* 64px gradient blob or outline icon */}
+  <h3 className="empty-state__title">Hələ heç bir layihə yoxdur</h3>
+  <p className="empty-state__body">İlk layihənizi yaratmaqla başlayın.</p>
+  <button className="btn btn--primary">+ Yeni layihə yarat</button>
+</div>
+```
+
+```css
+.empty-state {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 80px 32px; text-align: center;
+  gap: 16px;
+}
+.empty-state__icon  { width: 64px; height: 64px; opacity: 0.6; }
+.empty-state__title { font-size: var(--text-xl); font-weight: 600; color: var(--color-n800); }
+.empty-state__body  { font-size: var(--text-base); color: var(--color-n600); max-width: 360px; }
+```
+
+Per-page empty copy is owned in `locales/az.json` and listed in §9 alongside each module.
+
+**Loading skeletons** match the layout they replace (never a generic spinner on page-level loads). Use `.skeleton` shimmer per §7.8.
+
+**Error states:**
+- Validation → inline (`.field-error`) under the input
+- Transient API error → `.toast--error` (manual dismiss)
+- 500 / network down → full-page error component:
+  ```
+  ┌──────────────────────────────────────────┐
+  │  [Outline alert icon, 64px, n400]        │
+  │  Xəta baş verdi                          │
+  │  Bir şey səhv getdi. Yenidən cəhd edin.  │
+  │  [Yenidən cəhd et — primary]             │
+  │  [Ana səhifəyə qayıt — ghost]            │
+  └──────────────────────────────────────────┘
+  ```
+- Forbidden (RLS denied) → 403 page: "Bu məlumata icazəniz yoxdur" + "Geri qayıt" button
+- Stack traces never shown to users (PRD §9.1); details go to Sentry
+
+---
+
+## 7. Motion System
+
+### 7.1 Principles
+- **Purpose over decoration.** Every animation communicates state change, relationship, or direction
+- **Duration budget:** page transitions ≤ 200ms, micro-interactions ≤ 150ms, MIRAI blobs ambient (slow infinite)
+- **One easing:** `cubic-bezier(0.4, 0, 0.2, 1)` for all transitions except spring/celebration
+- **No bounces** in data-dense surfaces (tables, kanban). Bounces reserved for MIRAI and milestone celebrations
+- **Respect `prefers-reduced-motion`:** all non-essential animation disabled (see §8.5)
+
+### 7.2 Global Transition Defaults
+
+```css
+button, a, .card, input, select, .nav-item, .status-badge, .pill {
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+```
+
+### 7.3 Page Transitions
+
+```css
+@keyframes page-enter {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.page-content {
+  animation: page-enter 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+```
+
+### 7.4 Staggered Card Entrance
+
+```css
+@keyframes card-enter {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.card { animation: card-enter 200ms cubic-bezier(0.4, 0, 0.2, 1) both; }
+```
+
+```jsx
+{cards.map((card, i) => (
+  <Card
+    key={card.id}
+    style={{ animationDelay: `${Math.min(i * 40, 200)}ms` }}
+  />
+))}
+```
+
+Cap delay at 200ms (≈ 5 cards) so the grid never feels slow.
+
+### 7.5 Kanban Drag & Drop (PRD US-TASK-02)
+
+- **Dragging card:** `rotate(2deg) scale(1.02)`, `box-shadow: var(--shadow-lg)`, `cursor: grabbing`
+- **Drop target column:** `background: var(--color-brand-light)`, `border: 2px dashed var(--color-brand)` — entire column highlights
+- **Drop animation:** card enters target column with `scale(0.95) → 1.0` over 150ms
+- **Column height:** smooth transition when card added/removed (CSS grid `auto` height with transition disabled — use FLIP technique for measurable smoothness)
+- **Realtime echo** (PRD REQ §3.4): when another user moves a card, animate it from old column to new with `transform: translate3d` interpolation, 200ms
+
+### 7.6 MIRAI Blob Animation (PRD §9.11 / US-MIRAI-01)
+
+Three blobs drift on different cycles for natural, non-mechanical motion.
+
+```css
+@keyframes blob-drift-1 {
+  0%, 100% { transform: scale(1)    rotate(0deg)  translate(0, 0); }
+  25%      { transform: scale(1.04) rotate(2deg)  translate(4px, -6px); }
+  50%      { transform: scale(0.97) rotate(-1deg) translate(-3px, 4px); }
+  75%      { transform: scale(1.02) rotate(1.5deg) translate(2px, -3px); }
+}
+@keyframes blob-drift-2 {
+  0%, 100% { transform: scale(1)    rotate(0deg)  translate(0, 0); }
+  33%      { transform: scale(1.06) rotate(-2deg) translate(-5px, 3px); }
+  66%      { transform: scale(0.96) rotate(1deg)  translate(4px, -5px); }
+}
+@keyframes blob-drift-3 {
+  0%, 100% { transform: scale(1)    rotate(0deg)  translate(0, 0); }
+  40%      { transform: scale(1.03) rotate(3deg)  translate(3px, 5px); }
+  80%      { transform: scale(0.98) rotate(-2deg) translate(-4px, -3px); }
+}
+
+.mirai-blob-1 { animation: blob-drift-1  8s ease-in-out infinite; }
+.mirai-blob-2 { animation: blob-drift-2 10s ease-in-out infinite; }
+.mirai-blob-3 { animation: blob-drift-3 12s ease-in-out infinite; }
+```
+
+When MIRAI is generating a response, blobs subtly accelerate (scale `1.02 → 1.06`, duration halves) — a quiet "thinking" cue.
+
+### 7.7 Sidebar Active Indicator
+
+```css
+.nav-item { position: relative; }
+.nav-item__indicator {
+  position: absolute;
+  left: -16px; top: 50%;
+  transform: translateY(-50%);
+  width: 3px; height: 0;
+  background: var(--color-sidebar-indicator);
+  border-radius: 2px;
+  transition: height 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.nav-item--active .nav-item__indicator { height: 20px; }
+```
+
+### 7.8 Skeleton Shimmer
+
+```css
+@keyframes shimmer {
+  from { background-position: -200% 0; }
+  to   { background-position:  200% 0; }
+}
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-n200) 25%,
+    var(--color-n100) 50%,
+    var(--color-n200) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: var(--radius-xs);
+}
+```
+
+### 7.9 Realtime State Flash
+
+When a row updates via Supabase Realtime (task status change, new activity feed entry, MIRAI streamed token), a brief background flash signals the live update without being disruptive.
+
+```css
+@keyframes realtime-flash {
+  0%   { background: var(--color-brand-light); }
+  100% { background: transparent; }
+}
+.row--just-updated { animation: realtime-flash 1500ms ease-out; }
+```
+
+### 7.10 Status Change Pulse
+
+When a task status flips, the status badge pulses once.
+
+```css
+@keyframes status-pulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.08); }
+}
+.status-badge--just-changed { animation: status-pulse 300ms ease-out; }
+```
+
+---
+
+## 8. Accessibility
+
+PRD §6.6 sets the bar: **WCAG 2.1 AA minimum, non-negotiable**.
+
+### 8.1 Color Contrast — Verified Pairs
+
+| Pair | Ratio | Pass |
+|---|---|---|
+| `#5A4EFF` on `#FFFFFF` (brand button text) | 5.8:1 | AA |
+| `#6B7280` on `#FFFFFF` (secondary text) | 4.6:1 | AA |
+| `#1A1A1A` on `#F4F5F7` (body on canvas) | 16:1 | AAA |
+| White on `#5A4EFF` (primary button) | 5.8:1 | AA |
+| `#D97706` on `#FFFBEB` (warning text on warning bg) | 4.7:1 | AA |
+| `#D97706` on `#FFFFFF` (warning text on white) | 4.5:1 | AA |
+| `#EF4444` on `#FFFFFF` (danger text) | 4.6:1 | AA |
+| `#A1A1AA` on `#0F0F0F` (sidebar inactive) | 8.2:1 | AAA |
+
+⚠️ **Banned:** `#F59E0B` for body or label text — only as icon/dot fill where adjacent text passes contrast on its own. Use `#D97706` for text.
+
+### 8.2 Focus Rings
+
+```css
+:focus-visible {
+  outline: 3px solid var(--color-brand);
+  outline-offset: 2px;
+  border-radius: var(--radius-xs);
+}
+:focus:not(:focus-visible) { outline: none; }
+```
+
+Every interactive element receives a visible focus ring. Never `outline: none` without a substitute. Custom-styled inputs use `box-shadow: 0 0 0 3px var(--color-brand-light)` instead of outline (§6.7).
+
+### 8.3 Keyboard Navigation
+
+- Tab order follows visual order (no `tabindex > 0`)
+- Modals trap focus (`tabindex=-1` on backdrop, focus moves to first focusable on open, returns to trigger on close)
+- Esc closes modals/drawers/Cmd+K/dropdowns
+- Arrow keys navigate kanban columns when a card is focused (←/→ between columns, ↑/↓ within column)
+- Enter activates buttons and opens table rows
+- `/` or Cmd+K opens search (PRD §6.3)
+- `G then D/T/P/M/F` navigates Dashboard/Tasks/Projects/Müştərilər/Maliyyə (PRD §6.3)
+
+### 8.4 Screen Reader Patterns
+
+```jsx
+{/* Status badge */}
+<span aria-label={`Status: ${label}`}>{label}</span>
+
+{/* Avatar stack */}
+<div role="group" aria-label={`Assigned to: ${names.slice(0,3).join(', ')}${overflow ? ` and ${overflow} others` : ''}`}>...</div>
+
+{/* Drag card */}
+<div role="button" aria-grabbed={isDragging} aria-roledescription="Tapşırıq kartı">...</div>
+
+{/* Progress ring */}
+<div role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100} aria-label="OKR irəliləyişi">...</div>
+
+{/* Realtime feed updates announced via live region */}
+<div aria-live="polite" aria-atomic="false">
+  {feedItems.map(item => <FeedRow key={item.id} {...item} />)}
+</div>
+
+{/* Toast announcements */}
+<div role="status" aria-live="polite">{toast.message}</div>
+<div role="alert"  aria-live="assertive">{errorToast.message}</div>
+```
+
+### 8.5 Reduced Motion
+
+```css
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  /* MIRAI blobs hold static position */
+  .mirai-blob-1, .mirai-blob-2, .mirai-blob-3 { animation: none; }
+}
+```
+
+Status pulse, page enter, and shimmer are all suppressed. Functional feedback (e.g. "row just updated") falls back to a 1500ms persistent border instead of a flash.
+
+### 8.6 Touch Targets
+
+Minimum 40 × 40px tappable area on all interactive elements (covers AAA target per WCAG 2.5.5). Small buttons (`btn--sm`) and pills get 8px invisible padding via `position: relative; ::before` overlay.
+
+### 8.7 Form Accessibility
+
+- Every input has a visible `<label>` (placeholders are not labels)
+- Required fields use `aria-required="true"` + visible ` *`
+- Errors use `aria-invalid="true"` + `aria-describedby` pointing to `.field-error`
+- Field groups (radio sets in cancel reason — PRD US-TASK-03) use `<fieldset><legend>`
+
+---
+
+## 9. Internationalization
+
+PRD §6.5: primary AZ; EN/RU stubs for future. All dates display Asia/Baku.
+
+### 9.1 String storage
+
+All UI strings live in `src/locales/<lang>.json`. No hardcoded copy in components.
+
+```json
+// locales/az.json
+{
+  "tasks.create.title":     "Yeni tapşırıq",
+  "tasks.empty.title":      "Hələ heç bir tapşırıq yoxdur",
+  "tasks.empty.cta":        "+ İlk tapşırığı yarat",
+  "tasks.cancel.reason.client":  "Müştəri imtina etdi",
+  "finance.error.negative": "Məbləğ müsbət olmalıdır"
+}
+```
+
+### 9.2 Date / number / currency formatting
+
+Use `Intl.DateTimeFormat` and `Intl.NumberFormat` with locale `az-AZ` and timezone `Asia/Baku`.
+
+```js
+export const fmtDate = new Intl.DateTimeFormat('az-AZ', {
+  timeZone: 'Asia/Baku',
+  year: 'numeric', month: 'short', day: 'numeric',
+});
+export const fmtMoney = new Intl.NumberFormat('az-AZ', {
+  style: 'currency', currency: 'AZN', maximumFractionDigits: 0,
+});
+export const fmtRelative = new Intl.RelativeTimeFormat('az-AZ', { numeric: 'auto' });
+```
+
+### 9.3 Pluralization
+
+Use ICU MessageFormat-style strings via `i18next` plural rules:
+```json
+{ "tasks.count": "{count, plural, one {# tapşırıq} other {# tapşırıq}}" }
+```
+(Azerbaijani has no formal plural distinction in most cases — single form suffices.)
+
+### 9.4 RTL readiness
+
+Layout uses logical CSS properties (`margin-inline-start`, `padding-inline-end`, `inset-inline-start`) where practical. Arabic is not in v1 scope but the design system anticipates RTL support without rewrites.
+
+### 9.5 Switching locale
+
+Profile → locale (PRD US-AUTH-04): UI strings switch live without full reload via the i18n context. Date/number formatters re-render via React Query invalidation of the locale key.
+
+---
+
+*Part 2 ends here.* Part 3 (page-by-page specs cross-referenced to PRD modules, Tailwind config, global CSS, design DoD) follows.
