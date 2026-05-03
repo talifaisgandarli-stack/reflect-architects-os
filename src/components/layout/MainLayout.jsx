@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Outlet, useNavigate } from 'react-router-dom'
 import Sidebar from './Sidebar'
+import MiraiChat from '../MiraiChat'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import {
@@ -378,6 +379,9 @@ export default function MainLayout() {
           <Outlet />
         </div>
       </div>
+
+      {/* MIRAI AI Chat */}
+      <MiraiChat />
 
       {/* Search modal */}
       {searchOpen && (

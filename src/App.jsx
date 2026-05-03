@@ -13,6 +13,8 @@ const LayihelerPage          = lazy(() => import('./pages/LayihelerPage'))
 const TapshiriqlarPage       = lazy(() => import('./pages/TapshiriqlarPage'))
 const PipelinePage           = lazy(() => import('./pages/PipelinePage'))
 const SifarisciIdareetmesiPage = lazy(() => import('./pages/SifarisciIdareetmesiPage'))
+const MusterilerPage           = lazy(() => import('./pages/MusterilerPage'))
+const MaliyyeMerkeziPage       = lazy(() => import('./pages/MaliyyeMerkeziPage'))
 const KommersiyaTeklifleriPage = lazy(() => import('./pages/KommersiyaTeklifleriPage'))
 const MuqavilelerPage        = lazy(() => import('./pages/MuqavilelerPage'))
 const PortfelPage            = lazy(() => import('./pages/PortfelPage'))
@@ -118,8 +120,8 @@ export default function App() {
               <Route path="mezmun-planlamasi"     element={<AdminRoute><Suspense fallback={<PageLoader />}><MezmunPlanlamasiPage /></Suspense></AdminRoute>} />
               <Route path="parametrler"           element={<AdminRoute><Suspense fallback={<PageLoader />}><ParametrlerPage /></Suspense></AdminRoute>} />
               {/* New consolidated routes (Part 2 will build full pages) */}
-              <Route path="musteriler"            element={<AdminRoute><Navigate to="/sifarisci-idareetme" replace /></AdminRoute>} />
-              <Route path="maliyye-merkezi"       element={<AdminRoute><Navigate to="/daxilolmalar" replace /></AdminRoute>} />
+              <Route path="musteriler"            element={<AdminRoute><Suspense fallback={<PageLoader />}><MusterilerPage /></Suspense></AdminRoute>} />
+              <Route path="maliyye-merkezi"       element={<AdminRoute><Suspense fallback={<PageLoader />}><MaliyyeMerkeziPage /></Suspense></AdminRoute>} />
               <Route path="arxiv"                 element={<Suspense fallback={<PageLoader />}><SendArxiviPage /></Suspense>} />
               {/* Legacy routes — kept for backward compat, not in nav */}
               <Route path="sened-arxivi"          element={<Suspense fallback={<PageLoader />}><SendArxiviPage /></Suspense>} />
