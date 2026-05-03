@@ -231,13 +231,14 @@ insert into templates (category, name, language, is_default, body_html, variable
 on conflict (category, name, language) do nothing;
 
 -- ── 13. outsource_user_view (privacy filter) ─────────────
--- Table is outsource_works (not outsource_items)
+-- Exposes only non-financial columns from outsource_works
 create or replace view outsource_user_view as
 select
-  id, project_id, work_title, contact_person, contact_company,
-  responsible_user_id, deadline, status, cancel_reason,
-  created_at
-  -- amount, paid_at, payment_method intentionally omitted for privacy
+  id, name, outsource_type, project_id,
+  work_type, phase,
+  planned_deadline, actual_deadline, followup_date,
+  work_status, notes, created_at
+  -- contract_amount, total_paid, payment_status, payment_method intentionally omitted
 from outsource_works;
 
 -- ── 14. Verification ─────────────────────────────────────
