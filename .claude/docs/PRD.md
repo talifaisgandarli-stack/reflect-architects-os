@@ -1,5 +1,5 @@
 # Reflect Architects OS — Product Requirements Document
-**Version:** 3.3 (Maliyyə Mərkəzi refactor — bank/kassa, snapshots, internal loans, 3-level P&L, proxy overhead, runway, forecast formula, calibration, free fallback, CCO persona, IP/email audit chain)
+**Version:** 3.4 (Müştərilər lifecycle refactor — pipeline gating, BCC capture, letter composer, workload estimator, viewer log, lifetime value, MIRAI architecture mode + ZIP analysis, 2 user personas)
 **Date:** 2026-05-04
 **Product Owner:** Talifa İsgəndərli
 **Status:** Pre-PMF / Active Development
@@ -121,9 +121,12 @@ Telegram:   Bot API (one Reflect bot, per-user chat_id linking)
 - `mirai_blame_keywords` (id, keyword, weight, locale)
 
 **Clients / CRM**
-- `clients` (id, name, company, email, phone, pipeline_stage, confidence_pct, expected_value, last_interaction_at, ai_icp_fit, ai_icp_calculated_at, created_by)
-- `client_stage_history` (id, client_id, from_stage, to_stage, changed_by, changed_at, lost_reason)
-- `client_interactions` (id, client_id, type, note, occurred_at, logged_by)
+- `clients` (id, name, company, email, phone, pipeline_stage, confidence_pct, expected_value, expected_close_date, last_interaction_at, ai_icp_fit, ai_icp_calculated_at, total_lifetime_value, archived_at, created_by)
+- `client_stage_history` (id, client_id, from_stage, to_stage, changed_by, changed_at, lost_reason, transition_payload jsonb) — `transition_payload` captures the per-transition mandatory fields (e.g. `{proposal_sent_at, proposal_amount}` for Lead→Təklif), used for audit + retroactive validation
+- `client_interactions` (id, client_id, type, note, occurred_at, logged_by, source enum('manual','email_capture'))
+- `client_email_captures` (id, client_id NULL, project_id NULL, from_address, to_address, bcc_match_token, subject, body_text, body_html, attachments jsonb, received_at, ai_match_confidence, ai_matched_by enum('email_pattern','project_name','client_name','manual'), reviewed boolean default false)
+- `client_letters` (id, client_id, project_id NULL, template_id NULL, subject, body_html, variables_used jsonb, generated_pdf_url, signed_at, sent_at NULL, sent_via enum('email','manual_download','platform_share'), created_by)
+- `document_views` (id, document_id references project_documents, share_token, viewer_ip, viewer_user_agent, viewed_at) — every share-token open is logged; surfaces "kim baxdı, nə vaxt baxdı"
 
 **Finance**
 - `incomes` (id, project_id, client_id, amount, payment_method, occurred_at, invoice_number, note, created_by)
@@ -139,8 +142,8 @@ Telegram:   Bot API (one Reflect bot, per-user chat_id linking)
 - `project_overhead_allocations` (project_id PK, period_yyyymm PK, allocated_amount, computed_at, formula_version) — proxy-formula output written monthly by cron; one row per project per month
 
 **Documents**
-- `project_documents` (id, project_id, client_id, category, title, source enum('drive_link','auto_generated','upload'), external_link, storage_path, share_token, shared_with[], created_by, created_at)  ← absorbs the legacy Sənəd Arxivi
-- `templates` (id, category, name, body, variables jsonb, mime_type, created_by)
+- `project_documents` (id, project_id, client_id, category enum('contract','price_protocol','invoice','act','email','letter','outsource_act','retro_survey','other'), title, source enum('drive_link','auto_generated','upload','email_capture'), external_link, storage_path, share_token, shared_with[], created_by, created_at)  ← absorbs the legacy Sənəd Arxivi; canonical category enum closes prior ambiguity
+- `templates` (id, category enum('letter','invoice','delivery_act','email','outsource_act','survey'), subcategory text NULL, name, language text default 'az', body_html, variables jsonb, mime_type, is_default boolean default false, is_active boolean default true, created_by, created_at)
 - `retrospective_surveys` (id, project_id, client_id, share_token, sent_at, responded_at, nps_score, ratings jsonb, comment)
 - `closeout_checklists` (id, project_id, items jsonb, completed_at)
 - `portfolio_workflows` (id, project_id, selected_awards uuid[], website_published_at, press_release_sent, applications jsonb)
@@ -552,27 +555,213 @@ Explicitly NOT in v1 (do not implement, do not design):
 
 ### MODULE 6 — Müştərilər (Clients / CRM)
 
-**Pipeline (8 stages):**
+> Authoritative source for CRM behaviour. v3.4 absorbs `musteri-lifecycle-spec.md` (transition gating, BCC capture, letter composer, workload estimator, MIRAI architecture mode, viewer logging, lifetime value).
+
+#### 6.1 Pipeline stages
+
 ```
-Lead          10%
-Təklif        30%
-Müzakirə      50%
-İmzalanıb     75%
-İcrada        95%
-Portfolio     100%
-Udulan         0%
-Arxiv          —
+Lead       10%   İlk əlaqə
+Təklif     30%   Kommersiya təklifi göndərildi
+Müzakirə   50%   Müştəri ilə danışıq aktiv
+İmzalanıb  75%   Müqavilə imzalandı, avans yox
+İcrada     95%   Avans alındı
+Bitib      —     Layihə tamamlandı (Tamamlandı task statusu ilə sinxron)
+Arxiv      —     6+ ay aktivlik yox (auto)
+İtirildi    0%   Səbəb məcburi
 ```
 
-**REQ-CRM-01** Pipeline kanban with drag → `client_stage_history` entry; "Udulan" requires `lost_reason`.
-**REQ-CRM-02** Pipeline value per stage: `Σ(expected_value × confidence_pct/100)`.
-**REQ-CRM-03** Quick interaction log (≤30s): type (Zəng/Email/Görüş/WhatsApp), free text, date.
-**REQ-CRM-04** AI ICP enrichment via MIRAI (cached `ai_icp_fit` until inputs change; refresh max 1×/24h/client).
-**REQ-CRM-05** Slide-in detail panel (no full-page nav); sections: overview, interactions, proposals, projects, documents.
-**REQ-CRM-06** Proposals = `project_documents` rows with `category='price_protocol'`, optional `project_id`. Share token enables public read-only access.
-**REQ-CRM-07** Retrospective survey: triggered from closeout, public form, NPS 0–10 + per-category 1–5 stars + free text.
+**Note (PM rationale):** CRM stops at `Bitib`. Portfolio submission lives entirely in the task system (PRD §4.1 Portfolio task status). Duplicating it as a CRM stage would be double-bookkeeping for the same lifecycle event.
 
-**RLS:** `clients` admin-only by default. BD Lead role (level 3) granted SELECT/INSERT but NOT financial fields (`expected_value`).
+#### 6.2 Stage transition gating (REQ-CRM-01)
+
+Forward transitions require typed payload; the kanban drop modal collects them and writes to `client_stage_history.transition_payload`. Skipping stages is forbidden except via admin override.
+
+| Transition | Mandatory fields |
+|---|---|
+| Lead → Təklif | `proposal_sent_at` (date), `proposal_amount` (numeric > 0) |
+| Təklif → Müzakirə | `client_response_note` (text), `response_received_at` (date) |
+| Müzakirə → İmzalanıb | `contract_external_link` (Drive URL) — validated as `https://`, `contract_signed_at` (date) |
+| İmzalanıb → İcrada | `advance_amount` (numeric > 0), `advance_received_at` (date) → also auto-creates `incomes` row + receivable |
+| İcrada → Bitib | `delivery_act_document_id` (FK to project_documents), `final_payment_received_at` (date) |
+| → İtirildi | `lost_reason` enum (`budget`, `timeline`, `competitor`, `client_cancel`, `other`), `lost_reason_note` (text — required if `other`) |
+
+**Skip-stage detection:** dragging a card past an intermediate stage shows a blocking modal listing skipped stages; admin sees an "Override (səbəb məcburi)" option, non-admin sees only "Geri qayıt".
+
+**Override flow:** admin must enter `override_reason` (text); transition + reason logged to `audit_log` + `client_stage_history.transition_payload.override_reason`.
+
+#### 6.3 Pipeline value (REQ-CRM-02)
+
+Per-stage and total: `Σ(expected_value × confidence_pct/100)`. Confidence percentages are global (defined by stage) until calibrated per REQ-FIN-17.
+
+#### 6.4 Quick interaction log (REQ-CRM-03)
+
+≤ 30 seconds: type (Zəng / Email / Görüş / WhatsApp / Digər) + free text + date. On save updates `clients.last_interaction_at`.
+
+#### 6.5 AI ICP enrichment (REQ-CRM-04)
+
+MIRAI Strateq scores ICP fit (`Excellent / Good / Medium / Low`); cached in `ai_icp_fit` until inputs change. Refresh ≤ 1×/24h per client.
+
+#### 6.6 Slide-in detail panel (REQ-CRM-05)
+
+Right drawer (`--lg`, 640px). Tabs:
+
+1. **Statistika** (header summary): Ümumi gəlir = `clients.total_lifetime_value`, layihə sayı, ilk əlaqə, son layihə, ortalama dəyər
+2. **Ümumi** — contact info, expected_value, confidence slider, expected_close_date, AI ICP score with refresh button
+3. **Timeline** — auto-rendered from `client_stage_history` rows in reverse chron with avatar + transition + payload summary
+4. **Layihələr** — list of projects with status pill + deadline + last activity
+5. **Sənədlər** — see §6.8 (with viewer log)
+6. **Kommunikasiya** (NEW): unified feed of `client_interactions` + `client_email_captures` reverse-chron; quick-log form at top (PRD §6.4); "✉️ Məktub yaz" button opens letter composer (§6.10)
+7. **Əlaqə şəxsləri** — multi-contact support (admin-only edit)
+
+`clients.total_lifetime_value` is recomputed nightly via `pg_cron` from `Σ(incomes.amount where client_id = c.id)`.
+
+#### 6.7 Proposals — share token (REQ-CRM-06)
+
+Proposals = `project_documents` rows with `category='price_protocol'`. Share token enables public read-only access at `/d/{token}`. Each open emits `document_views` row (REQ-CRM-09); admin sees viewer log.
+
+#### 6.8 Document share token + viewer log (REQ-CRM-09)
+
+Every share-token URL open is logged to `document_views` with IP, user-agent, timestamp. Inside the document drawer, "Baxılma tarixçəsi" panel renders the latest 20 views as compact rows with relative time. Useful signals:
+- Müştəri linki açdı? (eviction of "müştəri görmədi" excuse)
+- Neçə dəfə? (interest signal)
+- Hansı IP-dən? (multiple stakeholders viewing)
+
+For Drive links: same proxy approach — `/d/{token}` is a Reflect-served redirector; the redirect emits the view log row before serving the Drive URL.
+
+Tokens may be revoked by admin (`share_token = NULL` clears it; existing URLs return 410 Gone).
+
+#### 6.9 Retrospective survey (REQ-CRM-07)
+
+Triggered from closeout (PRD REQ-PROJ-04). Template selected from `templates` where `category='survey'` (default seeded). Public form, NPS 0–10 + per-category 1–5 stars + free text. Submission persists to `retrospective_surveys`; admin Dashboard updates rolling 12-month NPS.
+
+#### 6.10 Rəsmi Məktub Composer (REQ-CRM-10)
+
+Drawer-launched composer for client correspondence. Layout:
+
+- Top: subject + recipient (auto-fills client.email)
+- Template picker (left): templates of `category='letter'`
+- WYSIWYG editor (center): plain-but-styled rich text — `{{variable}}` chips auto-populate from client / project context (variables resolved live, see §6.13)
+- Right rail: Logo + möhür preview (firm logo from system_settings)
+- Bottom actions:
+  - **PDF endir** — generates PDF (logo + signature + content); inserts `project_documents` row `source='auto_generated'`, `category='letter'`; share_token issued
+  - **Email göndər** — uses Resend; persists `client_letters.sent_via='email'`, `sent_at`
+  - **Yadda saxla** — saves draft to `client_letters` without sending
+
+Letters never bypass `project_documents` — every saved/sent letter creates a row so it surfaces in the Sənədlər tab and in the project Sənədlər list.
+
+#### 6.11 Email capture via BCC (REQ-CRM-11)
+
+**Workflow:**
+1. Each admin gets a unique BCC address: `{firm-slug}-{secret-token}@reflect-capture.app` (stored in `profiles.email_bcc_address`)
+2. When sending email to a client, employee adds the BCC address (invisible to client)
+3. Resend webhook receives the email → POSTs to `/api/webhooks/email-capture`
+4. AI matcher (Claude Haiku, single batched call per webhook) attempts to match `to_address` + email body against:
+   - `clients.email` exact match (confidence 1.0, `ai_matched_by='email_pattern'`)
+   - `clients.name` / `clients.company` token match in subject/body (confidence 0.7, `ai_matched_by='client_name'`)
+   - `projects.name` token match in subject/body (confidence 0.7, `ai_matched_by='project_name'`)
+5. Insert `client_email_captures` row + `project_documents` row (`category='email'`, `source='email_capture'`, attachments stored in Supabase Storage)
+6. `clients.last_interaction_at` updated; surface in Kommunikasiya tab (§6.6)
+
+**Privacy notes (PRD §9.1):**
+- BCC addresses are per-admin secrets; rotated by admin via "BCC ünvanı yenilə" in Profil
+- Captured emails admin-only RLS
+- "Sender of capture" (admin) recorded; AI never reads beyond what employees explicitly BCC'd
+
+**Failure mode:** if AI confidence < 0.5 across all matches → row inserted with `client_id NULL`, surfaced in Sistem → Email captures inbox for manual matching. No silent loss.
+
+#### 6.12 Workload estimator + Net Income (REQ-CRM-12)
+
+Surfaces in three places:
+1. Müştərilər page header
+2. Inside proposal generation flow (when creating a proposal for the client)
+3. As MIRAI tool when admin asks "Bu layihəni qəbul edə bilərikmi?"
+
+**Header indicator (Müştərilər page):**
+```
+🟢 Komanda yükü: 65% (sağlam)
+⚠️ Yeni layihə qəbul edə bilirik (3 nəfərdə boşluq var)
+```
+
+Computation:
+```
+team_capacity        = Σ_{member m} (m.work_hours × m.availability)
+firm_active_days     = REQ-FIN-13 firm_active_user_days for current month
+load_pct             = firm_active_days / team_capacity
+status:
+  ≤ 70%   🟢 sağlam — yeni layihə qəbul edilə bilər
+  70-90%  🟡 dolu — diqqətlə qəbul
+  > 90%   🔴 həddi keçib — yeni layihə tövsiyə olunmur
+```
+
+**Proposal-time variants (3 options):** for a new project being scoped, MIRAI computes 3 timeline variants:
+```
+estimated_days     = Σ(stage_template.default_duration_weeks) × 5  (project type from stage_templates, REQ-TASK-17)
+fastest            = estimated_days × 0.6
+medium             = estimated_days × 1.0
+comfortable        = estimated_days × 1.5
+```
+
+**Net Income preview** rendered alongside variants:
+```
+Müqavilə dəyəri:    ₼ contract_value
+− Outsource:        ₼ estimated_outsource_cost  (admin enters manually)
+− Overhead:         ₼ allocated_overhead         (proxy formula REQ-FIN-13 projected)
+─────────────────────────────────────
+Reflect-ə net qalır: ₼ X    (Y% of contract)
+```
+
+MIRAI recommends one of the 3 variants based on team load + net % healthiness (e.g. "Orta variant tövsiyə — 10 həftə, ₼100K, net 57% sağlamdır").
+
+#### 6.13 Template variables (REQ-CRM-13)
+
+Standard variable registry, auto-resolved by composer / invoice generator / letter generator:
+
+| Variable | Source |
+|---|---|
+| `{{client_name}}` | `clients.name` |
+| `{{client_company}}` | `clients.company` |
+| `{{client_address}}` | `clients.address` (added to schema) |
+| `{{client_email}}` | `clients.email` |
+| `{{project_name}}` | `projects.name` |
+| `{{contract_amount}}` | `projects.contract_value` |
+| `{{vat_amount}}` | `contract_amount × 0.18` (AZ VAT, REQ-FIN-AZ-VAT) |
+| `{{total_amount}}` | `contract_amount + vat_amount` |
+| `{{date}}` | `now()` Asia/Baku formatted |
+| `{{author_name}}` | `auth.user.full_name` |
+| `{{author_position}}` | `roles.name` |
+| `{{firm_name}}` | `system_settings.firm_name` |
+| `{{firm_logo}}` | `system_settings.firm_logo_url` |
+
+Variables undefined for the current context render as `[Yoxdur]` placeholder + admin warning toast on save: "Bəzi dəyişənlər boş qaldı".
+
+#### 6.14 Auto-archive (REQ-CRM-14)
+
+Daily `pg_cron` flips `pipeline_stage = 'Arxiv'` and sets `archived_at` for clients where `last_interaction_at < now() - interval '6 months'` AND `pipeline_stage NOT IN ('İcrada', 'Bitib', 'İtirildi')`. Archived clients hidden from default pipeline view; surface in Arxiv tab.
+
+#### 6.15 Default templates (REQ-CRM-15)
+
+System ships with seeded `templates` rows (`is_default=true`), per `musteri-lifecycle-spec.md` §Şablon Mərkəzi:
+
+| Template | Subcategory | Source |
+|---|---|---|
+| Email — Təşəkkür | — | system default |
+| Email — Faktura göndəriş | — | system default |
+| Akt — Podratçı (individual) | `individual` | system default |
+| Akt — Podratçı (şirkət) | `company` | system default |
+| Anket — Müştəri retrospektiv | — | system default |
+
+Admin-created (initially empty, admin populates):
+- Letter — Rəsmi məktub
+- Invoice — Hesab-faktura
+- Delivery_act — Sifarişçi ilə təhvil-təslim aktı
+
+Defaults are editable; reverting to default is one click in template detail.
+
+#### 6.16 RLS
+
+- `clients` admin-only by default. BD Lead role (level 3) granted SELECT/INSERT but NOT financial fields (`expected_value`, `total_lifetime_value`)
+- `client_email_captures`, `client_letters`, `document_views`: admin only
+- `templates`: SELECT all authenticated; INSERT/UPDATE admin only
 
 ---
 
@@ -925,7 +1114,13 @@ Circular, initials fallback on deterministic gradient. Stack max 3 + "+N".
 
 ### 7.2 Personas
 **Admin (8):** Əməliyyat Direktoru (COO) / Layihə Mühəndisi / Hüquqşünas (RAG) / Marketinq Direktoru (CMO) / Maliyyə Analitiki (CFO) / Strateq / İK Direktoru (HR) / **Kommunikasiya Direktoru (CCO)**.
-**User (1):** Komanda Köməkçisi.
+**User (2):** **Komanda Köməkçisi (Memarlıq)** / **Komanda Köməkçisi (Ümumi)**.
+
+**User personas detail:**
+- **Komanda Köməkçisi (Memarlıq):** AZDNT normativ axtarışı, ekspertiza qaydaları, məsafələr, AZ tikinti hüquqları, çertyoj standartları. Backed by Bilik Bazası RAG (PRD §10.18 Bilik Bazası). May analyze user-uploaded ZIP/PDF files (10 MB per file, 25 MB per ZIP — REQ-MIRAI-ARCH-01 below). Mode toggle: AZ-fokus (default) / Global. AZ mode prioritizes AZDNT + AZ Civil Code chunks; Global mode allows international references (RIBA, IBC, Eurocode).
+- **Komanda Köməkçisi (Ümumi):** task / project / calendar köməkçi. "Mənim bu həftə tapşırıqlarım nədir?", "X layihəsinin son aktivlikləri", "Sabah hansı görüşlərim var?" type queries. No Bilik Bazası RAG; uses scoped tools per RLS.
+
+**Switching:** user toggles via the same persona pill switcher (PRD §10.19 design). Conversation context resets between user personas (consistent with admin behaviour).
 
 **Kommunikasiya Direktoru (CCO) responsibilities:**
 - Drafts all client-facing written communication: emails to clients, proposal cover letters, retrospective survey invites, official letters (rəsmi məktub), award application narrative texts
@@ -1023,6 +1218,26 @@ Weekly Vercel cron: fetch ArchDaily / Dezeen / Architizer / WAF RSS + award cale
 - Avg response latency
 - Refusal rate (tool denied / over-budget)
 - User satisfaction thumbs (`mirai_feedback` table)
+
+### 7.10 File analysis — ZIP/PDF (REQ-MIRAI-ARCH-01)
+
+Komanda Köməkçisi (Memarlıq) and admin Layihə Mühəndisi accept file uploads for analysis:
+
+- **Limits:** 10 MB per individual file, 25 MB per ZIP archive
+- **Pipeline:** ZIP uploaded → server unzips into temp dir → PDFs forwarded to Anthropic Files API → MIRAI synthesizes ("Bu zip faylındakı sənədləri oxu və xülasə et")
+- **Loading state:** chat input disables; bubble shows "🤖 Bu sual 30 saniyəyə qədər çəkə bilər — sənədləri oxuyur..." with progress spinner (PRD §10.19 chat UI)
+- **Cleanup:** temp files deleted within 60 seconds of response delivery
+- **Audit:** file hash + size + page count logged to `mirai_messages.tools_used`; PDF content NOT persisted server-side
+- **Rate limit:** 5 file analyses per user per day (cost protection per §7.6.1)
+
+### 7.11 Layihə Mühəndisi mode toggle (REQ-MIRAI-ARCH-02)
+
+Layihə Mühəndisi (admin) and Komanda Köməkçisi (Memarlıq) (user) personas surface a mode toggle pill above the chat input:
+
+- **🇦🇿 AZ rejimi (default):** RAG retrieval prioritizes Bilik Bazası rows where `source_pdf` matches AZDNT / AZ Civil Code / AZ tikinti normativləri. References cited with AZ section numbers ("Maddə X.Y.Z").
+- **🌍 Global rejimi:** broadens RAG to international references (if uploaded), permits answers without AZ-specific source citations. Useful for design philosophy, parametric design, sustainability frameworks.
+
+Mode toggle is per-conversation; switching re-runs RAG with new bias.
 
 ---
 
@@ -1949,6 +2164,180 @@ Given a project closeout completes
   And admin Dashboard updates average NPS
 ```
 
+```
+US-CRM-07  Pipeline transition gating (refs REQ-CRM-01)
+AS A BD lead
+I WANT mandatory fields per stage transition
+SO THAT pipeline data is auditable, not aspirational
+
+Given I drag a client from Lead to Təklif
+  When the transition modal opens
+  Then I must enter proposal_sent_at AND proposal_amount > 0
+  And on save the values persist to client_stage_history.transition_payload
+  And confidence_pct updates to 30%
+
+Given I attempt to drag from Lead directly to İmzalanıb (skipping Təklif and Müzakirə)
+  Then a blocking modal lists skipped stages
+  And as a non-admin I see only "Geri qayıt"
+  And as admin I see "Override (səbəb məcburi)" — entering a reason logs it to audit_log
+
+Given I drag to İmzalanıb → İcrada with advance_amount=15000
+  Then advance creates an incomes row + receivable
+  And cash_balances bank/kassa row is offered as target (REQ-FIN-10)
+```
+
+```
+US-CRM-08  Document share token logs every view (refs REQ-CRM-09)
+AS A studio director
+I WANT to know when a client opens a shared document
+SO THAT I have an auditable interest signal
+
+Given a proposal share token at /d/{token}
+  When the client opens the URL
+  Then a document_views row is inserted with IP, user-agent, timestamp
+  And the document drawer "Baxılma tarixçəsi" panel shows the latest 20 views
+
+Given a Drive link wrapped in a share token
+  When the client opens the URL
+  Then the view is logged BEFORE the redirect to Drive
+
+Given I revoke the token (admin)
+  Then share_token = NULL
+  And future opens return 410 Gone
+```
+
+```
+US-CRM-09  Rəsmi məktub composer (refs REQ-CRM-10)
+AS AN admin
+I WANT a composer that produces a signed PDF letter
+SO THAT formal correspondence is one click, not Word + Photoshop
+
+Given I open Müştəri drawer → "✉️ Məktub yaz"
+  When the composer renders
+  Then the WYSIWYG editor pre-populates with selected template body
+  And {{variables}} are auto-resolved from client + project context (US-CRM-12)
+  And the firm logo + signature block render in the right rail preview
+
+Given I click "PDF endir"
+  Then a project_documents row is created (category='letter', source='auto_generated')
+  And a share_token is issued
+  And the PDF download begins
+
+Given I click "Email göndər"
+  Then Resend sends to clients.email
+  And client_letters.sent_via='email', sent_at=now() are recorded
+  And clients.last_interaction_at updates
+```
+
+```
+US-CRM-10  Email BCC capture (refs REQ-CRM-11)
+AS THE platform
+I WANT emails BCC'd by employees to land in the right client/project record
+SO THAT external correspondence isn't lost
+
+Given employee Aydan has BCC address aydan-x7q9z@reflect-capture.app
+  And she sends an email to "client@bilge-qrup.az" with BCC to her address
+  When the Resend webhook posts to /api/webhooks/email-capture
+  Then the AI matcher attempts client/project match
+  And on confidence ≥ 0.5 a client_email_captures row is inserted
+  And a project_documents row (category='email', source='email_capture') is inserted
+  And clients.last_interaction_at is updated
+
+Given AI confidence < 0.5
+  Then the row is inserted with client_id=NULL
+  And appears in Sistem → Email captures inbox for manual matching
+```
+
+```
+US-CRM-11  Workload estimator + Net Income on proposal (refs REQ-CRM-12)
+AS A BD lead
+I WANT 3 timeline variants and Net Income preview before I price
+SO THAT I price sustainably and don't over-commit the team
+
+Given I am scoping a new project for a client (project_type=residential, 200m²)
+  When I open the proposal calculator
+  Then I see 3 variants:
+    ⚡ Ən tez:    estimated_days × 0.6
+    🎯 Orta:      estimated_days × 1.0
+    🌿 Tam rahat: estimated_days × 1.5
+  And Net Income preview shows: contract − outsource − allocated_overhead = net (with %)
+  And MIRAI recommends one variant with reasoning
+
+Given the firm load is 65%
+  When the Müştərilər page header renders
+  Then it shows "🟢 Komanda yükü: 65% (sağlam) — Yeni layihə qəbul edə bilirik"
+```
+
+```
+US-CRM-12  Auto-archive inactive clients (refs REQ-CRM-14)
+AS THE platform
+I WANT clients with no activity for 6 months to auto-archive
+SO THAT the active pipeline stays clean
+
+Given a client where last_interaction_at < now() - interval '6 months'
+  AND pipeline_stage NOT IN ('İcrada', 'Bitib', 'İtirildi')
+  When the daily cron runs
+  Then pipeline_stage = 'Arxiv', archived_at = now()
+  And the row disappears from default pipeline view
+  And surfaces in the Arxiv tab
+```
+
+```
+US-CRM-13  MIRAI Komanda Köməkçisi (Memarlıq) with file analysis (refs REQ-MIRAI-ARCH-01, REQ-MIRAI-ARCH-02)
+AS A team member
+I WANT to ask AZDNT/expertise questions and analyze ZIP/PDF files
+SO THAT I have a domain copilot
+
+Given I am on persona "Komanda Köməkçisi (Memarlıq)" with mode "AZ"
+  When I ask "AZDNT-yə uyğun kafe layihəsi necə olmalıdır?"
+  Then RAG retrieves AZDNT chunks with high priority
+  And the response cites "Mənbə: AZDNT YYYY-NN, Maddə X.Y.Z"
+
+Given I upload a ZIP file (8 MB) with 3 PDF drawings
+  When I ask "Bu sənədləri xülasə et"
+  Then a loading message appears: "🤖 Bu sual 30 saniyəyə qədər çəkə bilər..."
+  And the response references each PDF's contents
+  And the temp files are deleted within 60s after delivery
+
+Given I switch to mode "Global"
+  When I ask the same question
+  Then RAG broadens to international references (if uploaded)
+  And the answer no longer requires AZ section citations
+```
+
+```
+US-CRM-14  Lifetime value displayed on client header (refs §6.6)
+AS A studio director
+I WANT lifetime value visible at a glance per client
+SO THAT I know who is strategically important
+
+Given client Bilgə Qrup has 3 incomes summing ₼285,000
+  When I open their drawer
+  Then the Statistika header reads:
+    Ümumi gəlir: ₼285,000
+    Layihə sayı: 3
+    İlk əlaqə: 2024-08
+    Son layihə: 2026-04
+    Ortalama layihə dəyəri: ₼95,000
+
+Given an income is added or modified
+  When the nightly cron runs
+  Then clients.total_lifetime_value is recomputed
+```
+
+```
+US-CRM-15  Manual email capture matching inbox (refs REQ-CRM-11)
+AS AN admin
+I WANT to manually match low-confidence captures
+SO THAT no email is lost
+
+Given a client_email_captures row with client_id=NULL and confidence 0.3
+  When I open Sistem → Email captures
+  Then I see the row with from/subject/excerpt
+  And I can pick a client + project from dropdowns
+  And on save the row is updated, project_documents row is moved into scope, and Kommunikasiya tabs refresh
+```
+
 ---
 
 ### MODULE 7 — Maliyyə Mərkəzi (refs REQ-FIN-01..09)
@@ -2659,16 +3048,16 @@ Given thresholds in system_settings (income_alert=5000, expense_alert=2000)
 | Layihələr | US-PROJ-01..05 | Leave | US-LEAVE-01..02 |
 | Tapşırıqlar | US-TASK-01..22 | Calendar | US-CAL-01..03 |
 | Arxiv | US-ARC-01..02 | Elanlar | US-ELAN-01..03 |
-| Müştərilər | US-CRM-01..06 | Equipment | US-EQUIP-01 |
+| Müştərilər | US-CRM-01..15 | Equipment | US-EQUIP-01 |
 | Maliyyə | US-FIN-01..18 | OKR | US-OKR-01..03 |
 | Sistem | US-SYS-01..03 | Karyera | US-CAREER-01 |
 | MIRAI | US-MIRAI-01..05 | Content | US-CONTENT-01 |
 | Telegram | US-TG-01..03 | | |
 
-**Total:** 80 user stories across 19 module groups (v3.3 — Maliyyə expanded 8 → 18 with bank/kassa, snapshots, internal loans, 3-level P&L, runway, calibration, free fallback). Each story is QA-testable; cross-references exist to §5 REQ IDs.
+**Total:** 89 user stories across 19 module groups (v3.4 — Müştərilər expanded 6 → 15: pipeline gating, viewer log, letter composer, BCC capture, workload estimator + Net Income, auto-archive, lifetime value, MIRAI architecture mode + ZIP analysis). Each story is QA-testable; cross-references exist to §5 REQ IDs.
 
 ---
 
-*Last updated: 2026-05-04 (v3.3 — Maliyyə Mərkəzi refactor: bank/kassa split, snapshots, internal loans, 3-level P&L, proxy overhead, runway gauge, forecast formula, calibration loop, free fallback, CCO persona, IP/timestamp/email audit chain)*
+*Last updated: 2026-05-04 (v3.4 — Müştərilər lifecycle refactor: pipeline transition gating with mandatory payloads, BCC email capture, rəsmi məktub composer, document viewer log, workload estimator + Net Income, lifetime value, auto-archive, 2 user personas + MIRAI architecture mode + ZIP analysis)*
 *Owner: Talifa İsgəndərli*
 *Next review: end of Part 1 sprint*
