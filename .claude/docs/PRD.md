@@ -1,5 +1,5 @@
 # Reflect Architects OS — Product Requirements Document
-**Version:** 3.4 (Müştərilər lifecycle refactor — pipeline gating, BCC capture, letter composer, workload estimator, viewer log, lifetime value, MIRAI architecture mode + ZIP analysis, 2 user personas)
+**Version:** 3.5 (MIRAI master spec — tool permission matrix, write-approve flow, persona auto-routing, 5 trigger scenarios, quiet hours, validity-aware RAG, knowledge base seed, firm-wide $5 cap, perf metrics via proxy)
 **Date:** 2026-05-04
 **Product Owner:** Talifa İsgəndərli
 **Status:** Pre-PMF / Active Development
@@ -155,10 +155,12 @@ Telegram:   Bot API (one Reflect bot, per-user chat_id linking)
 - `notifications` (id, user_id, kind, payload jsonb, read_at, created_at)
 
 **AI**
-- `mirai_conversations` (id, user_id, persona, started_at, last_message_at, archived_at)
-- `mirai_messages` (id, conversation_id, role, content, tokens_in, tokens_out, cost_usd, tools_used jsonb, created_at)
+- `mirai_conversations` (id, user_id, persona, page_context, entity_type, entity_id, compressed_history jsonb, started_at, last_message_at, archived_at)
+- `mirai_messages` (id, conversation_id, role, content, tool_calls jsonb, tool_results jsonb, tokens_in, tokens_out, cost_usd, cached boolean default false, tools_used jsonb, created_at)
 - `mirai_usage_log` (id, user_id, period_yyyymm, tokens_in, tokens_out, cost_usd)
-- `knowledge_base` (id, source_pdf, chunk_index, content, embedding vector(1536), uploaded_by, uploaded_at)
+- `mirai_firm_usage` (period_yyyymm PK, total_cost_usd, request_count, fallback_active boolean default false) — firm-wide budget tracker (REQ-MIRAI-COST-01)
+- `knowledge_base` (id, source_type enum('law','normative','practice','case'), source_name, source_pdf, chunk_index, content, embedding vector(1536), locale text default 'az', valid_from date, valid_until date NULL, tags text[], uploaded_by, uploaded_at) — `valid_until NULL` means still in force; expired chunks excluded from default RAG retrieval
+- `mirai_trigger_log` (id, trigger_kind enum('deadline_7d','cash_low','task_blocked_3d','client_silent_5d','outsource_payment_2d'), entity_type, entity_id, fired_at, recipient_user_id, message_text, telegram_sent boolean) — proactive notification audit trail (REQ-MIRAI-TRIG-01)
 - `mirai_feed_posts` (id, source_url, source_kind enum('trend','opportunity'), summary, deadline_at, fetched_at, posted_announcement_id)
 
 **System**
@@ -1000,6 +1002,20 @@ List of `profiles`, role, contact, equipment count, current workload.
 - **Unpublish:** admin may revoke publication (sets `published_at = NULL`); logged in `audit_log`
 - **HR persona summary** (PRD §7.2) operates on the live data regardless of `published_at`; admin can preview the not-yet-published summary before deciding to publish
 
+**Metrics surfaced (REQ-PERF-02 — uses proxy from REQ-FIN-13, no timesheet):**
+
+The HR persona aggregates per-employee monthly numbers using the same proxy formula that drives finance overhead allocation (single source of truth, PRD §7.5 `project_overhead_allocations`):
+
+| Metric | Source | Display |
+|---|---|---|
+| Aktiv iş günü (per month) | `Σ project_active_user_days(P, M) for u` | "18 gün (Aprel)" |
+| Tamamlanan tapşırıqlar | `count(tasks where assignee = u AND status='Tamamlandı' AND completed_at in M)` | "23/26 (88%)" |
+| Orta tamamlanma günü | `avg(completed_at - start_date) for u's done tasks in M` | "2.3 gün" |
+| Bloklanmış tapşırıqlar | `count(tasks where assignee = u AND status='İcrada' AND last_status_change > 3 days ago)` | "2" |
+| `is_blame_excluded` saymalı | `count(activity_log where actor=u AND is_blame_excluded=true in M)` | "3 (excluded)" |
+
+**Explicit non-metric:** hours / saat are NEVER displayed. All time-related numbers are calendar-day units (REQ-TASK-15 / §4.17 timesheet exclusion). The `mirai-spec.md` v1 example showing "340 saat" is superseded — we report active-days using the proxy formula.
+
 #### 8.4 Məzuniyyət
 - `leave_requests` (id, employee_id, kind, starts_at, ends_at, days, status, approver_id, note)
 - Workflow: request → admin approve/deny → calendar event auto-created on approve
@@ -1165,20 +1181,49 @@ The wording may vary across responses (MIRAI rephrases to avoid mechanical repet
 - Empty result → MIRAI must reply: "Bu məsələ üzrə dəqiq məlumatım yoxdur."
 
 ### 7.5 Tool Layer
-Whitelisted tools (server-executed, scoped by user role):
-- `list_my_tasks`, `list_my_projects`
-- `create_task` (current user as creator)
-- `summarize_project` (project_id must be in user's scope)
-- `firm_finance_snapshot` (admin only)
-- `search_knowledge_base`
-- `post_announcement_draft` (admin only — feeds Elanlar approval queue)
+Whitelisted tools (server-executed, scoped by user role).
 
-### 7.6 Cost Guardian
-- Per-message: refuse if estimated cost would exceed remaining monthly budget
-- 80% of budget → warning banner
-- 100% → chat disabled until next calendar month, message shown
-- Creator exempt from limit
-- Daily cron rolls usage into `mirai_usage_log`
+#### 7.5.1 Read tools (REQ-MIRAI-TOOL-01)
+
+| Tool | Description | Admin | User |
+|---|---|---|---|
+| `query_financials` | Cash balances, P&L, forecast, internal loans, cash snapshots | ✅ | ❌ |
+| `query_tasks` | Tasks status, deadline risk, dependency chains, blockers | ✅ | ✅ (scoped to own + assigned) |
+| `query_clients` | Clients, pipeline, interactions, lifetime value | ✅ | ❌ |
+| `query_team` | Team workload, leave, performance reviews, salaries | ✅ | ❌ |
+| `query_my_data` | Own profile, own tasks, own salary, own leave | — | ✅ (RLS-scoped) |
+| `search_knowledge` | RAG over `knowledge_base` (AZ laws + normatives) | ✅ | ✅ |
+| `analyze_document` | PDF/image analysis (per §7.10) | ✅ | ✅ |
+| `summarize_project` | Project status + timeline + risk synthesis | ✅ | ✅ (scoped) |
+| `firm_finance_snapshot` | Read-only Cash Cockpit summary | ✅ | ❌ |
+
+Read tools execute via Supabase with the user's JWT — RLS is the final guard. The application layer pre-checks role to avoid wasted DB hits on guaranteed denials.
+
+#### 7.5.2 Write tools — explicit-approve flow (REQ-MIRAI-TOOL-02)
+
+Write tools NEVER execute autonomously. Each invocation produces a **preview payload**; the user must click "Təsdiq et" before the action commits.
+
+| Tool | Description | Admin | User | Approve UI |
+|---|---|---|---|---|
+| `create_task` | Create a task (current user = creator) | ✅ | ✅ (own scope) | Modal preview with editable fields |
+| `draft_email` | Compose email draft (never sends) | ✅ | ❌ | Preview drawer; user copies / opens in mail client |
+| `send_telegram` | Send a Telegram message to a teammate | ✅ | ❌ | Modal "Göndərilsin?" with full message preview + recipient avatar |
+| `post_announcement_draft` | Create unpublished `announcements` row (Elanlar moderation queue) | ✅ | ❌ | Inline confirm |
+
+Server middleware validates: if request comes from MIRAI tool layer with `intent='execute'` but no `approval_token`, request rejected. Approval token issued only after explicit user click; one-time use, expires in 60s.
+
+This is the LLM agent **security boundary**: PRD §9.1 forbids any auto-write from LLM output. The token mechanism makes that enforceable, not aspirational.
+
+#### 7.6 Cost Guardian — firm-wide budget (REQ-MIRAI-COST-01)
+
+- **Hard cap:** firm-wide `MIRAI_MONTHLY_BUDGET_USD` env var, default `5` USD/month for the entire firm (NOT per-user). All admin + user usage rolls into one bucket
+- **Per-user rate limits:** admin 100 messages/day, user 30 messages/day (rolling 24h)
+- **Per-message cost estimate:** refuse if estimated cost would push firm spend over budget
+- **80% of budget** → admin Telegram warning + warning banner in app
+- **100% of budget** → automatic transparent fallback to Groq llama-3.3-70b free tier (REQ-FIN-18); banner shown
+- **Creator exempt from per-user limit** but counts toward firm cap
+- Daily cron rolls usage into `mirai_usage_log` + `mirai_firm_usage`
+- Calibrated to historical scenarios from `mirai-spec.md`: 3 admin + 10 user → ~$2.30/month real; 5 admin + 15 user → ~$4.60/month max → $5 firm cap covers active use comfortably
 
 #### 7.6.1 Mandatory cost optimizations
 
@@ -1208,7 +1253,61 @@ Telegram delivery is **template + cron** by default — not MIRAI-generated — 
 All other Telegram traffic — deadline reminders, mention notifications, finance alerts, Smart Reminder, daily 09:00/18:00 summaries — uses fixed templates from `locales/az.json` filled in by cron, never MIRAI-generated.
 
 ### 7.7 Context Engine
-System prompt injects: today's date (Asia/Baku), user role, active projects (names+phases+deadlines), open task count, persona-specific extras.
+System prompt injects: today's date (Asia/Baku), user role, active projects (names+phases+deadlines), open task count, persona-specific extras. Page-aware: also injects the current `page_context` (URL pathname) and active entity (`entity_type`, `entity_id`) when applicable. Cached via Anthropic prompt caching (~90% input discount).
+
+Sample injection block:
+```
+[CONTEXT]
+Page: /projects/abc123
+Entity: Layihə "Nəriman Towers" (status: İcrada, P&L Net: ₼75K)
+User: Admin (Talifa İsgəndərli)
+Time: 2026-05-03 14:30 Asia/Baku
+Cash: Bank ₼145K | Kassa ₼8.5K (REQ-FIN-10)
+Active deadlines: 2 (3 gün + 12 gün)
+```
+
+#### 7.7.1 Persona auto-routing (REQ-MIRAI-ROUTE-01)
+
+When admin opens MIRAI without explicit persona selection, the router picks based on `(page_context, query keywords)`:
+
+| Page | Keywords | Persona |
+|---|---|---|
+| `/maliyyə-mərkəzi/*` | cash flow, P&L, balance, gəlir, xərc, forecast | CFO |
+| `/maliyyə-mərkəzi/forecast` | forecast, proqnoz | CFO |
+| `/tapşırıqlar/*` | deadline, blocked, sub-task, assignee | COO |
+| `/tapşırıqlar/*` | priority, sırala, gecikən | COO |
+| `/müştərilər/*` | e-poçt, məktub, müştəriyə cavab | CCO |
+| `/müştərilər/*` | pipeline, forecast, expected_value | CFO + CMO co-suggest |
+| `/işçi-heyəti/*` | performans, məzuniyyət, yük | HR |
+| `/layihələr/*` | normativ, AZDNT, ekspertiza, məsafə | Layihə Mühəndisi |
+| `/elanlar/*`, `/məzmun-planlaşdırması/*` | trend, opportunity, marketinq | CMO |
+| (any) | qanun, Vergi Məcəlləsi, Əmək Məcəlləsi | Hüquqşünas |
+| (any) | strategiya, böyümə, hiring plan | Strateq |
+
+Fallback: COO (operational catch-all). Admin always sees the routed persona pill highlighted; clicking another pill commits manual override → sticky for the conversation.
+
+#### 7.7.2 Context-based suggestion chips (REQ-MIRAI-CHIPS-01)
+
+On MIRAI pop-up open, 3 quick-question chips render below the input, computed from active page:
+
+| Page | Chip 1 | Chip 2 | Chip 3 |
+|---|---|---|---|
+| Maliyyə Mərkəzi | "Bu ayın P&L-i?" | "Forecast riskləri?" | "Cash cockpit izah et" |
+| Tapşırıqlar | "Bu həftə nə bloklanıb?" | "Deadline riski?" | "Prioriteti sırala" |
+| Müştərilər | "Pipeline forecast?" | "ICP fit ən yüksək olanlar?" | "Bu müştəriyə məktub yaz" |
+| Layihələr (detail) | "Bu layihənin riskləri?" | "Ekspertiza statusu?" | "Komanda yükü neçədir?" |
+| Dashboard | "Bu gün nə vacibdir?" | "Bu həftə deadline-lar" | "Komanda nə üzərində işləyir?" |
+| (digər) | (boş — chip render olunmur) | | |
+
+Click → text inserted into input; user submits or edits.
+
+#### 7.7.3 Pop-up state persistence (REQ-MIRAI-UI-01)
+
+The MIRAI pop-up uses global Zustand state (`useMiraiStore`) so that:
+- Open/closed state persists across page navigation
+- Active conversation (and selected persona) survives page transitions
+- Unread badge increments on background tool-result arrival
+- Mobile: pop-up promotes to bottom-sheet; "Genişlət" button switches to 800×600 side panel on desktop
 
 ### 7.8 CMO → Elanlar Cron
 Weekly Vercel cron: fetch ArchDaily / Dezeen / Architizer / WAF RSS + award calendars → MIRAI CMO summarizes & filters (architecture + AZ/regional relevance) → inserts `mirai_feed_posts` and creates `announcements` row with `mirai_generated=true, approved=false`. Admin moderation queue gates publication.
@@ -1219,16 +1318,22 @@ Weekly Vercel cron: fetch ArchDaily / Dezeen / Architizer / WAF RSS + award cale
 - Refusal rate (tool denied / over-budget)
 - User satisfaction thumbs (`mirai_feedback` table)
 
-### 7.10 File analysis — ZIP/PDF (REQ-MIRAI-ARCH-01)
+### 7.10 File analysis — PDF / DOCX / image (REQ-MIRAI-ARCH-01)
 
-Komanda Köməkçisi (Memarlıq) and admin Layihə Mühəndisi accept file uploads for analysis:
+Komanda Köməkçisi (Memarlıq), admin Layihə Mühəndisi, and CCO accept file uploads for analysis. Supported formats: **PDF, DOCX, JPG, PNG**.
 
-- **Limits:** 10 MB per individual file, 25 MB per ZIP archive
-- **Pipeline:** ZIP uploaded → server unzips into temp dir → PDFs forwarded to Anthropic Files API → MIRAI synthesizes ("Bu zip faylındakı sənədləri oxu və xülasə et")
-- **Loading state:** chat input disables; bubble shows "🤖 Bu sual 30 saniyəyə qədər çəkə bilər — sənədləri oxuyur..." with progress spinner (PRD §10.19 chat UI)
-- **Cleanup:** temp files deleted within 60 seconds of response delivery
-- **Audit:** file hash + size + page count logged to `mirai_messages.tools_used`; PDF content NOT persisted server-side
-- **Rate limit:** 5 file analyses per user per day (cost protection per §7.6.1)
+- **Limits:** 5 MB per individual file, max 3 files per request
+- **Pipeline:** files uploaded → forwarded to Anthropic Files API (PDF/DOCX) or vision input (JPG/PNG) → MIRAI synthesizes
+- **Use cases (real):**
+  - Müqavilə PDF → "Bu müqavilədə risk nədir? AZ hüququna uyğundur?" (Hüquqşünas)
+  - Çertyoj PDF → "Bu planda əlillik tələbləri varmı?" (Layihə Mühəndisi)
+  - Smeta PDF → "Bu smeta bazar qiymətlərinə uyğundur?" (Maliyyə Analitiki)
+  - Email screenshot JPG → "Bu müştəriyə necə cavab verim?" (CCO)
+  - Çertyoj JPG render → "Bu konsepti necə təkmilləşdirim?" (Layihə Mühəndisi)
+- **Loading state:** chat input disables; bubble shows "🤖 Bu sual 30 saniyəyə qədər çəkə bilər — sənədləri oxuyur..." with progress spinner (design system §10.19)
+- **Cleanup:** uploaded files deleted from temp storage within 60 seconds of response delivery
+- **Audit:** file hash + size + page count logged to `mirai_messages.tools_used`; file content NOT persisted server-side
+- **Rate limit:** 5 file-analysis requests per user per day (cost protection per §7.6.1)
 
 ### 7.11 Layihə Mühəndisi mode toggle (REQ-MIRAI-ARCH-02)
 
@@ -1238,6 +1343,53 @@ Layihə Mühəndisi (admin) and Komanda Köməkçisi (Memarlıq) (user) personas
 - **🌍 Global rejimi:** broadens RAG to international references (if uploaded), permits answers without AZ-specific source citations. Useful for design philosophy, parametric design, sustainability frameworks.
 
 Mode toggle is per-conversation; switching re-runs RAG with new bias.
+
+### 7.12 Trigger-based proactive notifications (REQ-MIRAI-TRIG-01)
+
+Beyond the daily 09:00 / 18:00 summaries (REQ-TASK-21) and Smart Reminder (REQ-TASK-23), MIRAI proactively notifies admins on 5 specific conditions detected by the hourly cron. Each fire writes to `mirai_trigger_log`:
+
+| Trigger kind | Condition | Recipient | Message persona |
+|---|---|---|---|
+| `deadline_7d` | Project `deadline - 7 days <= now()` AND status NOT IN closed/cancelled | Project's responsible admins + creator | COO |
+| `cash_low` | `current_total_balance < min_runway_required × 0.8` (REQ-FIN-14) | Creator + CFO admins | CFO (with disclaimer) |
+| `task_blocked_3d` | Task in `İcrada` with last comment older than 3 days AND no status change | Task assignees + creator | COO |
+| `client_silent_5d` | Client `pipeline_stage IN ('Təklif','Müzakirə')` AND `last_interaction_at < now() - 5 days` | Project admin + sales lead | CCO (suggests follow-up) |
+| `outsource_payment_2d` | `outsource_items.status='Təhvil'` AND `now() - status_changed_at > 2 days` AND `paid_at IS NULL` | Finance admin + creator | CFO |
+
+Triggers are **deduplicated**: same `(trigger_kind, entity_id, recipient)` won't fire twice in a 24h window. All messages routed via Telegram cron (PRD §7.6.2 hybrid policy — these 5 are **not** MIRAI-rewritten by default; the persona is just a header label).
+
+### 7.13 Telegram message hygiene — quiet hours + per-user cap (REQ-MIRAI-TRIG-02)
+
+- **Quiet hours:** 22:00–08:00 Asia/Baku — no Telegram messages dispatched (queued, sent at 08:00 next morning); critical exceptions: `cash_low` and `deadline_7d` with `<24h` left
+- **Per-user cap:** max 3 Telegram messages per user per calendar day across all triggers (excluding mentions and replies — those are direct conversation, not notification spam)
+- Excess messages above cap roll into the next day's 09:00 morning summary card as a digest line: "🔔 Dünən sizə 5 xəbərdarlıq olub — yığım: ..."
+
+### 7.14 Knowledge Base content scope (REQ-MIRAI-RAG-01)
+
+`knowledge_base` table seeded with the following AZ-specific content (Talifa curates the initial PDF set):
+
+**Laws (priority, `source_type='law'`):**
+- "Şəhərsalma və tikinti haqqında" Qanun (latest revision)
+- "Sahibkarlıq fəaliyyəti haqqında" Qanun
+- "Mühasibat uçotu haqqında" Qanun
+- Vergi Məcəlləsi (VAT, gəlir vergisi, ödəniş müddətləri)
+- Əmək Məcəlləsi (məzuniyyət, işdən çıxarma, maaş)
+- "Elektron imza haqqında" Qanun
+
+**Construction normatives (`source_type='normative'`):**
+- SNiP series (2.08.01-89, 2.07.01-89 və s.)
+- AZS EN series (Eurocode adaptations)
+- Yanğın təhlükəsizliyi normaları (fire safety)
+- Accessibility (əlillik) tələbləri
+- Energy efficiency standards
+
+**Practice (`source_type='practice'`):**
+- İcazə prosedurları (city/region differences)
+- Bakı-spesifik qaydalar (Binaların Texniki Baxışı)
+- Outsource market price ranges (AZN, 2024–2026)
+- Smeta normatives (ABŞERON+)
+
+Each chunk carries `valid_from`, `valid_until` (NULL while in force), and `tags text[]` for category filtering. Default RAG retrieval filters `valid_until IS NULL OR valid_until > now()` — automatically excludes expired law versions. Annual review: admin marks superseded chunks `valid_until = supersession_date` rather than deleting (PRD §10 no data loss).
 
 ---
 
@@ -2993,6 +3145,159 @@ Given the weekly cron runs (Mon 09:00 Asia/Baku)
   And admins receive a moderation queue notification
 ```
 
+```
+US-MIRAI-06  Tool layer permission boundary (refs REQ-MIRAI-TOOL-01)
+AS A team member
+I WANT MIRAI to refuse data outside my role scope cleanly
+SO THAT firm financials and other-user PII stay protected
+
+Given I am a Member (level 4) and I ask "Bu ay nə qədər gəlirimiz olub?"
+  When MIRAI's tool layer attempts query_financials
+  Then the tool returns immediate denial (admin only)
+  And MIRAI responds with the satirical AZ refusal tone (REQ-MIRAI-PRIV-01)
+  And tools_used logs the denial with reason='admin_only'
+  And no financial values appear in the response
+
+Given I ask "Mənim son tapşırıqlarım?"
+  Then query_my_data executes scoped to auth.uid()
+  And only my own rows return
+```
+
+```
+US-MIRAI-07  Write tool explicit-approve flow (refs REQ-MIRAI-TOOL-02)
+AS AN admin
+I WANT MIRAI write actions to require explicit approval
+SO THAT no autonomous side effects happen
+
+Given MIRAI proposes "Aydan-a Telegram göndər: 'Yarın 14:00 toplantı'"
+  When I see the preview modal
+  Then it shows recipient avatar + full message text
+  And the "Göndər" button generates a one-time approval_token (60s TTL)
+  And only after I click does the actual Telegram dispatch occur
+
+Given the approval_token expires
+  When I click "Göndər" 65 seconds later
+  Then the request is rejected
+  And MIRAI re-proposes with a fresh preview
+
+Given I never click approve
+  Then no Telegram message is sent
+  And mirai_messages.tool_calls records the proposal but no tool_results
+```
+
+```
+US-MIRAI-08  Persona auto-routing on page change (refs REQ-MIRAI-ROUTE-01)
+AS AN admin
+I WANT MIRAI to default to the right persona for the page I'm on
+SO THAT I don't waste a click switching every time
+
+Given I am on /maliyyə-mərkəzi/forecast and I open MIRAI
+  When the persona pill highlights
+  Then CFO is auto-selected
+  And the suggestion chips render: "Bu ayın P&L-i?", "Forecast riskləri?", "Cash cockpit izah et"
+
+Given I click the COO pill manually
+  Then COO becomes sticky for the rest of this conversation
+  And navigating to a new page does NOT auto-route again until I close + reopen
+```
+
+```
+US-MIRAI-09  Trigger-based proactive alerts (refs REQ-MIRAI-TRIG-01, REQ-MIRAI-TRIG-02)
+AS A studio director
+I WANT MIRAI to alert me on 5 specific scenarios proactively
+SO THAT firm risks surface early, not after damage
+
+Given a project deadline is 7 days away
+  When the hourly cron runs
+  Then a mirai_trigger_log row with trigger_kind='deadline_7d' is inserted
+  And a Telegram message is queued (subject to quiet hours)
+  And the same (trigger_kind, entity_id, recipient) does NOT fire again for 24h
+
+Given current_total_balance < min_runway_required × 0.8
+  Then trigger_kind='cash_low' fires to creator + CFO admins
+  And the Telegram message uses the CFO persona header label
+  And critical exception: this trigger BYPASSES quiet hours if runway < 1 month
+
+Given quiet hours apply (22:00 — 08:00) and a non-critical trigger fires
+  Then the message is queued
+  And dispatched at 08:00 next day OR rolled into the 09:00 morning summary digest line
+```
+
+```
+US-MIRAI-10  Knowledge base validity-aware retrieval (refs REQ-MIRAI-RAG-01)
+AS A team member
+I WANT MIRAI's RAG to skip expired law versions
+SO THAT I never get cited a 2018 normative replaced in 2024
+
+Given knowledge_base has both 2018 and 2024 versions of an AZ normative
+  AND the 2018 row has valid_until = 2024-06-01
+  When I ask a question matching both via vector similarity
+  Then RAG retrieves only the 2024 version (valid_until IS NULL)
+  And the cited "Mənbə: <pdf>, Maddə X.Y.Z" reflects the current law
+
+Given an admin marks a chunk superseded with valid_until = today
+  Then future RAG queries exclude it automatically
+  AND the row is preserved per PRD §10 (no DELETE)
+```
+
+```
+US-MIRAI-11  File analysis with image support (refs REQ-MIRAI-ARCH-01)
+AS A team member
+I WANT to upload up to 3 files (PDF/DOCX/JPG/PNG, ≤5MB each) for analysis
+SO THAT real-world inputs are usable
+
+Given I am on Komanda Köməkçisi (Memarlıq) and I attach 2 PDFs (3 MB each) + 1 JPG (2 MB)
+  When I ask "Bu sənədləri xülasə et"
+  Then MIRAI accepts all 3 (within limits)
+  And processes via Files API + vision input
+  And shows "🤖 Bu sual 30 saniyəyə qədər çəkə bilər..." loading state
+  And temp files are deleted within 60s after delivery
+
+Given I attempt to upload a 4th file
+  Then the upload UI shows error "Maksimum 3 fayl. Birini silin."
+  And the request does not submit
+
+Given my daily file-analysis count = 5
+  When I attempt a 6th
+  Then MIRAI refuses with "Gündəlik fayl analizi limitiniz dolub. Sabah yenidən cəhd edin."
+```
+
+```
+US-MIRAI-12  Pop-up state survives navigation (refs REQ-MIRAI-UI-01)
+AS A team member
+I WANT MIRAI conversation to persist across page changes
+SO THAT I don't lose context when I navigate
+
+Given I open MIRAI on /tapşırıqlar with persona COO and 3 messages exchanged
+  When I navigate to /müştərilər
+  Then MIRAI stays open with same persona and same conversation history
+  And the unread badge increments if a tool result arrives in background
+
+Given I close the pop-up and reopen
+  Then auto-routing recomputes based on current page (/müştərilər → CCO suggested)
+  But the previous conversation is still accessible via "Keçmiş" tab
+```
+
+```
+US-MIRAI-13  Firm-wide budget cap with Groq fallback (refs REQ-MIRAI-COST-01)
+AS THE platform
+I WANT a single $5/month firm cap (not per-user)
+SO THAT total LLM spend is bounded regardless of team size
+
+Given MIRAI_MONTHLY_BUDGET_USD = 5 and firm cumulative spend = $4.10
+  When any user sends a message
+  Then a one-time admin Telegram fires: "MIRAI 80% limitə çatdı (₼6.97 sərf olundu, ₼1.70 qaldı)"
+
+Given firm cumulative spend reaches $5.00
+  When any user sends a subsequent message
+  Then transparently routes to Groq llama-3.3-70b free tier
+  And UI banner: "🔄 Pulsuz model rejimi — keyfiyyət bir az aşağı ola bilər"
+  And mirai_firm_usage.fallback_active = true
+
+Given on the 1st of the next month the firm budget resets
+  Then primary model resumes automatically and the banner clears
+```
+
 ---
 
 ### MODULE 12 — Telegram
@@ -3051,13 +3356,13 @@ Given thresholds in system_settings (income_alert=5000, expense_alert=2000)
 | Müştərilər | US-CRM-01..15 | Equipment | US-EQUIP-01 |
 | Maliyyə | US-FIN-01..18 | OKR | US-OKR-01..03 |
 | Sistem | US-SYS-01..03 | Karyera | US-CAREER-01 |
-| MIRAI | US-MIRAI-01..05 | Content | US-CONTENT-01 |
+| MIRAI | US-MIRAI-01..13 | Content | US-CONTENT-01 |
 | Telegram | US-TG-01..03 | | |
 
-**Total:** 89 user stories across 19 module groups (v3.4 — Müştərilər expanded 6 → 15: pipeline gating, viewer log, letter composer, BCC capture, workload estimator + Net Income, auto-archive, lifetime value, MIRAI architecture mode + ZIP analysis). Each story is QA-testable; cross-references exist to §5 REQ IDs.
+**Total:** 97 user stories across 19 module groups (v3.5 — MIRAI expanded 5 → 13: tool permission boundary, write-approve flow, persona auto-routing, trigger-based proactive alerts, validity-aware RAG, image file analysis, pop-up state persistence, firm-wide budget cap). Each story is QA-testable; cross-references exist to §5 REQ IDs.
 
 ---
 
-*Last updated: 2026-05-04 (v3.4 — Müştərilər lifecycle refactor: pipeline transition gating with mandatory payloads, BCC email capture, rəsmi məktub composer, document viewer log, workload estimator + Net Income, lifetime value, auto-archive, 2 user personas + MIRAI architecture mode + ZIP analysis)*
+*Last updated: 2026-05-04 (v3.5 — MIRAI master: 9-tool permission matrix with write-approve flow, persona auto-routing per page+keyword, 5 trigger-based proactive scenarios, Telegram quiet hours + 3/day cap, knowledge_base validity-aware retrieval + AZ content seed list, file analysis 5MB/3 files with image support, pop-up state persistence, firm-wide $5/month budget cap with Groq fallback, performance metrics via finance proxy formula not timesheet)*
 *Owner: Talifa İsgəndərli*
 *Next review: end of Part 1 sprint*
