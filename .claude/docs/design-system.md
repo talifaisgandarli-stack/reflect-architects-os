@@ -1,5 +1,5 @@
 # Reflect Architects OS — Design System
-**Version:** 2.2 (aligned to PRD v3.3 — Maliyyə Mərkəzi refactor, CCO persona, performance publish)
+**Version:** 2.3 (aligned to PRD v3.4 — Müştərilər lifecycle, transition gating, BCC capture, letter composer, 2 user personas, mode toggle, file upload)
 **Date:** 2026-05-04
 **Lead Designer:** Principal Designer II
 **Companion to:** `.claude/docs/PRD.md` (v3.0)
@@ -211,7 +211,7 @@ When task is **also** overdue or expertise, priority tick takes precedence on th
 | `leave_approval` | ✅ | leave_requests insert |
 | `followup` | 💬 | CRM interaction follow-up |
 
-### 2.3 Pipeline Stage Color Map (PRD §5 MODULE 6, 8 stages)
+### 2.3 Pipeline Stage Color Map (PRD §5 MODULE 6 v3.4, 8 stages)
 
 | Stage (AZ) | Color | Confidence |
 |---|---|---|
@@ -220,11 +220,13 @@ When task is **also** overdue or expertise, priority tick takes precedence on th
 | Müzakirə | `#D97706` | 50% |
 | İmzalanıb | `#8B5CF6` | 75% |
 | İcrada | `#22C55E` | 95% |
-| Portfolio | `#10B981` | 100% |
-| Udulan | `#EF4444` | 0% |
+| Bitib | `#10B981` | — |
 | Arxiv | `#9CA3AF` | — |
+| İtirildi | `#EF4444` | 0% |
 
 Used in: pipeline kanban headers, client card stage badge, table stage cell, drawer header chip.
+
+> **Note:** CRM does NOT include a `Portfolio` stage. Portfolio submission lives entirely in the task system (PRD §4.1 task status `Portfolio`). Avoiding double-bookkeeping for the same lifecycle event.
 
 ### 2.4 Project Phase Gradients (PRD §5 MODULE 3)
 
@@ -2051,28 +2053,216 @@ Read-only view under İŞ group. Combines `tasks` (`archived_at IS NOT NULL`) an
 
 Restore action confirms via `confirm()` dialog → admin-only RLS guard server-side (REQ-ARC-02). Non-admin sees no restore action and is scoped to own items (REQ-ARC-03).
 
-### 10.6 Müştərilər (CRM) — REQ-CRM-01..07 / US-CRM-01..06
+### 10.6 Müştərilər (CRM) — REQ-CRM-01..15 / US-CRM-01..15
+
+**Page header (admin only):**
+```
+Müştərilər                                       [+ Yeni müştəri — primary]
+🟢 Komanda yükü: 65% (sağlam) — Yeni layihə qəbul edə bilirik
+₼ Pipeline value (weighted): ₼287,500
+```
+
+Header indicator color: 🟢 ≤70% / 🟡 70–90% / 🔴 >90% (REQ-CRM-12).
 
 **View toggle:** `Pipeline / Cədvəl`. Detail opens as right drawer (`--lg`) over either view.
 
-**Pipeline (Attio workflow style):**
+#### 10.6.1 Pipeline view (Attio workflow)
+
 - Dots canvas background
-- 8 stage columns (PRD §5 MOD 6) with header showing stage name + total `Σ(expected_value × confidence_pct/100)` (REQ-CRM-02)
-- Client cards = workflow nodes (§6.13) with: company logo + name (`--text-base` 600), confidence %, last interaction relative time, AI ICP badge (`pill--ai`)
-- Drag between columns → confidence updates per §2.3 map; drop on `Udulan` opens `lost_reason` required dialog (US-CRM-01)
+- 8 stage columns: Lead / Təklif / Müzakirə / İmzalanıb / İcrada / Bitib / Arxiv / İtirildi (note: NO Portfolio — see §2.3)
+- Column header: stage name + total `Σ(expected_value × confidence_pct/100)` (REQ-CRM-02)
+- Client cards = workflow nodes (§6.13): company logo + name (`--text-base` 600), confidence %, last interaction relative time, AI ICP badge (`pill--ai`)
+- Drag between columns → **transition gating modal** (§10.6.2, REQ-CRM-01)
+- Drop on `İtirildi` → required `lost_reason` enum + note dialog
+- Skip-stage drag → blocking modal (admin sees override option)
 
-**Table view:**
-- Columns: Şirkət (logo + name) / Əlaqə / Mərhələ / Gözlənilən dəyər (numeric) / Ehtimal % / Son aktivlik / ICP Fit (AI) / Əlaqə gücü
-- BD Lead role (level 3): financial column `Gözlənilən dəyər` masked with `cell--masked` per RLS
+#### 10.6.2 Stage transition modal (US-CRM-07)
 
-**Client Drawer (US-CRM-04):**
-- Header: company logo + name + stage chip (`pipeline color`) + `Mərhələni dəyiş` dropdown
-- Tabs: `Ümumi / Qeydlər / Təkliflər / Layihələr / Sənədlər`
-- **Ümumi:** contact info, expected value, confidence slider, expected close date, AI ICP score with "Yenilə" button (throttled 1/24h, US-CRM-03)
-- **Qeydlər:** quick interaction log form at top (type pill row + free-text + submit ≤30s, US-CRM-02), reverse-chron feed below
-- **Təkliflər:** list of `project_documents` with `category='price_protocol'`; `Yeni təklif` opens template picker (US-CRM-05); each row has copy-link icon → toast "Link kopyalandı"
+When a card is dropped on the next valid stage, the modal collects mandatory payload before the drop commits:
 
-**Retrospective survey (US-CRM-06):** triggered from project closeout. Public form at `/r/{share_token}` — no auth, NPS 0–10 row of 11 buttons + per-category 1–5 stars + free-text + submit.
+```
+┌─────────────────────────────────────────────────────┐
+│  Lead → Təklif                          [×]          │
+├─────────────────────────────────────────────────────┤
+│  Bilgə Qrup mərhələni dəyişir.                       │
+│                                                       │
+│  Təklif tarixi*:    [📅 ____]                        │
+│  Təklif məbləği*:   [₼ ______]                       │
+│                                                       │
+│  Qeyd: bu məlumatlar audit izinə qaydalanır.         │
+│                                                       │
+│  [Ləğv et]                       [Mərhələni dəyiş]   │
+└─────────────────────────────────────────────────────┘
+```
+
+Per-transition field set per PRD §6.2:
+| Transition | Modal fields |
+|---|---|
+| Lead → Təklif | Təklif tarixi + Təklif məbləği |
+| Təklif → Müzakirə | Müştəri cavabı + Cavab tarixi |
+| Müzakirə → İmzalanıb | Müqavilə Drive linki (URL validation) + İmzalanma tarixi |
+| İmzalanıb → İcrada | Avans məbləği + Avans tarixi (auto-creates income+receivable) |
+| İcrada → Bitib | Təhvil-təslim aktı (project_documents picker) + Final ödəniş tarixi |
+| → İtirildi | Səbəb (radio: Büdcə / Müddət / Rəqib / Müştəri ləğv etdi / Digər) + Qeyd (məcburi if Digər) |
+
+**Skip-stage block modal (non-admin):**
+```
+⚠️ Mərhələ atlamaq olmaz
+Atlanmış mərhələlər: Təklif, Müzakirə
+Bu mərhələləri əvvəlcə tamamlamaq lazımdır.
+[Geri qayıt]
+```
+
+**Skip-stage admin override:** same modal but adds at bottom:
+```
+─────────────────────────────────────
+Override (admin):
+Səbəb*: [text input]
+[Geri qayıt]    [Override et — danger]
+```
+
+Override commit logs both `transition_payload.override_reason` and an `audit_log` row.
+
+#### 10.6.3 Table view
+
+Columns: Şirkət (logo + name) / Əlaqə / Mərhələ / Gözlənilən dəyər (numeric) / Ehtimal % / Son aktivlik / **Lifetime ₼** (NEW) / ICP Fit (AI) / Əlaqə gücü
+
+BD Lead role (level 3): financial columns `Gözlənilən dəyər` + `Lifetime ₼` masked with `cell--masked` per RLS.
+
+#### 10.6.4 Client Drawer (US-CRM-04, US-CRM-14)
+
+Header (Statistika summary):
+```
+Bilgə Qrup                                  [Edit] [Arxiv]
+─────────────────────────────────────────────────────────
+📊 Ümumi gəlir: ₼285,000  Layihə sayı: 3
+   İlk əlaqə: 2024-08    Son layihə: 2026-04
+   Ortalama: ₼95,000
+─────────────────────────────────────────────────────────
+[Stage chip — pipeline color]   [Mərhələni dəyiş ▼]
+```
+
+Tabs: `Statistika / Ümumi / Timeline / Layihələr / Sənədlər / Kommunikasiya / Əlaqə şəxsləri`
+
+- **Statistika** (default tab) — header summary expanded with sparkline of incomes per quarter; AI ICP score with refresh button (throttled 1/24h, US-CRM-03)
+- **Ümumi** — contact info, expected value, confidence slider, expected close date
+- **Timeline** — `client_stage_history` rows reverse chron with avatar + transition + transition_payload summary chips (e.g. "Avans: ₼15K, 02 May")
+- **Layihələr** — list of projects with status pill + deadline + last activity
+- **Sənədlər** — `project_documents` rows for this client; categories (Müqavilə, Qiymət protokolu, Hesab-faktura, Akt, Email, Məktub) shown as filter pills above; per-row "Baxılma tarixçəsi" expansion (§10.6.5)
+- **Kommunikasiya** (NEW) — unified feed: `client_interactions` + `client_email_captures` reverse chron; quick-log form at top (type pill + text + submit, ≤30s); "✉️ Məktub yaz" button opens letter composer (§10.6.6); BCC-captured emails marked with 📥 badge + "BCC capture" pill
+- **Əlaqə şəxsləri** — multi-contact rows (admin only edit)
+
+#### 10.6.5 Document viewer log (US-CRM-08)
+
+Inside any document row in Sənədlər tab, expandable "Baxılma tarixçəsi":
+
+```
+👁 Baxılma tarixçəsi (12)
+─────────────────────────────
+03 May 14:32 · 95.85.xx.xx · Chrome/Mac
+03 May 14:30 · 95.85.xx.xx · Chrome/Mac
+02 May 09:18 · 188.72.yy.yy · Safari/iOS
+... [Hamısına bax →]
+```
+
+- Empty state: "Hələ heç kim açmayıb"
+- Repeat opens from same IP within 5min collapsed into single row with `(N dəfə)` count
+- Admin "Tokeni iptal et" action → confirms → URL returns 410 Gone
+
+#### 10.6.6 Rəsmi Məktub Composer (US-CRM-09)
+
+Drawer (`--lg` 640px) opened from Kommunikasiya tab "✉️ Məktub yaz":
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Yeni məktub — Bilgə Qrup                              [×]  │
+├─────────────────────────────────────────────────────────────┤
+│  Mövzu: [_______________________________________________]   │
+│  Alıcı:  client@bilge-qrup.az                                │
+│                                                              │
+│  ┌─ Şablon ────────┐  ┌─ Məzmun ──────────────┐  ┌─ Önizləmə ┐
+│  │ ▸ Müqavilə      │  │ [WYSIWYG editor]      │  │ [Logo]    │
+│  │ ▸ Faktura       │  │ {{client_name}} chips │  │ [Letter   │
+│  │ ▸ Təşəkkür      │  │ paragraf...           │  │  preview] │
+│  │ ▸ Sorğu         │  │                       │  │ [İmza+    │
+│  │ [+ Yeni şablon] │  │                       │  │  möhür]   │
+│  └─────────────────┘  └───────────────────────┘  └───────────┘
+│                                                              │
+│  ☐ Email göndər (avtomatik Resend)                           │
+│                                                              │
+│  [PDF endir]   [Email göndər]   [Yadda saxla]   [Ləğv et]   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+Variable chips (right-side variable picker) drag-drop into editor; double-click any chip to insert at cursor. Unresolved variables on save → toast warning "Bəzi dəyişənlər boş qaldı" + highlights `[Yoxdur]` placeholders.
+
+Output:
+- **PDF endir:** generates PDF (logo + signature + content); inserts `project_documents` row + share_token; download starts
+- **Email göndər:** Resend → `client_letters.sent_via='email'` + `sent_at`
+- **Yadda saxla:** `client_letters` draft, no project_documents row yet
+
+#### 10.6.7 Email BCC capture inbox (US-CRM-15)
+
+Sistem → Email captures (admin only). Layout:
+
+```
+📥 Email captures inbox  ·  3 manual matching gözləyir
+───────────────────────────────────────────────────────
+○ "Layihə təklifi haqqında" — to: client@bilge-qrup.az
+   from: aydan@reflect.app  ·  03 May 14:30  ·  AI: 0.4 ⚠️
+   [Müştəri picker]  [Layihə picker]  [Saxla]  [Sil]
+   
+✓ "Final təhvil" — to: yeni@hacikend.az  ·  matched ✓
+   from: talifa@reflect.app  ·  02 May 18:00  ·  AI: 0.95 ✅
+```
+
+Matched rows (confidence ≥0.5) auto-disappear from this inbox after 7 days; unmatched stay until human action.
+
+#### 10.6.8 Workload estimator + Net Income (US-CRM-11)
+
+Surfaces in 3 places:
+
+**A. Müştərilər page header** (already shown §10.6 top):
+```
+🟢 Komanda yükü: 65% (sağlam) — Yeni layihə qəbul edə bilirik
+```
+
+**B. Proposal flow modal** (when creating proposal for client):
+```
+┌──────────────────────────────────────────────────────┐
+│  📊 Çatdırılma müddəti hesablaması                   │
+├──────────────────────────────────────────────────────┤
+│  Müştəri: Bilgə Qrup                                  │
+│  Layihə: Yay evi (residential, 200 m²)                │
+│                                                       │
+│  ⏱ Variantlar:                                        │
+│  ⦿ ⚡ Ən tez: 6 həftə      (estimated × 0.6)          │
+│  ○ 🎯 Orta:    10 həftə     (estimated × 1.0)         │
+│  ○ 🌿 Tam rahat: 14 həftə  (estimated × 1.5)          │
+│                                                       │
+│  💰 Net qazanc proqnozu (₼100K müqavilə):            │
+│     Müqavilə dəyəri:        ₼100,000                  │
+│     − Outsource (estimate): ₼ 25,000                  │
+│     − Overhead allocation:  ₼ 18,000                  │
+│     ────────────────────────────────                  │
+│     Reflect-ə net qalır:    ₼ 57,000  (57%)  🟢       │
+│                                                       │
+│  💡 MIRAI tövsiyəsi: Orta variant + ₼100K müqavilə   │
+│     Səbəb: Komanda yükü uyğundur, net qazanc 57%      │
+│                                                       │
+│  [Ləğv et]              [Variantı seç və davam et]   │
+└──────────────────────────────────────────────────────┘
+```
+
+**C. Inline MIRAI tool** in chat for "Bu layihəni qəbul edə bilərikmi?" type questions; same content rendered as MIRAI bubble.
+
+#### 10.6.9 Auto-archive (US-CRM-12)
+
+Daily cron flips inactive (>6mo) clients to `Arxiv`. Archived clients hidden from default pipeline; appear under "Arxiv" stage column with muted opacity. Admin can reactivate via card menu `↩ Bərpa et` → returns card to its `previous_stage` from `client_stage_history`.
+
+#### 10.6.10 Retrospective survey (US-CRM-06)
+
+Triggered from project closeout. Public form at `/r/{share_token}` — no auth, NPS 0–10 row of 11 buttons + per-category 1–5 stars + free-text + submit.
 
 ### 10.7 Maliyyə Mərkəzi — REQ-FIN-01..09 / US-FIN-01..08
 
@@ -2420,10 +2610,36 @@ Calendar grid view + list view toggle. Each `content_plans` entry: channel pill 
 #### Ümumi
 - Firm name input, logo uploader, default currency picker, working hours range, AZ holidays multi-select calendar
 
-#### Şablonlar (US-SYS-01)
-- Table: Kateqoriya / Ad / Variables / Son redaktə / Müəllif
-- Editor opens drawer: split — left: rich-text editor with `{{variable}}` autocomplete, right: live preview with sample values
-- Variables auto-extracted on save; preview updates live
+#### Şablonlar (US-SYS-01, REQ-CRM-15)
+
+Two sections rendered as collapsible groups:
+
+**📦 Sistem default şablonları** (seeded, editable, revertible):
+| Şablon | Kateqoriya |
+|---|---|
+| Email — Təşəkkür | `email` |
+| Email — Faktura göndəriş | `email` |
+| Akt — Podratçı (individual) | `outsource_act / individual` |
+| Akt — Podratçı (şirkət) | `outsource_act / company` |
+| Anket — Müştəri retrospektiv | `survey` |
+
+Each row has `↺ Default-a qaytar` action; admin edits restore via this button.
+
+**✏️ Sizin yaratdığınız şablonlar** (initially empty):
+| Şablon | Kateqoriya |
+|---|---|
+| (boş) Rəsmi məktub | `letter` |
+| (boş) Hesab-faktura | `invoice` |
+| (boş) Sifarişçi ilə təhvil-təslim aktı | `delivery_act` |
+
+Empty rows show `[+ Şablon yarat]` CTA inline.
+
+**Editor drawer** (`--lg`):
+- Split — left: rich-text editor (TipTap) with `{{variable}}` chip autocomplete from REQ-CRM-13 registry
+- Right: live preview rendered with sample values (e.g. `{{client_name}}` → "Bilgə Qrup")
+- Top: language selector (AZ/EN/RU) — switches active body
+- Variables auto-extracted on save; missing required variables flagged with yellow warnings
+- "Önbaxış PDF" button generates sample PDF
 
 #### Bilik Bazası (US-SYS-02)
 - Drag-drop PDF uploader
@@ -2482,7 +2698,11 @@ Optional geometric overlay: SVG lines connecting dots at blob centers (1px strok
 **Persona selector:**
 - Admin: 8 pill buttons in horizontally scrollable row — `Əməliyyat Direktoru (COO) / Layihə Mühəndisi / Hüquqşünas / CMO / Maliyyə Analitiki (CFO) / Strateq / İK Direktoru (HR) / Kommunikasiya Direktoru (CCO)`
 - Each pill carries an emoji prefix for fast recognition: 🎯 COO / 🏗️ Layihə / ⚖️ Hüquqşünas / 📣 CMO / 💰 CFO / 🧭 Strateq / 👥 HR / ✉️ CCO
-- User: 1 pill — `Komanda Köməkçisi`
+- User: 2 pills — `🏛 Komanda Köməkçisi (Memarlıq)` / `🤝 Komanda Köməkçisi (Ümumi)` (PRD §7.2 v3.4)
+  - Memarlıq pill is the default for users; persona switch starts a new conversation
+  - Memarlıq pill surfaces an additional **mode toggle** above the chat input: `🇦🇿 AZ rejimi` / `🌍 Global rejimi` (REQ-MIRAI-ARCH-02). Switching mode re-runs RAG with new bias for next message
+  - Memarlıq pill enables file upload (📎 chip beside send button) — accepts ZIP/PDF up to limits (10 MB / 25 MB), shows progress + "🤖 Bu sual 30 saniyəyə qədər çəkə bilər..." loading copy (REQ-MIRAI-ARCH-01)
+  - Ümumi pill has no file upload, no mode toggle
 - Active persona: `--color-brand` bg + white text; inactive: `--color-n100` bg
 - Switching persona starts a new conversation (PRD §7.2)
 
@@ -2871,6 +3091,6 @@ Every feature PR must pass this checklist before merge. It complements PRD §11.
 
 ---
 
-*Last updated: 2026-05-04 (v2.2 — Maliyyə Mərkəzi: bank/kassa cockpit, runway gauge, snapshot chart, Token Counter widget, 3-level P&L drawer, Cross-Project Funding suggester with audit chain, two-line forecast chart with calibration banner, CCO persona, performance publish flow, Bildirişlər matrix expanded)*
+*Last updated: 2026-05-04 (v2.3 — Müştərilər lifecycle: pipeline 8 stages with Bitib (no Portfolio), transition gating modal per stage with skip/override flow, expanded drawer with Statistika header + Kommunikasiya tab + lifetime value, document viewer log, rəsmi məktub composer, BCC email capture inbox, workload + Net Income proposal flow, auto-archive cron; Şablon Mərkəzi seeded defaults; user 2-persona MIRAI with mode toggle + file upload)*
 *Owner: Talifa İsgəndərli*
 *Review cycle: after each module's first implementation; full review at v1.0 release*
