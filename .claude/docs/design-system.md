@@ -1,5 +1,5 @@
 # Reflect Architects OS — Design System
-**Version:** 2.1 (aligned to PRD v3.2 — Tapşırıqlar refactor, HR persona, satirical tone)
+**Version:** 2.2 (aligned to PRD v3.3 — Maliyyə Mərkəzi refactor, CCO persona, performance publish)
 **Date:** 2026-05-04
 **Lead Designer:** Principal Designer II
 **Companion to:** `.claude/docs/PRD.md` (v3.0)
@@ -2078,28 +2078,69 @@ Restore action confirms via `confirm()` dialog → admin-only RLS guard server-s
 
 Single page, 6 tabs. Sticky `Cash Cockpit` summary above tabs.
 
-**Sticky top bar (Cash Cockpit balance):**
+**Sticky top bar (Cash Cockpit balance) — Bank vs Kassa split, US-FIN-09:**
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  Cari balans         12,450 AZN ↑     +8% vs keçən ay       │
-│  [+ Gəlir — primary] [+ Xərc — secondary]                   │
-└─────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────┐
+│  🏦 Bank: ₼145,000   💵 Kassa: ₼8,500   📊 Cəmi: ₼153,500              │
+│  📈 30g: ₼178K   90g: ₼165K   12ay: ₼240K                              │
+│  ⚠️ Min. tələb (3 ay runway): ₼210K → 🟡 Diqqət                         │
+│  [+ Gəlir — primary] [+ Xərc — secondary]                              │
+└────────────────────────────────────────────────────────────────────────┘
 ```
+
 - Featured-style gradient border card
-- Number tabular, large (`--text-3xl`), trend arrow + %
+- Numbers tabular, large (`--text-3xl`), AZN-formatted via `Intl.NumberFormat('az-AZ')`
+- Bank icon `🏦` + Kassa icon `💵` rendered inline; tooltip on each shows breakdown if multiple rows (e.g. "Kapital ₼90K + PASHA ₼55K")
+- Runway gauge color: 🟢 ≥3mo / 🟡 2–3mo / 🔴 <2mo (REQ-FIN-14)
+- Insufficient history (< 6 months expenses) → runway line replaced with muted text "Burn rate hesablaması üçün 6 aylıq tarixçə lazımdır"
+- "+ Gəlir" / "+ Xərc" modals require selecting target balance row (radio of bank/kassa rows) — empty state never appears (CHECK trigger ensures sum)
 
 **Tabs:** `Cash Cockpit / P&L / Outsource / Xərclər / Debitor / Forecast`
 
 #### 10.7.1 Cash Cockpit
 - Featured balance (already sticky above)
 - 3 metric cards row: `Gəlir / Xərc / Gözlənilən` (this month, tabular)
-- Recent transactions table (compact): Tarix / Növ / Layihə / Məbləğ (color-coded: gəlir green, xərc red)
+- **Cash snapshot chart** (REQ-FIN-11): area chart of last 90 days from `cash_snapshot_mv`. Two-band area: `bank_total` (blue tint) + `kassa_total` (green tint). Stacked. X axis: date. Y axis: AZN tabular.
+- **Token Counter Dashboard widget** (REQ-FIN-18, US-FIN-17): admin-only card under Cash Cockpit row:
+  ```
+  ┌────────────────────────────────────────┐
+  │ 🤖 MIRAI istifadəsi (May 2026)         │
+  │ ₼3.20 / ₼5.00 budget  ━━━━━─── 64%     │
+  │                                         │
+  │ Persona: CFO ₼1.20 · HR ₼0.80 · ...    │
+  │ User: Talifa ₼2.10 · Aydan ₼0.70 · ... │
+  │ [30-day sparkline of daily tokens]      │
+  └────────────────────────────────────────┘
+  ```
+  - Bar fill: green <80%, yellow 80–100%, red ≥100%
+  - At 100% → red banner under widget: "🔄 Pulsuz model rejiminə keçildi (Groq llama-3.3)"
+- Recent transactions table (compact): Tarix / Növ / Layihə / Bank/Kassa / Məbləğ (color-coded: gəlir green, xərc red, internal_loan brand)
 - "Hamısına bax" link → opens Xərclər/Debitor based on type
 
-#### 10.7.2 P&L (US-FIN-06)
-- Firm-level row at top (gəlir / xərc / outsource / net)
-- Project rows below, sortable by net descending
-- "Excel ixracı" button (right) → `.xlsx` download
+#### 10.7.2 P&L — 3-level (US-FIN-12, REQ-FIN-06)
+
+Firm-level header row, project rows below.
+
+**Project row layout:**
+```
+Layihə X — Bilgə Qrup                                    [⋯]
+   Gross    ₼100,000
+   Net      ₼ 75,000   (Gross − ₼25,000 outsource)
+   Final    ₼ 68,375   (Net − ₼6,625 overhead)    🟢
+```
+
+- Each level on its own line, tabular numerals, right-aligned
+- Health emoji at end of Final line:
+  - 🟢 Final ≥ 30% of Gross
+  - 🟡 10–30%
+  - 🔴 < 10%
+- Click row → drawer opens with breakdown:
+  - Income transactions list
+  - Outsource items list
+  - **Overhead allocation breakdown** (US-FIN-13, REQ-FIN-13): per-month rows showing `month / firm_overhead / share_% / allocated`. Override button per row → modal accepts `override_amount` + `override_reason`; flagged rows show `↺ Manual` chip
+  - **MIRAI alert banner** if 25% peer divergence: "⚠️ Bu layihənin overhead-ı oxşar müddətli digər layihələrdən %X yüksəkdir. Səbəbi araşdırın."
+- Sort: by Final descending (default), Gross / Net / project name as alternates
+- "Excel ixracı" button (right) → `.xlsx` download with all 3 levels + monthly overhead allocation history
 
 #### 10.7.3 Outsource (US-FIN-04, REQ-FIN-07)
 - Table: Layihə / İş növü / Məsul / Deadline / Status (always visible)
@@ -2135,15 +2176,101 @@ Other status transitions (Sifariş → Sifariş, Sifariş → Təhvil-skip, Canc
 - Status pills: `Tam ödənilib` (success) / `Qismən` (warning) / `Vaxtı keçib` (danger)
 - Row action: `Ödəniş qeyd et` opens partial-payment modal with overpayment guard ("Ödəniş qalıq məbləği aşır", US-FIN-02)
 
-#### 10.7.6 Forecast (US-FIN-07)
-- 3 tab cards: 30 / 60 / 90 gün
-- Each: ring progress around projected balance with confidence_low / high range below
-- Disclaimer: "Bu proqnoz son 6 ayın məlumatlarına əsaslanır"
-- `Yenilə` button (rate-limited 1/24h per user)
+#### 10.7.6 Forecast — two-line confidence chart (US-FIN-15, REQ-FIN-15..17)
 
-**`+ Gəlir` / `+ Xərc` modal (REQ-FIN-01, REQ-FIN-04):**
-- Fields: amount (positive validated) + project + client + payment_method + date + invoice_number + note
-- On save: row insert + activity_log + receivable auto-mark-paid if amount matches (US-FIN-01)
+**Horizon tabs:** `30 gün / 90 gün / 365 gün`
+
+**Two-line area chart layout:**
+```
+Balance (₼)
+  ↑
+  │           ╱─── Optimistic (dashed)  ← all sources @ full
+  │       ╱──╱       confidence
+  │   ╱──╱
+  │ ╱─    ━━━━━━━ Confident (solid)  ← only ≥90% confidence
+  │       ━━━━ ⓘ
+  │  shaded warning-bg = risk zone
+  └─────────────────────→ date
+```
+
+```css
+.forecast-chart .line--confident { stroke: var(--color-brand); stroke-width: 2; fill: none; }
+.forecast-chart .line--optimistic { stroke: var(--color-brand-border); stroke-width: 2; stroke-dasharray: 6 4; fill: none; }
+.forecast-chart .risk-zone        { fill: var(--color-warning-bg); opacity: 0.5; }
+.forecast-chart .axis-grid        { stroke: var(--color-n200); }
+.forecast-chart .axis-label       { font-size: var(--text-xs); fill: var(--color-n400); }
+```
+
+**Right side panel:**
+- Source contributions list (collapsible per confidence tier):
+  - 95% — Müqaviləli + avans alınmış (₼XX)
+  - 75% — Müqaviləli, avans yox (₼XX)
+  - 60% — CRM İcrada (₼XX)
+  - 30% — CRM Təklif/İmzalanıb (₼XX)
+  - 10% — CRM Lead (₼XX)
+- "Yenilə" button — rate-limited 1×/24h per user, shows next-allowed time on hover
+- Disclaimer: "Bu proqnoz son 6 ayın məlumatlarına əsaslanır"
+
+**Calibration banner (US-FIN-16):** when MIRAI detects a confidence tier consistently miscalibrated by >15% over 3 months, banner appears above the chart:
+
+```
+🤖 İcrada confidence 60% → 55% tövsiyə olunur
+   Son 3 ayın faktiki nəticələri: 55%, 53%, 57%.
+   [Tətbiq et]   [Sonra]   [Detallar]
+```
+
+#### 10.7.7 Cross-Project Funding suggester (US-FIN-11, REQ-FIN-12)
+
+When MIRAI detects shortfall + sibling surplus, a modal opens automatically (admin only):
+
+```
+┌──────────────────────────────────────────────────────┐
+│  🤖 MIRAI: Daxili maliyyələşdirmə təklifi             │
+├──────────────────────────────────────────────────────┤
+│                                                       │
+│  Z layihəsinin maaş ödənişi 3 gün içində çatmır.      │
+│  Lazım olan məbləğ: ₼15,000                           │
+│                                                       │
+│  Mövcud opsiyalar:                                    │
+│  ⦿ X layihəsi  (₼45,000 sərbəst, avans alındı)       │
+│  ○ Y layihəsi  (₼20,000 sərbəst, final gözlənilir)   │
+│  ○ Sabit kassadan (₼8,500 — yetərsiz ⚠️)             │
+│                                                       │
+│  💡 Tövsiyəm: X layihəsi                              │
+│     Səbəb: Z 2 ay sonra ₼60K gətirəcək, X-də buffer  │
+│     var, final ödəniş 3 ay sonradır.                  │
+│                                                       │
+│  Səbəb: [_______________________________________]    │
+│  [Canvas signature pad]                               │
+│                                                       │
+│  [Ləğv et]    [Y-dən götür]    [X-dən götür — primary]│
+└──────────────────────────────────────────────────────┘
+```
+
+- Selected source highlighted with `--color-brand-light` row
+- Insufficient sources shown with `⚠️` and disabled radio
+- Səbəb text required to commit
+- Canvas signature pad (300×100px) — captures signature
+- On commit:
+  - `internal_loans` row inserted
+  - PDF auto-generated with all `audit_chain` fields embedded (REQ-FIN-19)
+  - Toast: "Daxili borc qeyd olundu — PDF audit-də saxlanılır"
+- Repayment prompt appears later as a Mənim Tapşırıqlarım row (`task_kind='followup'`) when borrowing project receives income
+
+**Audit chain panel** (REQ-FIN-19) on internal loan detail drawer:
+```
+🔒 Audit zənciri
+─────────────────
+IP: 95.85.xx.xx
+Tarix: 04 May 2026 14:32:08 (Asia/Baku)
+Aktiv: talifa@example.com
+Imza: [thumbnail of canvas signature]
+Email təsdiqi: ✅ talifa@... (2 dəq sonra)
+```
+
+#### 10.7.8 `+ Gəlir` / `+ Xərc` modal (REQ-FIN-01, REQ-FIN-04)
+- Fields: amount (positive validated) + project + client + payment_method + **target balance row (radio: 🏦 Kapital / 🏦 PASHA / 💵 Main kassa)** + date + invoice_number + note
+- On save: row insert + activity_log + receivable auto-mark-paid if amount matches + target `cash_balances.current_balance` increment (US-FIN-01)
 - Negative amount → `.input--error` + "Məbləğ müsbət olmalıdır"
 
 **Invoice template generator (US-FIN-08):**
@@ -2170,10 +2297,27 @@ Click → opens employee detail drawer (Profil, Kompensasiya — admin only, Per
 - **User view (US-SAL-01):** single card showing current effective salary + history table (effective_from / effective_to / amount / components breakdown)
 - **Admin view (US-SAL-02):** all employees table with current salary + "Yenilə" action; update modal inserts new `salaries` row (no overwrite), prev row's `effective_to` set to day before; `audit_log` entry recorded
 
-### 10.10 Performans — US-PERF-01..02
+### 10.10 Performans — US-PERF-01..02 / REQ-PERF-01
 
-- User: vertical list of yearly cards (2026, 2027, …) with ring progress (§6.9) + ratings breakdown bars + reviewer name
-- Admin: switchable between "Mənim" and per-employee dropdown; "Yeni qiymətləndirmə" modal (year, score 0–100, ratings JSON form, summary)
+- **User view:** vertical list of yearly cards for years where `published_at IS NOT NULL`. Each card: ring progress (§6.9) + ratings breakdown bars + reviewer name + publish date in subtitle ("Yayımlandı: 18 Dek 2026"). Years without published reviews simply don't appear; **no draft data leaks**.
+- 3 years employed + all published → 3 cards.
+- **Admin view:** switchable between "Mənim" and per-employee dropdown. Each row shows BOTH draft and published years; draft rows have a yellow `📝 Qaralama` pill, published rows have green `✅ Yayımlandı`.
+- **Yeni qiymətləndirmə modal** (admin, REQ-PERF-01):
+  ```
+  Yeni qiymətləndirmə — Aydan, 2026
+  ─────────────────────────────────
+  Score (0–100):     [_____]
+  Ratings (4 ölçü):  [components form]
+  Xülasə:            [textarea]
+  
+  ☐ İndi yayımla (işçi dərhal görəcək)
+  
+  [Ləğv et]   [Qaralama saxla]   [Yarat və yayımla — primary]
+  ```
+- "Qaralama saxla" → `published_at = NULL` (default). User cannot see.
+- "Yayımla" button on existing draft rows → confirms → `published_at = now()`, in-app + Telegram notification "{year} performans nəticəniz hazırdır" fires to employee.
+- **Unpublish flow:** admin opens published row → `⋯` menu → "Yayımı geri al" → confirm dialog → `published_at = NULL`; logged in `audit_log`. UI strongly discourages this with copy: "İşçi bu yekunu artıq görüb. Geri almaq görmə tarixçəsini silmir."
+- **HR persona summary preview** (PRD §7.2): admin viewing a draft sees an inline "🤖 MIRAI HR önizləməsi" card above the form fields → blame-exclusion-aware aggregation visible to admin even before publish (see §10.19 İK persona).
 - Activates from year 2026 (REQ-Komanda 8.3)
 
 ### 10.11 Məzuniyyət — US-LEAVE-01..02
@@ -2288,8 +2432,26 @@ Calendar grid view + list view toggle. Each `content_plans` entry: channel pill 
 - Re-upload same filename → confirms versioning replacement
 
 #### Bildirişlər
-- Matrix UI: rows = event kinds (Deadline / Mention / Status change / Finance alert / MIRAI feed), columns = channels (In-app / Email / Telegram), cells = toggle switches (§6.10)
+- Matrix UI: rows = event kinds, columns = channels (In-app / Email / Telegram), cells = toggle switches (§6.10)
 - Stored in `notification_preferences (user_id, channel, event_kind, enabled)`
+
+**Event kind rows (full list, PRD §6.4 + §4.13 + REQ-TASK-21 + REQ-TASK-23):**
+| Event kind | AZ label |
+|---|---|
+| `deadline` | Tapşırıq deadline yaxınlaşır / keçdi |
+| `mention` | Komment-də etiketlənmə |
+| `status_change` | Tapşırıq statusu dəyişdi (mənə təyin olunan) |
+| `assignment` | Yeni tapşırıq mənə təyin olundu |
+| `finance_alert` | Maliyyə xəbərdarlığı (yalnız admin/creator) |
+| `mirai_feed` | MIRAI Elanlar yayımı |
+| `morning_summary` | 09:00 günün özeti |
+| `evening_motivation` | 18:00 gün sonu motivasiyası |
+| `smart_reminder` | MIRAI elapsed-vs-estimate xəbərdarlığı |
+| `performance_published` | İllik performans yekunu yayımlandı |
+| `loan_proposal` | Daxili borc təklifi (admin only) |
+| `internal_loan_repayment_due` | Borc qaytarma xatırlatması (admin only) |
+
+User toggles each cell. Defaults: in-app=ON for all; Telegram=ON for deadline/mention/finance_alert/morning_summary; Email=OFF except `performance_published`.
 
 ### 10.19 MIRAI — REQ-MIRAI-* / US-MIRAI-01..05 (PRD §7)
 
@@ -2318,11 +2480,18 @@ Right:   orange/white   → "Artistic Intelligence" label
 Optional geometric overlay: SVG lines connecting dots at blob centers (1px stroke `--color-n900`, dot r=3) — adds the "constellation" feel.
 
 **Persona selector:**
-- Admin: 7 pill buttons in horizontally scrollable row — `Əməliyyat Direktoru / Layihə Mühəndisi / Hüquqşünas / CMO / Maliyyə Analitiki / Strateq / İK Direktoru`
-- Each pill carries an emoji prefix for fast recognition: 🎯 Əməliyyat / 🏗️ Layihə / ⚖️ Hüquqşünas / 📣 CMO / 💰 Maliyyə / 🧭 Strateq / 👥 İK
+- Admin: 8 pill buttons in horizontally scrollable row — `Əməliyyat Direktoru (COO) / Layihə Mühəndisi / Hüquqşünas / CMO / Maliyyə Analitiki (CFO) / Strateq / İK Direktoru (HR) / Kommunikasiya Direktoru (CCO)`
+- Each pill carries an emoji prefix for fast recognition: 🎯 COO / 🏗️ Layihə / ⚖️ Hüquqşünas / 📣 CMO / 💰 CFO / 🧭 Strateq / 👥 HR / ✉️ CCO
 - User: 1 pill — `Komanda Köməkçisi`
 - Active persona: `--color-brand` bg + white text; inactive: `--color-n100` bg
 - Switching persona starts a new conversation (PRD §7.2)
+
+**CCO persona — special surfaces:**
+- Drafts client-facing copy: emails, proposal cover letters, retro survey invites, official letters (rəsmi məktub), award narratives
+- Auto-detects target language from `clients.locale` (AZ default, EN/RU/TR supported)
+- Output rendered in CCO bubble with a "Dilə dəyiş" mini-dropdown above (preserve drafts across language switches)
+- "Drafts only" pill below CCO output: "📝 Yalnız qaralama — admin redaktə + göndərmə"
+- Send button is intentionally absent — copy-to-clipboard + "Müştəri panelinə apar" instead
 
 **İK Direktoru (HR) persona — special surfaces:**
 - Monthly performance summary card (auto-rendered on Performans page top, admin-only) per Module 8.3
@@ -2702,6 +2871,6 @@ Every feature PR must pass this checklist before merge. It complements PRD §11.
 
 ---
 
-*Last updated: 2026-05-04 (v2.1 — Tapşırıqlar refactor, HR persona, satirical refusal tone, lazy outsource executor, editable closeout + custom awards)*
+*Last updated: 2026-05-04 (v2.2 — Maliyyə Mərkəzi: bank/kassa cockpit, runway gauge, snapshot chart, Token Counter widget, 3-level P&L drawer, Cross-Project Funding suggester with audit chain, two-line forecast chart with calibration banner, CCO persona, performance publish flow, Bildirişlər matrix expanded)*
 *Owner: Talifa İsgəndərli*
 *Review cycle: after each module's first implementation; full review at v1.0 release*
