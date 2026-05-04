@@ -1,5 +1,5 @@
 # Reflect Architects OS — Product Requirements Document
-**Version:** 3.2 (Closeout/awards customisation, MIRAI HR persona + tone, Smart Reminder, outsource lazy executor)
+**Version:** 3.3 (Maliyyə Mərkəzi refactor — bank/kassa, snapshots, internal loans, 3-level P&L, proxy overhead, runway, forecast formula, calibration, free fallback, CCO persona, IP/email audit chain)
 **Date:** 2026-05-04
 **Product Owner:** Talifa İsgəndərli
 **Status:** Pre-PMF / Active Development
@@ -133,6 +133,10 @@ Telegram:   Bot API (one Reflect bot, per-user chat_id linking)
 - `outsource_user_view` (Postgres view exposing outsource_items WITHOUT amount/paid_at/payment_method to non-admins)
 - `receivables` (id, client_id, project_id, amount, due_at, paid_amount, status)
 - `cash_forecasts` (id, generated_at, horizon_days, projected_balance, confidence_low, confidence_high, generated_by)
+- `cash_balances` (id, kind enum('bank','kassa'), label, current_balance, currency default 'AZN', updated_at, updated_by) — bank accounts and physical cash registers tracked separately; sum of all rows = total liquid balance shown in Cash Cockpit
+- `cash_snapshots` (id, snapshot_date date, bank_total, kassa_total, grand_total, generated_at) — daily snapshot row written by `pg_cron` at 00:05 Asia/Baku, materialized view `cash_snapshot_mv` exposes 90-day rolling history for charts
+- `internal_loans` (id, borrowing_project_id, lending_project_id, amount, reason, requested_by, approved_by, approved_at, repaid_at, status enum('open','repaid','written_off'), audit_pdf_url, created_at) — every loan auto-generates a PDF receipt for tax-audit defense (PRD §9.1)
+- `project_overhead_allocations` (project_id PK, period_yyyymm PK, allocated_amount, computed_at, formula_version) — proxy-formula output written monthly by cron; one row per project per month
 
 **Documents**
 - `project_documents` (id, project_id, client_id, category, title, source enum('drive_link','auto_generated','upload'), external_link, storage_path, share_token, shared_with[], created_by, created_at)  ← absorbs the legacy Sənəd Arxivi
@@ -574,26 +578,213 @@ Arxiv          —
 
 ### MODULE 7 — Maliyyə Mərkəzi (Finance)
 
+> Authoritative source for finance behaviour. v3.3 absorbs `maliyye-merkezi-spec.md` (bank/kassa split, snapshots, internal loans, 3-level P&L, explicit forecast formula, audit chain).
+
 **Single page, 6 tabs:**
-1. Cash Cockpit (sticky top bar with current balance)
-2. P&L (project-level + firm-level)
+1. Cash Cockpit (sticky top bar with bank + kassa breakdown + runway gauge)
+2. P&L (firm-level + project-level — Gross / Net / Final)
 3. Outsource (admin amounts; users: hidden via view)
 4. Xərclər (one-off + recurring)
 5. Debitor (receivables)
-6. Forecast (MIRAI 30/60/90d)
+6. Forecast (MIRAI 30/60/90/365d with confidence chart)
 
-**REQ-FIN-01** "+ Gəlir" modal: amount, project, client, payment_method, date, invoice_number, note. On save → `incomes` row + activity_log + receivable status sync.
+#### 7.1 Core requirements
+
+**REQ-FIN-01** "+ Gəlir" modal: amount, project, client, payment_method, target balance row (bank or kassa — REQ-FIN-10), date, invoice_number, note. On save → `incomes` row + activity_log + receivable status sync + `cash_balances.current_balance` increment.
+
 **REQ-FIN-02** Receivable overpayment validation: `paid_amount` cannot exceed `amount`. Excess flagged, blocks save.
-**REQ-FIN-03** `markPaid` partial fix: supports partial payments (`paid_amount += delta`), updates `status` only when fully paid.
-**REQ-FIN-04** Negative-amount validation across `incomes`, `expenses`, `outsource_items`: `amount > 0` check at DB and form layers.
-**REQ-FIN-05** Sabit (recurring) xərclər: format normalized — `recurring_expenses` table, period enum (`weekly|monthly|quarterly|yearly`), `pg_cron` materializes monthly entries into `expenses`.
-**REQ-FIN-06** Project P&L view: per-project income, direct expenses, outsource costs, net.
-**REQ-FIN-07** Outsource hybrid workflow: status transitions Sifariş → İcra → Təhvil → Ödənildi. Users can update operational status without seeing amounts. **Lazy executor assignment:** at row-create time only `work_title` + `project_id` + `amount` + `deadline` are required; `contact_person`, `contact_company`, and `responsible_user_id` may be set to NULL and filled in via inline edit later (the executor is often unknown at the moment outsourcing is decided). Status `İcra` may not be entered until `responsible_user_id` is set; modal blocks the transition with "Cavabdeh şəxs təyin edilməlidir".
-**REQ-FIN-08** Forecast: MIRAI persona "Maliyyə Analitiki" computes `cash_forecasts` row daily (cron) for horizons 30/60/90; UI displays latest with confidence range and disclaimer.
-**REQ-FIN-09** Bakı timezone fix: all date math (month boundaries, due dates) computed in `Asia/Baku` not UTC.
 
-**RLS:**
-- `incomes`, `expenses`, `outsource_items`, `receivables`, `cash_forecasts`: admin only
+**REQ-FIN-03** `markPaid` partial fix: supports partial payments (`paid_amount += delta`), updates `status` only when fully paid.
+
+**REQ-FIN-04** Negative-amount validation across `incomes`, `expenses`, `outsource_items`, `internal_loans`: `amount > 0` check at DB and form layers.
+
+**REQ-FIN-05** Sabit (recurring) xərclər: format normalized — `recurring_expenses` table, period enum (`weekly|monthly|quarterly|yearly`), `pg_cron` materializes monthly entries into `expenses`.
+
+**REQ-FIN-06** Project P&L — **3-level model:**
+```
+Gross  = Σ(incomes for project)
+Net    = Gross − Σ(outsource_items.amount where paid)
+Final  = Net   − allocated_overhead (per REQ-FIN-13)
+```
+UI shows all three numbers per project with health emoji: 🟢 Final ≥ 30% of Gross / 🟡 10–30% / 🔴 < 10%. Firm-level view aggregates rows.
+
+**REQ-FIN-07** Outsource hybrid workflow: status transitions Sifariş → İcra → Təhvil → Ödənildi. Users can update operational status without seeing amounts. **Lazy executor assignment:** at row-create time only `work_title` + `project_id` + `amount` + `deadline` are required; `contact_person`, `contact_company`, and `responsible_user_id` may be set to NULL and filled in via inline edit later. Status `İcra` may not be entered until `responsible_user_id` is set; modal blocks the transition with "Cavabdeh şəxs təyin edilməlidir".
+
+**REQ-FIN-07a** Outsource → expenses propagation table (canonical). Outsource cost flows to different surfaces with different rules:
+
+| Surface | Inclusion |
+|---|---|
+| Cash Cockpit (real balance) | ✅ Included once `paid_at IS NOT NULL` (real cash leaves) |
+| Monthly expenses table | ✅ Under category `outsource` |
+| Firm overhead (forecast `reflect_overhead`) | ❌ NOT included (project-specific, not firm fixed cost) |
+| Project P&L Net | ✅ Subtracted from Gross |
+| Forecast `outsource_planned` | ✅ Separate line by deadline (even if unpaid) |
+
+**REQ-FIN-08** Forecast: MIRAI persona "Maliyyə Analitiki" computes `cash_forecasts` row daily (cron) for horizons 30/60/90/365 days using the explicit formula in REQ-FIN-15; UI displays latest with confidence chart (REQ-FIN-16) and disclaimer.
+
+**REQ-FIN-09** Bakı timezone fix: all date math (month boundaries, due dates, snapshot timing) computed in `Asia/Baku` not UTC.
+
+#### 7.2 Bank vs Kassa split (REQ-FIN-10)
+
+`cash_balances` table holds N rows, each typed `bank` or `kassa`. Cash Cockpit displays:
+
+```
+🏦 Bank: ₼145,000   💵 Kassa: ₼8,500   📊 Cəmi: ₼153,500
+```
+
+- Multi-bank supported (e.g. Kapital Bank + PASHA Bank rows)
+- Multi-kassa supported (main register + project-site petty cash)
+- "+ Gəlir" / "+ Xərc" modals require selecting target balance row — sum-of-rows must equal Cash Cockpit total at all times (DB CHECK enforced via trigger)
+- Manual reconciliation supported: admin can adjust `current_balance` directly with required note → logs to `audit_log`
+
+#### 7.3 Daily cash snapshot (REQ-FIN-11)
+
+`pg_cron` job at 00:05 Asia/Baku writes a `cash_snapshots` row capturing bank_total + kassa_total + grand_total. Materialized view `cash_snapshot_mv` exposes the last 90 days for the Cash Cockpit chart. Older rows preserved in the table for compliance / auditing.
+
+If the daily cron fails, the next-day run inserts both rows (gap-fill); never leaves holes in the series.
+
+#### 7.4 Cross-Project Funding — internal loans (REQ-FIN-12)
+
+When a project's near-term cash need exceeds its own available balance, MIRAI proposes internal funding from a sibling project's surplus. Real-world ssenari: maaş ödəniş tarixi gəlir, Z layihəsi hələ ödəniş almayıb, X layihəsindən borc lazımdır.
+
+**Workflow:**
+1. MIRAI Maliyyə Analitiki detects shortfall (cron hourly): `(project.next_known_cost - project.available_balance) > 0` AND another project has surplus
+2. MIRAI surfaces a suggester dialog to admin:
+   ```
+   🤖 MIRAI: Z layihənin maaş ödənişi 3 gün içində çatmır. ₼15,000 lazımdır.
+   Mövcud opsiyalar:
+     ○ X layihəsi (₼45,000 sərbəst, avans alındı)
+     ○ Y layihəsi (₼20,000 sərbəst, final ödəniş gözlənilir)
+   💡 Tövsiyəm: X. Səbəb: Z 2 ay sonra ₼60K gətirəcək, X-də buffer var.
+   [X-dən götür] [Y-dən götür] [Ləğv et]
+   ```
+3. Admin approves → `internal_loans` row inserted (`status='open'`)
+4. **Auto-generated PDF receipt** stored at `audit_pdf_url`: borrowing project, lending project, amount, reason, date, signatures (canvas-captured admin signature + IP + timestamp + creator email — REQ-FIN-19)
+5. When the borrowing project receives income, MIRAI prompts to mark loan repaid → `repaid_at` set, status → `repaid`
+
+**Security / legal posture:** every loan PDF is the legal defense against tax-audit interpretations of cross-project funding as embezzlement. Without this audit trail the practice is dangerous; with it, it is standard internal-accounting hygiene.
+
+**RLS:** `internal_loans` admin-only.
+
+#### 7.5 Overhead allocation — proxy formula, no timesheet (REQ-FIN-13)
+
+**Constraint:** PRD §4.17 forbids time tracking at any granularity. Yet project P&L Final (REQ-FIN-06) requires per-project overhead allocation. Resolved with a proxy formula based on existing task activity windows.
+
+**Formula (per project, per month):**
+```
+project_active_user_days(P, M) = Σ_{user u, day d in M}
+                                 ⟦ ∃ task t : project=P, assignees ∋ u,
+                                   start_date ≤ d ≤ deadline,
+                                   status ∉ {Tamamlandı, Cancelled} on d ⟧
+
+firm_active_user_days(M) = Σ_{all projects P} project_active_user_days(P, M)
+
+allocation_share(P, M) = project_active_user_days(P, M) / firm_active_user_days(M)
+
+monthly_overhead(M) = Σ(salaries effective in M) + Σ(recurring_expenses materialized in M)
+                     + Σ(one-off expenses with category='overhead' in M)
+
+allocated_overhead(P, M) = monthly_overhead(M) × allocation_share(P, M)
+```
+
+A monthly `pg_cron` job (1st of every month for the prior month) writes `project_overhead_allocations` rows. `formula_version` integer allows future formula revisions without rewriting history.
+
+**Accuracy expectation:** ~60–70%. MIRAI compares allocations against actual project income trajectories quarterly; if a single project's allocated overhead ratio diverges >25% from a peer of similar duration, surfaces "Bu layihənin overhead-ı qeyri-adi" alert for admin review.
+
+**Override:** admin may manually set a project's monthly allocation in the P&L drawer; manual overrides flagged in UI and stored with `override_reason`.
+
+#### 7.6 Minimum runway & burn rate (REQ-FIN-14)
+
+Cash Cockpit displays a runway gauge:
+
+```
+⚠️ Min. tələb (3 ay runway): ₼210K → Status: ⚠️ Diqqət
+```
+
+**Computation:**
+```
+avg_monthly_burn = AVG(monthly_overhead) over last 6 months
+min_runway_required = avg_monthly_burn × 3
+runway_months = current_total_balance / avg_monthly_burn
+
+Status:
+  ≥ 3 months  → 🟢 Sağlam
+  2–3 months  → 🟡 Diqqət
+  < 2 months  → 🔴 Kritik
+```
+
+Fewer than 6 months of history → status disabled with message "Burn rate hesablaması üçün 6 aylıq tarixçə lazımdır".
+
+#### 7.7 Forecast — explicit formula (REQ-FIN-15)
+
+```
+forecast_balance(date) =
+    current_total_balance
+  + Σ(expected_incomes ⋅ confidence)         [pipeline + receivables, by due_at ≤ date]
+  − Σ(reflect_overhead)                       [monthly_overhead × months_until_date]
+  − Σ(outsource_planned)                      [outsource_items unpaid, by deadline ≤ date]
+  − Σ(one_time_planned)                       [scheduled one-off expenses by date]
+```
+
+`expected_incomes` come from receivables AND from CRM pipeline rows weighted by stage confidence:
+
+| Source | Confidence |
+|---|---|
+| Müqaviləli + avans alınmış (receivable, paid_amount > 0) | 95% |
+| Müqaviləli, avans yox (receivable, paid_amount = 0) | 75% |
+| CRM stage = İcrada | 60% |
+| CRM stage = Təklif / İmzalanıb | 30% |
+| CRM stage = Lead | 10% |
+
+#### 7.8 Forecast UI (REQ-FIN-16)
+
+Two-line area chart:
+- **Confident line** (solid) — only sources ≥ 90% confidence
+- **Optimistic line** (dashed) — all sources at full confidence
+- Area between the two lines shaded in `--color-warning-bg` = "risk zone"
+
+Horizon tabs: 30 / 90 / 365 days. Refresh button rate-limited 1×/24h per user (US-FIN-07).
+
+#### 7.9 Monthly forecast calibration (REQ-FIN-17)
+
+End-of-month `pg_cron` compares the forecast generated at month-start vs. actual month-end balance per source bucket. Calibration outputs:
+
+- `forecast_calibration_log` row per (month, confidence_tier) recording predicted vs actual
+- If a confidence tier consistently over/under-shoots by >15% across 3 consecutive months, MIRAI proposes a confidence adjustment to admin (e.g. "İcrada confidence 60% → 55% tövsiyə olunur, son 3 ayın faktiki nəticəsinə əsasən")
+- Admin one-click accepts → confidence tier updated for future forecasts
+
+#### 7.10 Token Counter Dashboard widget (REQ-FIN-18)
+
+A widget rendered in Maliyyə Mərkəzi → Cash Cockpit (admin only) showing real-time MIRAI usage and spend:
+
+- This-month spend vs budget bar (color-coded at 80% / 100%)
+- Per-persona breakdown (CFO / HR / COO / CCO / CMO / Strateq / Hüquqşünas / Layihə Mühəndisi — see §7.2)
+- Per-user spend (admin sees firm-wide; helps spot runaway loops or expensive prompts)
+- Sparkline of daily token usage (last 30 days)
+- Alerts: 80% → yellow banner, 100% → red banner + "MIRAI bu ay üçün limitə çatdı"
+
+Backed by aggregations over `mirai_usage_log`.
+
+#### 7.11 AZ legal audit chain (REQ-FIN-19)
+
+Every financial action that may be questioned by AZ tax authorities — internal loans, manual cash adjustments, signature on outsource delivery PDF — captures a defense bundle:
+
+```
+audit_chain {
+  ip_address text,           -- HTTP request IP at action time
+  user_agent text,           -- browser/client identification
+  occurred_at timestamptz,   -- server time
+  actor_email text,          -- snapshot of profile email (not FK — preserved)
+  signature_data jsonb,      -- canvas-captured signature data + email confirmation token
+  email_confirmation_id text -- optional: separate email token confirming the action
+}
+```
+
+Stored on the relevant row (e.g. `internal_loans.audit_chain jsonb`, `outsource_items.delivery_audit_chain jsonb`). Canvas signature alone is weak evidence; combined with IP + timestamp + actor email + an email-confirmation token sent to the admin's recorded address, the bundle reaches "satisfactory commercial evidence" threshold under AZ Civil Code Art. 405 (electronic transactions).
+
+#### 7.12 RLS
+
+- `incomes`, `expenses`, `outsource_items`, `receivables`, `cash_forecasts`, `cash_balances`, `cash_snapshots`, `internal_loans`, `project_overhead_allocations`: admin only
 - `outsource_user_view`: returns project, work_title, deadline, status, responsible_user_id ONLY (no money fields) — granted to authenticated
 
 ---
@@ -610,8 +801,15 @@ List of `profiles`, role, contact, equipment count, current workload.
 #### 8.3 Performans
 - Yearly performance gauges per employee
 - Activates from year 2026 onward
-- User sees self for all years; admin sees all
-- `performance_reviews` (id, employee_id, year, score, ratings jsonb, reviewer_id, summary)
+- `performance_reviews` (id, employee_id, year, score, ratings jsonb, reviewer_id, summary, published_at NULL, published_by NULL)
+
+**Visibility (REQ-PERF-01):**
+- **Admin** sees all reviews (published or draft) in real time across every employee and year
+- **Employee** sees their own review **only when `published_at IS NOT NULL`**. Draft reviews are invisible during the year
+- An employee who has worked 3 years sees 3 published reviews (one per year), so long as the admin has clicked "Yayımla" on each. Unpublished years simply don't appear
+- **Year-end publish flow:** admin opens Performans → selects year → reviews scores → clicks "Yayımla" → `published_at = now()`, `published_by = admin.id`. From that moment the employee can view it; an in-app + Telegram notification fires
+- **Unpublish:** admin may revoke publication (sets `published_at = NULL`); logged in `audit_log`
+- **HR persona summary** (PRD §7.2) operates on the live data regardless of `published_at`; admin can preview the not-yet-published summary before deciding to publish
 
 #### 8.4 Məzuniyyət
 - `leave_requests` (id, employee_id, kind, starts_at, ends_at, days, status, approver_id, note)
@@ -726,8 +924,15 @@ Circular, initials fallback on deterministic gradient. Stack max 3 + "+N".
 - All requests authenticated; `user_id` logged per response (audit)
 
 ### 7.2 Personas
-**Admin (7):** Əməliyyat Direktoru / Layihə Mühəndisi / Hüquqşünas (RAG) / Marketinq Direktoru (CMO) / Maliyyə Analitiki / Strateq / **İK Direktoru (HR)**.
+**Admin (8):** Əməliyyat Direktoru (COO) / Layihə Mühəndisi / Hüquqşünas (RAG) / Marketinq Direktoru (CMO) / Maliyyə Analitiki (CFO) / Strateq / İK Direktoru (HR) / **Kommunikasiya Direktoru (CCO)**.
 **User (1):** Komanda Köməkçisi.
+
+**Kommunikasiya Direktoru (CCO) responsibilities:**
+- Drafts all client-facing written communication: emails to clients, proposal cover letters, retrospective survey invites, official letters (rəsmi məktub), award application narrative texts
+- Native polyglot: AZ (default), EN, RU, TR — auto-detects target language from client profile
+- Tone calibration per recipient: formal for governmental/expertise correspondence, warm-professional for commercial clients, concise for outsource vendors
+- Drafts only — never sends. Admin reviews + edits + sends manually
+- CCO has SELECT on `clients`, `client_interactions`, `project_documents` (admin scope) — never exposed to non-admin users via persona switch (RLS enforced).
 
 Persona switch starts a new conversation context; history not carried across personas.
 
@@ -779,6 +984,33 @@ Whitelisted tools (server-executed, scoped by user role):
 - 100% → chat disabled until next calendar month, message shown
 - Creator exempt from limit
 - Daily cron rolls usage into `mirai_usage_log`
+
+#### 7.6.1 Mandatory cost optimizations
+
+Implementation MUST include all 10 of the following. Each is enforceable via CI / monitoring; absence = bug.
+
+1. **Prompt caching** — Anthropic's `cache_control` markers on every system prompt block; ~90% discount on cached input tokens. Target cache hit rate ≥ 70%.
+2. **Smart context pruning** — only inject the schema/data fields required for the current question. Persona-specific allow-lists in `mirai/context-rules.ts`.
+3. **Rate limiting** — admin: 100 messages/day, user: 30 messages/day (per-user, rolling 24h). Enforced via Upstash Redis sliding window.
+4. **Cached reports** — identical question text from same user within 24h → return cached response without LLM call. Hashed by `(user_id, prompt_hash, persona)`.
+5. **Batch endpoint** — proactive analyses (Smart Reminder, monthly performance summary, forecast generation) use Anthropic Batch API (50% discount, async). Real-time chat stays on streaming endpoint.
+6. **Session compression** — once a conversation reaches 10 messages, MIRAI summarizes the first half into a 1-paragraph context block; older messages dropped from prompt.
+7. **Local heuristics first** — simple data lookups ("How many open tasks do I have?") run pure SQL via the tool layer without invoking the model; LLM only for synthesis.
+8. **Monthly hard budget** — env var `MIRAI_MONTHLY_BUDGET_USD` (default 25); reaching it disables ALL non-creator chat (cron + Smart Reminder also paused). Alerts admin at 80%.
+9. **Token counter dashboard** — real-time usage widget in Maliyyə Mərkəzi (REQ-FIN-18). Per-persona, per-user, per-day visibility.
+10. **Free fallback** — when monthly budget hard limit is hit OR Anthropic API returns 5xx, MIRAI transparently falls back to Groq's `llama-3.3-70b` free tier for the remainder of the month / outage. Quality drop announced via small banner: "🔄 Pulsuz model rejimi — keyfiyyət bir az aşağı ola bilər". Functional parity for chat; RAG and tools remain operational with reduced reasoning.
+
+#### 7.6.2 Telegram message generation policy
+
+Telegram delivery is **template + cron** by default — not MIRAI-generated — for reliability, cost, and audit clarity. Reasons (PM rationale): cron is deterministic, free, easy to test; LLM-generated messages introduce latency, hallucination risk, and per-message cost.
+
+**Hybrid exception:** the following high-stakes messages MAY be MIRAI-rewritten for tone:
+- HR monthly performance summary (Module 8.3)
+- Privacy refusal in chat (PRD §7.3)
+- CMO weekly Elanlar feed posts (§7.8)
+- Cross-project loan proposals (REQ-FIN-12)
+
+All other Telegram traffic — deadline reminders, mention notifications, finance alerts, Smart Reminder, daily 09:00/18:00 summaries — uses fixed templates from `locales/az.json` filled in by cron, never MIRAI-generated.
 
 ### 7.7 Context Engine
 System prompt injects: today's date (Asia/Baku), user role, active projects (names+phases+deadlines), open task count, persona-specific extras.
@@ -848,6 +1080,7 @@ Weekly Vercel cron: fetch ArchDaily / Dezeen / Architizer / WAF RSS + award cale
 - Errors to users are generic; stack traces hidden in prod; full details to `audit_log` and Sentry.
 - MIRAI: API key server-side; tool layer scoped; user_id audit per response; RAG cannot return chunks containing other firms' data (single-tenant in v1, but enforced by upload tagging).
 - Telegram: financial messages only to admin chat IDs.
+- **AZ legal audit chain (REQ-FIN-19):** for any financial action that may face tax-authority scrutiny (internal loans, manual cash adjustments, signed outsource delivery PDFs), capture an evidence bundle (`audit_chain jsonb`) on the row: `ip_address`, `user_agent`, `occurred_at` (server time), `actor_email` (snapshot, not FK), `signature_data` (canvas), and an optional email-confirmation token. Canvas signature alone is weak evidence under AZ Civil Code Art. 405; the bundle reaches "satisfactory commercial evidence" threshold.
 - Dependency hygiene: `npm audit` weekly cron; high/critical → block deploy until patched.
 
 **Mandatory question for every new feature:** *"Can someone who shouldn't see this data see it?"* If yes → fix before deploy.
@@ -1825,6 +2058,172 @@ Given a template with variables {{client_name}}, {{amount}}, {{date}}, {{service
   And invoice_number is auto-incremented per fiscal year (format AZ-YYYY-NNNN)
 ```
 
+```
+US-FIN-09  Bank vs Kassa balance breakdown (refs REQ-FIN-10)
+AS A studio director
+I WANT bank and kassa balances tracked separately
+SO THAT the cockpit reflects real treasury structure
+
+Given I have 2 bank rows (Kapital, PASHA) and 1 kassa row (main register)
+  When the Cash Cockpit renders
+  Then I see "🏦 Bank: ₼145,000  💵 Kassa: ₼8,500  📊 Cəmi: ₼153,500"
+  And the sum of all cash_balances rows equals the displayed grand total (DB CHECK trigger)
+  And "+ Gəlir" / "+ Xərc" modals require selecting a target balance row
+```
+
+```
+US-FIN-10  Daily cash snapshot for history & charts (refs REQ-FIN-11)
+AS A studio director
+I WANT yesterday's balance preserved daily
+SO THAT I can chart treasury history and answer audits
+
+Given the snapshot cron runs at 00:05 Asia/Baku
+  When today's snapshot is written
+  Then a cash_snapshots row exists for today with bank_total, kassa_total, grand_total
+  And cash_snapshot_mv exposes the last 90 days for the chart
+  And a missed cron next-day backfills both rows (no holes in series)
+```
+
+```
+US-FIN-11  Cross-project loan with audit PDF (refs REQ-FIN-12, REQ-FIN-19)
+AS A studio director
+I WANT a legally defensible internal loan workflow
+SO THAT cross-project funding survives tax-audit scrutiny
+
+Given Project Z has a maaş ödənişi shortfall of ₼15,000 and Project X has ₼45,000 surplus
+  When the hourly cron detects shortfall
+  Then MIRAI Maliyyə Analitiki surfaces a suggester to admin with options + recommendation
+  
+Given I approve "X-dən götür"
+  When the loan executes
+  Then internal_loans row is inserted with status='open'
+  And a PDF receipt is auto-generated and stored at audit_pdf_url
+  And the PDF carries: borrowing project, lending project, amount, reason, date, canvas signature, IP, timestamp, actor email
+  And both projects' Project P&L Net reflects the transfer
+
+Given Project Z later receives ₼80K income
+  When MIRAI prompts to repay
+  Then admin one-clicks "Bəli — qaytar"
+  And internal_loans.repaid_at = now() and status = 'repaid'
+```
+
+```
+US-FIN-12  Project P&L 3-level (Gross / Net / Final) (refs REQ-FIN-06)
+AS A studio director
+I WANT to see real per-project profitability after overhead
+SO THAT I price future projects sustainably
+
+Given a project with Gross ₼100,000, Outsource ₼25,000, allocated overhead ₼6,625 (May)
+  When I open Maliyyə → P&L → drill into the project
+  Then I see three numbers stacked:
+    Gross  ₼100,000
+    Net    ₼ 75,000
+    Final  ₼ 68,375
+  And health emoji renders next to Final: 🟢 (≥30% of Gross), 🟡 (10–30%), 🔴 (<10%)
+  And tabular numerals + AZN formatting applied
+```
+
+```
+US-FIN-13  Overhead allocation without timesheet (refs REQ-FIN-13)
+AS THE platform
+I WANT per-project overhead computed automatically
+SO THAT P&L Final exists without requiring time tracking
+
+Given May 2026 has 3 active projects with overlapping task date windows
+  When the monthly cron runs on 1 June 2026
+  Then project_overhead_allocations rows are written for each project for period_yyyymm='202605'
+  And allocated_amount = monthly_overhead × project_active_user_days / firm_active_user_days
+  And formula_version is stamped
+  And the rows are exposed in P&L Final per project
+
+Given the allocated amount diverges >25% from a similar-duration peer project
+  When the quarterly check runs
+  Then MIRAI surfaces "Bu layihənin overhead-ı qeyri-adi" alert to admin
+
+Given admin manually overrides a month's allocation in P&L drawer
+  Then the override is stored with override_reason
+  And the row is flagged in UI
+```
+
+```
+US-FIN-14  Runway gauge in Cash Cockpit (refs REQ-FIN-14)
+AS A studio director
+I WANT a 3-month runway gauge
+SO THAT I see firm health at a glance
+
+Given last 6 months avg burn = ₼70,000 and current total balance = ₼153,500
+  When Cash Cockpit renders
+  Then runway_months = 153500/70000 ≈ 2.2
+  And status = "🟡 Diqqət" (2–3 months)
+  And the line "⚠️ Min. tələb (3 ay runway): ₼210K → Status: ⚠️ Diqqət" is shown
+
+Given fewer than 6 months of expense history exist
+  Then the gauge is disabled with message "Burn rate hesablaması üçün 6 aylıq tarixçə lazımdır"
+```
+
+```
+US-FIN-15  Forecast confidence chart with risk zone (refs REQ-FIN-15, REQ-FIN-16)
+AS A studio director
+I WANT an honest forecast that distinguishes confident from optimistic projections
+SO THAT I plan against realistic downside
+
+Given expected income sources at multiple confidence tiers
+  When I open Forecast (90-day horizon)
+  Then a two-line chart renders:
+    Confident (solid) — only sources ≥90% confidence
+    Optimistic (dashed) — all sources at full weight
+  And the area between is shaded warning color (risk zone)
+  And horizon tabs 30 / 90 / 365 are switchable
+  And refresh button is rate-limited 1×/24h
+```
+
+```
+US-FIN-16  Monthly forecast calibration (refs REQ-FIN-17)
+AS THE platform
+I WANT confidence percentages adjusted from observed outcomes
+SO THAT predictions improve over time
+
+Given the "İcrada" stage confidence is 60% and the last 3 months actual realization was ~55%
+  When the monthly calibration cron runs
+  Then forecast_calibration_log records (predicted, actual) per tier
+  And MIRAI surfaces "İcrada confidence 60% → 55% tövsiyə" to admin
+  And on accept the tier is updated for future forecasts (not retroactively)
+```
+
+```
+US-FIN-17  Token Counter Dashboard widget (refs REQ-FIN-18)
+AS A studio director
+I WANT real-time MIRAI cost visibility
+SO THAT runaway loops or expensive prompts get caught early
+
+Given I am admin and current month spend = ₼3.20 against budget ₼5.00
+  When I open Cash Cockpit
+  Then a Token Counter widget renders:
+    Header progress bar at 64% (yellow at ≥80%, red at 100%)
+    Per-persona breakdown sorted by spend
+    Per-user spend (firm-wide visibility)
+    30-day daily-token sparkline
+  And alerts appear at 80% / 100% thresholds
+```
+
+```
+US-FIN-18  Free fallback when budget hit (refs REQ-FIN-18 / §7.6.1)
+AS THE platform
+I WANT MIRAI to keep working even when the monthly budget is exhausted
+SO THAT the firm is never blocked
+
+Given MIRAI_MONTHLY_BUDGET_USD is reached on day 22
+  When a non-creator user sends a chat message
+  Then the request transparently routes to Groq llama-3.3-70b free tier
+  And a small banner renders: "🔄 Pulsuz model rejimi — keyfiyyət bir az aşağı ola bilər"
+  And tools and RAG continue to operate
+  And on the 1st of the next month the primary model resumes automatically
+
+Given Anthropic returns 5xx for any single request
+  When the retry policy exhausts
+  Then the same fallback engages for that one outage and resumes once primary recovers
+```
+
 ---
 
 ### MODULE 8 — Komanda
@@ -1857,27 +2256,42 @@ Given I am admin
 
 #### 8.2 Performance
 ```
-US-PERF-01  User sees own performance gauges
+US-PERF-01  User sees own published performance reviews (refs REQ-PERF-01)
 AS A team member
-I WANT to see my performance reviews across years
-SO THAT I track my growth
+I WANT to see my performance reviews for each year admin has published
+SO THAT I track my growth without seeing in-progress drafts
 
-Given performance_reviews exist for years 2026, 2027
+Given performance_reviews exist for me with published_at IS NOT NULL for years 2024 and 2025
+  And a draft (published_at IS NULL) exists for 2026
   When I open Performans
-  Then I see a gauge per year with score and ratings breakdown
-  And no other employee data is visible
+  Then I see a gauge per published year (2024, 2025) with score + ratings breakdown
+  And the 2026 row is invisible — no draft data leaks
+  And no other employee data is visible (RLS enforced)
+
+Given I have worked at the firm for 3 years and admin has published all 3 reviews
+  Then I see 3 yearly gauges
 ```
 
 ```
-US-PERF-02  Admin reviews team performance
+US-PERF-02  Admin reviews and publishes performance (refs REQ-PERF-01)
 AS AN admin
-I WANT to author performance reviews per employee
-SO THAT formal reviews live in one place
+I WANT to draft, review, and publish performance reviews
+SO THAT reviews are formal events, not surveillance
 
 Given I am admin
   When I submit a review (year, score, ratings, summary)
-  Then a performance_reviews row is created with reviewer_id = me
-  And the employee receives an in-app notification
+  Then a performance_reviews row is created with reviewer_id = me, published_at = NULL
+  And the employee CANNOT see it yet
+
+Given I have finalized the review and click "Yayımla"
+  When the API succeeds
+  Then published_at = now() and published_by = me
+  And the employee receives an in-app + Telegram notification "{year} performans nəticəniz hazırdır"
+  And the gauge becomes visible to them
+
+Given I click "Yayımı geri al"
+  Then published_at = NULL
+  And an audit_log entry records the unpublish action
 ```
 
 #### 8.3 Leave
@@ -2246,15 +2660,15 @@ Given thresholds in system_settings (income_alert=5000, expense_alert=2000)
 | Tapşırıqlar | US-TASK-01..22 | Calendar | US-CAL-01..03 |
 | Arxiv | US-ARC-01..02 | Elanlar | US-ELAN-01..03 |
 | Müştərilər | US-CRM-01..06 | Equipment | US-EQUIP-01 |
-| Maliyyə | US-FIN-01..08 | OKR | US-OKR-01..03 |
+| Maliyyə | US-FIN-01..18 | OKR | US-OKR-01..03 |
 | Sistem | US-SYS-01..03 | Karyera | US-CAREER-01 |
 | MIRAI | US-MIRAI-01..05 | Content | US-CONTENT-01 |
 | Telegram | US-TG-01..03 | | |
 
-**Total:** 70 user stories across 19 module groups (Tapşırıqlar expanded to 22 in v3.2 with MIRAI Smart Reminder). Each story is QA-testable; cross-references exist to §5 REQ IDs.
+**Total:** 80 user stories across 19 module groups (v3.3 — Maliyyə expanded 8 → 18 with bank/kassa, snapshots, internal loans, 3-level P&L, runway, calibration, free fallback). Each story is QA-testable; cross-references exist to §5 REQ IDs.
 
 ---
 
-*Last updated: 2026-05-04 (v3.2 — closeout/awards customisation, HR persona, Smart Reminder, outsource lazy executor)*
+*Last updated: 2026-05-04 (v3.3 — Maliyyə Mərkəzi refactor: bank/kassa split, snapshots, internal loans, 3-level P&L, proxy overhead, runway gauge, forecast formula, calibration loop, free fallback, CCO persona, IP/timestamp/email audit chain)*
 *Owner: Talifa İsgəndərli*
 *Next review: end of Part 1 sprint*
