@@ -1,6 +1,6 @@
 # Reflect Architects OS — Product Requirements Document
-**Version:** 3.0 (Production-Ready Spec)
-**Date:** 2026-05-03
+**Version:** 3.1 (Tapşırıqlar refactor — task_kind hub, 8-status with Portfolio, dependencies, blame-exclusion)
+**Date:** 2026-05-04
 **Product Owner:** Talifa İsgəndərli
 **Status:** Pre-PMF / Active Development
 **Scope of this document:** Functional, data, integration, security, AI, ops, and acceptance specifications for a fully-ready product. **UI/UX visual design is intentionally excluded** and lives in a separate design-system spec.
@@ -108,10 +108,17 @@ Telegram:   Bot API (one Reflect bot, per-user chat_id linking)
 - `invitations` (id, email, role_id, invited_by, token, expires_at, accepted_at)
 
 **Work**
-- `projects` (id, name, client_id, phases[] text[], requires_expertise, expertise_deadline, payment_buffer_days, deadline, start_date, status, created_by, created_at, archived_at)
-- `tasks` (id, project_id, title, description, status, parent_task_id, task_level, assignee_ids uuid[], start_date, deadline, estimated_duration, duration_unit, risk_buffer_pct, is_expertise_subtask, workload, workload_calculated_at, cancel_reason, archived_at, created_by)
+- `projects` (id, name, client_id, phases[] text[], requires_expertise, expertise_deadline, payment_buffer_days, deadline, start_date, status, project_type, default_risk_buffer_pct, created_by, created_at, archived_at)
+- `tasks` (id, project_id, title, description, status, task_kind, priority, parent_task_id, task_level, assignee_ids uuid[], start_date, deadline timestamptz, estimated_duration, duration_unit, risk_buffer_pct, is_expertise_subtask, workload, workload_calculated_at, cancel_reason, cancelled_at, deleted_at, archived_at, source_entity_type, source_entity_id, created_by)
 - `task_status_history` (id, task_id, from_status, to_status, changed_by, changed_at)
 - `task_comments` (id, task_id, user_id, body, mentions uuid[], created_at)
+- `task_dependencies` (id, task_id, depends_on_task_id, kind enum('finish_to_start'), created_at)
+- `task_tags` (id, name, color, created_by)
+- `task_tag_assignments` (task_id, tag_id, applied_at, applied_by) — composite PK; works for tasks AND subtasks
+- `stage_templates` (id, project_type, stage_name, default_duration_weeks, order_index)
+- `scheduled_notifications` (id, schedule_type enum('daily_morning','daily_evening'), schedule_time time, enabled, user_id NULL, template jsonb)
+- `user_notification_settings` (user_id PK, morning_summary, evening_motivation, telegram_chat_id, email_enabled)
+- `mirai_blame_keywords` (id, keyword, weight, locale)
 
 **Clients / CRM**
 - `clients` (id, name, company, email, phone, pipeline_stage, confidence_pct, expected_value, last_interaction_at, ai_icp_fit, ai_icp_calculated_at, created_by)
@@ -310,45 +317,210 @@ Working-days mode is a v2 toggle; v1 = calendar days.
 
 ### MODULE 4 — Tapşırıqlar (Tasks)
 
-**Status model (7):**
+> Authoritative source for tasks behaviour. This module supersedes prior task spec drafts and incorporates `tapsiriqlar-spec.md` v2.
+
+#### 4.1 Status model (8)
+
 ```
 İdeyalar      backlog
-başlanmayıb   queued
+Başlanmayıb   queued
 İcrada        active
-Yoxlamada     review
-Ekspertizada  expert review pending
-Tamamlandı    done
-Cancelled     cancelled (with reason)
+Yoxlamada     review (in-house QA)
+Ekspertizada  external expert review pending (state agency etc.)
+Tamamlandı    done — auto-triggers Portfolio workflow eligibility
+Portfolio     post-completion award/portfolio submission state
+Cancelled     cancelled (with required reason)
 ```
 
-**REQ-TASK-01** Quick create (title only) + full create modal (title, assignee_ids[], project, start_date, deadline, estimated_duration, duration_unit, risk_buffer_pct, is_expertise_subtask, task_level, parent_task_id).
+**Flow:**
+```
+İdeyalar → Başlanmayıb → İcrada → Yoxlamada → Ekspertizada → Tamamlandı → Portfolio
+                                                                     ↓ ↑
+                                                                  Cancelled (revertible)
+```
+
+`Portfolio` is reached only from `Tamamlandı` and only when the project is flagged as a portfolio candidate during closeout (REQ-TASK-25). It is NOT a Yoxlamada/Ekspertizada review state.
+
+**Legacy status migration map (zero data loss, per §10):**
+| Legacy | New |
+|---|---|
+| `todo` | `Başlanmayıb` |
+| `in_progress` | `İcrada` |
+| `review` | `Yoxlamada` |
+| `done` | `Tamamlandı` |
+| `archived` | preserved + status → `Tamamlandı` + `archived_at = now()` |
+
+#### 4.2 Core requirements
+
+**REQ-TASK-01** Quick create (title only, lands in current column) + full create modal: title, description (plain text), assignee_ids[], project, task_kind, priority, start_date, deadline (datetime — see REQ-TASK-13), estimated_duration, duration_unit, risk_buffer_pct, is_expertise_subtask, task_level, parent_task_id, tag_ids[].
 
 **REQ-TASK-02** Multi-assignee — `assignee_ids uuid[]` replaces legacy single `assignee_id`. Migration: copy → drop column renamed `_deprecated_assignee_id` (per §10).
 
 **REQ-TASK-03** Drag between status columns → status update + `task_status_history` row + `activity_log` entry.
 
-**REQ-TASK-04** Cancellation requires reason from list `[Müştəri imtina etdi | Layihə dəyişdi | Texniki problem | Yenidən planlaşdırılır | Digər (with text)]`.
+**REQ-TASK-04** Cancellation requires reason from list `[Müştəri imtina etdi | Layihə dəyişdi | Texniki problem | Yenidən planlaşdırılır | Digər (with text)]`. On cancel: `cancel_reason` and `cancelled_at` set; status = `Cancelled`. **Cancel revert (REQ-TASK-04a):** admin OR assignee may reopen a cancelled task → status restored to its previous value (read from `task_status_history`), `cancelled_at` cleared, `cancel_reason` archived to history. Reopen logged in `activity_log` as `cancel_reverted`.
 
-**REQ-TASK-05** Subtask completion blocking: parent task cannot move to Tamamlandı while any child is open. Modal shows blockers and offers "Hamısını tamamla" shortcut.
+**REQ-TASK-05** Subtask completion blocking: parent task cannot move to `Tamamlandı` while any direct child is open. Modal lists blockers and offers "Hamısını tamamla" shortcut.
 
 **REQ-TASK-06** Workload formula:
 ```
 workload = estimated_duration × (1 + risk_buffer_pct/100)
 ```
-`workload_calculated_at` updated on save.
+`workload_calculated_at` updated on save. Project-level default `projects.default_risk_buffer_pct` prefilled into new tasks.
 
 **REQ-TASK-07** Mention `@userId` format inside `task_comments.body`; `mentions[]` populated server-side via parser; mentioned users notified (in-app + Telegram if linked).
 
-**REQ-TASK-08** Archive: tasks `Tamamlandı`/`Cancelled` → `archived_at = now()`. Hidden from board, surfaced in Arxiv module (see Module 5).
+**REQ-TASK-08** Archive: tasks in `Tamamlandı` / `Portfolio` / `Cancelled` may be archived → `archived_at = now()`. Hidden from board, surfaced in Arxiv (Module 5). Bulk archive supported (no other bulk operations in v1).
 
-**REQ-TASK-09** Expertise subtasks auto-suggested when `is_expertise_subtask = true`:
-- Çertyoj hazırlığı / Spesifikasiya / Möhür+imza / Çap+ciltləmə / Ekspertizaya təhvil
+**REQ-TASK-09** Expertise auto-subtasks: when project `requires_expertise = true` AND a task is created with `is_expertise_subtask = true`, the following 5 children are **automatically inserted** with calculated dates (per backward planning in REQ-TASK-15):
+1. Ekspertiza üçün çap sənədlərinin hazırlanması (3 gün)
+2. Ekspertizaya göndərmək (1 gün)
+3. Ekspertiza cavabı gözləmə (30 gün)
+4. İrad düzəltmə buffer (10 gün)
+5. Son təsdiq alınması (variable)
 
-**RLS:** `tasks` SELECT: project members + admin. Comments visible to anyone with task SELECT.
+Auto-creation may be disabled by uncheck on the create modal.
 
-**Edge cases:**
+#### 4.3 Hierarchy & deletion (REQ-TASK-10)
+
+3-level conceptual hierarchy:
+```
+🏗️ LAYİHƏ (Project — from Module 3)
+   └── 📋 TASK
+        └── ☐ SUBTASK (and sub-sub-…, no depth limit)
+```
+
+Subtasks use the same `tasks` row with `parent_task_id` set. **No nesting depth limit** in v1.
+
+**Delete (REQ-TASK-10a):** admin OR creator may delete a task or subtask → soft-delete via `deleted_at = now()`. Deletion cascades to child subtasks (each child's `deleted_at` set independently). Each deletion (parent + each child) emits its own `activity_log` entry of action `deleted` so subtask removal is visible in the parent's activity feed and in the project history. Deleted rows excluded from all default queries; recoverable from Arxiv by admin within 90 days, then permanently purged.
+
+#### 4.4 Cross-module task hub (REQ-TASK-11)
+
+`tasks.task_kind` enum unifies all accountability under one inbox:
+
+| Kind | Source | Default assignee | Visible kind badge |
+|---|---|---|---|
+| `work` | manual create | creator picks | (none — default) |
+| `portfolio` | Closeout flow when project is portfolio candidate | per-award owner | 🏆 |
+| `closeout` | Project closeout checklist items | closeout owner | 📋 |
+| `leave_approval` | `leave_requests` insert (Module 8.4) | requester's manager / admin | ✅ |
+| `followup` | CRM `client_interactions` opt-in "follow up in N days" | interaction logger | 💬 |
+
+`tasks.source_entity_type` + `source_entity_id` link back to originating row (e.g. `portfolio_workflows.id`, `leave_requests.id`). When the task transitions to `Tamamlandı`, a DB trigger updates the source row's status (e.g. leave request → `approved`, portfolio submission → `submitted`).
+
+**Effect:** "Mənim Tapşırıqlarım", dashboard deadline widgets, Telegram D-3/D-1/D reminders all surface every accountability across the firm — not only `work` tasks. This closes the gap where portfolio award deadlines, leave approvals, and closeout chores were previously invisible.
+
+**RLS:** `task_kind = 'leave_approval'` rows are SELECT-able only by the assignee (manager) and admin, never by the requester (would create circular notification).
+
+#### 4.5 Priority (REQ-TASK-12)
+
+`tasks.priority` enum: `low | medium | high | urgent` (default `medium`). Used for sort order in "Mənim Tapşırıqlarım" (urgent → high → medium → low, then deadline ASC) and surfaced as a small left-edge color tick on task cards.
+
+#### 4.6 Time-of-day deadline (REQ-TASK-13)
+
+`tasks.deadline` is `timestamptz` (not `date`). UI defaults the time to `18:00 Asia/Baku` if user picks a date only. Same-day urgent tasks (e.g. "müştəriyə 17:00-a kimi göndər") are first-class. Telegram reminder cron already runs at `09:00 Asia/Baku` daily; for tasks with `deadline` ≤ end of today, an extra reminder fires 2 hours before the deadline timestamp.
+
+#### 4.7 Tags / labels (REQ-TASK-14)
+
+`task_tags` table holds firm-wide tag definitions (name + color). `task_tag_assignments` is the m2m link, applicable to **both tasks and subtasks**. Tags are manually assigned via a chip picker on the create/edit modal and via the kanban card's `⋯` menu. Filterable in all 3 task views (Kanban, Cədvəl, Mənim Tapşırıqlarım).
+
+Out of scope v1: bulk tag operations, AI tag suggestions.
+
+#### 4.8 Auto Planner & backward planning (REQ-TASK-15)
+
+When a task is created with a project that has `requires_expertise = true`, MIRAI computes dates by working backwards from the project deadline:
+
+```
+expertise_final = project.deadline − payment_buffer_days
+expertise_submit = expertise_final − 30 (review) − 10 (revision buffer)
+design_final = expertise_submit − 3 (print prep)
+```
+
+The Auto Planner offers these dates as suggestions in the create modal; user may accept or override. Days are calendar days in v1; working-day mode is v2.
+
+#### 4.9 Task dependencies (REQ-TASK-16)
+
+`task_dependencies` (id, task_id, depends_on_task_id, kind). Only `finish_to_start` supported in v1.
+
+- Task B with dependency on Task A: B cannot transition to `İcrada` until A is `Tamamlandı`. Attempted transition shows blocking modal listing predecessors.
+- When A's deadline shifts later, MIRAI proposes shifting B's start_date; user confirms.
+- Visual: dependency badge "↳ {N} blocking" on task card.
+- Critical path computation deferred to v2 (Gantt-light view).
+
+#### 4.10 Stage templates (REQ-TASK-17)
+
+`stage_templates` table seeded with project-type-specific stages. `projects.project_type` enum: `residential | commercial | interior | urban`. On project creation, selecting a type prefills phases:
+
+| Type | Stages (weeks) |
+|---|---|
+| Residential | Konsept (2) → Eskiz (3) → İşçi (4) → Ekspertiza (6) → Müəllif nəzarəti (5) |
+| Commercial | Konsept (3) → Eskiz (5) → İşçi (7) → Ekspertiza (6) → Müəllif (4) |
+| Interior | Konsept (1) → 3D (2) → İşçi (3) → Müəllif (2) (no expertise) |
+| Urban | Konsept (3) → Master plan (6) → Detallar (10) → Ekspertiza (6) → Müəllif (4) |
+
+Templates are editable by admin in Sistem → Şablonlar (Module 10.2).
+
+#### 4.11 Proposal calculation includes expertise (REQ-TASK-18)
+
+When generating a proposal (Module 6, US-CRM-05) for a project that requires expertise, the proposal's "Çatdırılma müddəti" calculation must include the full expertise chain (3+30+10 = ~43 days minimum). Surfaced in proposal preview as a line item:
+```
+Ekspertiza paketi: 3 gün
+Ekspertiza gözləmə: 30 gün
+İrad düzəltmə buffer: 10 gün
+Son təsdiq + ödəniş buffer: 10 gün
+```
+
+#### 4.12 Activity log + blame exclusion (REQ-TASK-19)
+
+The universal `activity_log` (§6.1) gains `is_blame_excluded boolean default false`. When set, the entry is excluded from performance score calculations (Module 8.3).
+
+- **Manual exclude:** admin clicks "Performansa təsir göstərməsin" on any activity entry.
+- **MIRAI auto-detect (REQ-TASK-20):** scans new task comments for blame keywords from `mirai_blame_keywords` table (e.g. "sifarişçi gecikdirdi", "müştəri cavab vermir", "outsource gecikdi"). On match, MIRAI proposes the flag → admin one-click confirms.
+- **Excluded delays** are not counted against assignee performance scores.
+
+#### 4.13 Daily scheduled notifications (REQ-TASK-21)
+
+`scheduled_notifications` + `user_notification_settings` drive two cron jobs:
+
+- **09:00 Asia/Baku — Günün özeti:** for every user with `morning_summary=true`, send in-app + Telegram (if linked) message with: today's tasks (deadline = today), this week's tasks, today's calendar events, motivational quote (rotating from a curated AZ list).
+- **18:00 Asia/Baku — Gün sonu motivasiyası:** for every user with `evening_motivation=true`, send a summary of completed tasks today + closed subtasks + comments authored, plus a different quote.
+
+User toggles in Sistem → Bildirişlər (Module 10.4).
+
+#### 4.14 Activity log archival policy (REQ-TASK-22)
+
+`activity_log` rows older than 12 months are migrated to `activity_log_archive` (same schema) by a monthly `pg_cron` job. Default queries hit only the live table; archive is queried explicitly from Sistem → Audit (admin only).
+
+#### 4.15 Out-of-scope clarifications
+
+Explicitly NOT in v1 (do not implement, do not design):
+- File attachments to tasks
+- Recurring tasks
+- Watchers / subscribe (only assignees + mentions trigger notifications)
+- Rich text in task description (plain text only)
+- Draft autosave on create modal
+- Bulk operations beyond bulk archive
+- Reviewer/approver workflow with explicit reviewer_id (Yoxlamada / Ekspertizada have no formal reviewer field)
+- Human-readable task IDs (UUIDs only)
+- Reassign handover note
+- Saved per-user filter views
+- Time tracking per task / timesheet at any granularity (gün/həftə estimate only; no actual hour tracking)
+- Calendar embedding of tasks (calendar remains a separate page — Module 8.5)
+
+#### 4.16 RLS
+
+- `tasks` SELECT: project members + admin + (for `task_kind='leave_approval'`) assignee only
+- `task_tags` SELECT: all authenticated; INSERT/UPDATE: admin
+- `task_dependencies` SELECT: same as task SELECT
+- Comments visible to anyone with task SELECT
+
+#### 4.17 Edge cases
+
 - Reassign last assignee → must replace, not empty
-- Bakı timezone: all `*_at` stored UTC; UI renders Asia/Baku
+- Bakı timezone: all `*_at` stored UTC; UI renders `Asia/Baku`
+- Cancel revert restores prior status from `task_status_history`; if history empty, defaults to `Başlanmayıb`
+- Deleting a parent task cascades soft-delete to all children regardless of depth
+- A task with kind `leave_approval` cannot be manually deleted; only the source `leave_requests` row drives its lifecycle
 
 ---
 
@@ -804,7 +976,7 @@ SELECT COUNT(*), SUM(amount) FROM new_view;
 
 ### 12.1 Out of scope (v1.0)
 - Native mobile app (web responsive only)
-- Time tracking per task (timesheet exists at day-level only)
+- Time tracking of any kind (no timesheet at task, day, or any other level — `estimated_duration` is gün/həftə only; no actual-time logging)
 - Video calls / screen recording
 - Client login portal (share-token only)
 - Multi-firm / multi-tenant
@@ -1150,21 +1322,231 @@ Given the board has 30 tasks in Tamamlandı or Cancelled
 ```
 
 ```
-US-TASK-08  Expertise subtask suggestions
+US-TASK-08  Expertise auto-subtasks (refs REQ-TASK-09)
 AS AN architect
-I WANT typical expertise subtasks suggested
-SO THAT I don't recreate the same checklist
+I WANT the standard expertise chain auto-created
+SO THAT I never miss a step on a regulated project
 
-Given I create a task with is_expertise_subtask = true
-  When the modal renders
-  Then suggested children appear:
-    □ Çertyoj hazırlığı
-    □ Spesifikasiya yazılması
-    □ Möhür + imza
-    □ Çap + ciltləmə
-    □ Ekspertizaya təhvil
-  And selecting them creates linked subtasks with parent_task_id set
-  And each subtask carries the purple "E" badge marker (semantic, not visual spec)
+Given I create a task with is_expertise_subtask = true on a project where requires_expertise = true
+  When I save
+  Then 5 child subtasks are auto-inserted with calculated dates per backward planning:
+    □ Ekspertiza üçün çap sənədlərinin hazırlanması (3 gün)
+    □ Ekspertizaya göndərmək (1 gün)
+    □ Ekspertiza cavabı gözləmə (30 gün)
+    □ İrad düzəltmə buffer (10 gün)
+    □ Son təsdiq alınması
+  And each subtask carries the purple "E" badge marker
+  And I may uncheck the auto-generation toggle to disable
+```
+
+```
+US-TASK-09  Cancel revert (refs REQ-TASK-04a)
+AS AN admin or assignee
+I WANT to undo a cancellation
+SO THAT a wrong cancel isn't permanent
+
+Given a task with status = 'Cancelled' and cancel_reason = 'Yenidən planlaşdırılır'
+  When I click "Ləğvi geri qaytar"
+  Then status restores to its prior value from task_status_history
+  And cancelled_at clears
+  And cancel_reason archives to history
+  And an activity_log entry of action='cancel_reverted' is emitted
+```
+
+```
+US-TASK-10  Delete task or subtask (refs REQ-TASK-10a)
+AS AN admin or task creator
+I WANT to delete a task or any of its subtasks
+SO THAT mistaken or duplicate work disappears from the board
+
+Given a task with 3 subtasks and I am the creator
+  When I delete the parent
+  Then deleted_at is set on the parent
+  And deleted_at is cascaded to each child
+  And each deletion (parent + each child) emits its own activity_log entry of action='deleted'
+  And the parent's activity feed shows every removed subtask line
+  And rows are recoverable from Arxiv by admin within 90 days
+
+Given I delete a single subtask
+  When I confirm
+  Then deleted_at is set on that row only
+  And an activity_log entry shows under the parent task's history
+```
+
+```
+US-TASK-11  Cross-module task hub (refs REQ-TASK-11)
+AS A team member
+I WANT every accountability assigned to me to appear in "Mənim Tapşırıqlarım"
+SO THAT nothing falls through cracks across leave / portfolio / closeout / followup
+
+Given a portfolio submission deadline is added on a closed project
+  When the system creates the task
+  Then a tasks row is inserted with task_kind='portfolio', source_entity_type='portfolio_workflows', source_entity_id={pw.id}
+  And the assigned owner sees it in "Mənim Tapşırıqlarım" with 🏆 badge
+  And dashboard "Yaxınlaşan deadline" widget includes it
+  And Telegram D-3 / D-1 / D reminders fire per US-TG-02
+
+Given the task is moved to Tamamlandı
+  When status updates
+  Then a DB trigger updates the source row (portfolio_workflows.status='submitted')
+
+Given a leave_requests row is inserted
+  Then a tasks row with task_kind='leave_approval' is auto-created assigned to the requester's manager
+  And only the manager and admin can SELECT this row (RLS)
+  And on Tamamlandı the leave_request row's status flips to 'approved'
+```
+
+```
+US-TASK-12  Priority sort in My Tasks (refs REQ-TASK-12)
+AS A team member
+I WANT to see urgent tasks first
+SO THAT I work the right things
+
+Given I have 12 open tasks across all priorities
+  When I open Mənim Tapşırıqlarım
+  Then they sort by priority (urgent → high → medium → low) then by deadline ASC
+  And each card shows a left-edge color tick (red urgent / orange high / blue medium / gray low)
+  And changing priority via card menu updates sort within 200ms
+```
+
+```
+US-TASK-13  Time-of-day deadline (refs REQ-TASK-13)
+AS A team member
+I WANT to set a deadline at a specific hour
+SO THAT same-day urgent work is supported
+
+Given I create a task with deadline date = today and time = 17:00 Asia/Baku
+  When the time reaches 15:00 Asia/Baku (T-2h)
+  Then I receive an extra Telegram + in-app reminder
+  And the task card displays "Bugün 17:00" instead of just the date
+```
+
+```
+US-TASK-14  Tags on tasks and subtasks (refs REQ-TASK-14)
+AS A studio director
+I WANT to label tasks and subtasks with reusable tags
+SO THAT cross-cutting categorization is searchable
+
+Given I open a task or subtask edit modal
+  When I open the tag chip picker
+  Then I can pick from existing task_tags rows (admin-defined) or quick-create a new one
+  And selected tags persist via task_tag_assignments
+  And the tag chips render on the kanban card and in the table view tag column
+  And filtering Kanban / Cədvəl / Mənim Tapşırıqlarım by tag narrows the view
+```
+
+```
+US-TASK-15  Auto Planner backward dates (refs REQ-TASK-15)
+AS AN architect
+I WANT MIRAI to suggest dates by working backwards from project deadline
+SO THAT I plan around expertise lead time
+
+Given I create a task on a project where requires_expertise = true and deadline = 15 Aug
+  When the create modal opens
+  Then start_date and deadline fields are prefilled with backward-planned dates:
+    expertise_final = 5 Aug (15 Aug − 10 day payment buffer)
+    expertise_submit = 12 Jun (5 Aug − 30 review − 10 revision − 3 print)
+    design_final = 9 Jun
+  And I can override before saving
+  And a banner shows "MIRAI hesablamasıdır — düzəliş edə bilərsiniz"
+```
+
+```
+US-TASK-16  Task dependency blocks transition (refs REQ-TASK-16)
+AS A project architect
+I WANT a task to be blocked until its predecessors are done
+SO THAT sequence integrity is enforced
+
+Given Task B has a finish_to_start dependency on Task A and A is in İcrada
+  When I drag B from Başlanmayıb to İcrada
+  Then a blocking modal lists "Bu tapşırıq A bitənə kimi başlaya bilməz"
+  And B remains in Başlanmayıb
+  And B's card shows a "↳ 1 blocking" badge
+
+Given A is moved to Tamamlandı
+  When the realtime event fires
+  Then B's blocking badge clears
+  And B can be transitioned freely
+```
+
+```
+US-TASK-17  Stage templates seed project phases (refs REQ-TASK-17)
+AS AN architect
+I WANT project phases prefilled by project type
+SO THAT I don't recreate the same stages each time
+
+Given I create a project and select project_type = 'residential'
+  When the form renders
+  Then phases[] prefills from stage_templates: Konsept / Eskiz / İşçi / Ekspertiza / Müəllif nəzarəti
+  And default_duration_weeks per stage is shown next to each
+  And admin can edit templates in Sistem → Şablonlar
+```
+
+```
+US-TASK-18  Proposal includes expertise lead time (refs REQ-TASK-18)
+AS A BD lead
+I WANT proposals for expertise-required projects to surface the full lead time
+SO THAT clients have realistic delivery expectations
+
+Given I generate a proposal for a project with requires_expertise = true
+  When the preview renders
+  Then "Çatdırılma müddəti" includes line items:
+    Ekspertiza paketi: 3 gün
+    Ekspertiza gözləmə: 30 gün
+    İrad düzəltmə buffer: 10 gün
+    Son təsdiq + ödəniş buffer: 10 gün
+  And the cumulative weeks total is highlighted
+```
+
+```
+US-TASK-19  Blame-excluded delays don't hurt performance (refs REQ-TASK-19, REQ-TASK-20)
+AS A studio director
+I WANT delays caused by clients or outsource vendors excluded from team performance
+SO THAT scores reflect actual employee accountability
+
+Given a comment on a task contains "sifarişçi gecikdirdi"
+  When MIRAI scans new comments (cron 5 min)
+  Then a proposal is surfaced to admin: "is_blame_excluded suggested for this delay"
+  And admin clicks "Təsdiq" to flag the activity_log entry
+  And subsequent monthly performance score for the assignee excludes this delay
+
+Given admin manually clicks "Performansa təsir göstərməsin" on any activity entry
+  Then is_blame_excluded = true is set
+  And the change is itself logged in audit_log
+```
+
+```
+US-TASK-20  Daily 09:00 / 18:00 notifications (refs REQ-TASK-21)
+AS A team member
+I WANT a morning summary and an evening motivation
+SO THAT my day is bookended with clarity
+
+Given I am opted into morning_summary
+  When the 09:00 Asia/Baku cron runs
+  Then I receive an in-app + (if linked) Telegram message containing:
+    today's tasks (deadline = today)
+    this week's tasks count
+    today's calendar events
+    a rotating motivational quote
+  And the same content respects my notification_preferences
+
+Given I am opted into evening_motivation
+  When the 18:00 Asia/Baku cron runs
+  Then I receive a summary of today's completed tasks + closed subtasks + comments authored
+  And a different rotating quote
+```
+
+```
+US-TASK-21  Activity log archive after 12 months (refs REQ-TASK-22)
+AS THE platform
+I WANT activity_log rows older than 12 months to migrate to archive
+SO THAT default queries stay fast at scale
+
+Given activity_log has 200,000 rows over 18 months
+  When the monthly pg_cron runs
+  Then rows older than 12 months copy to activity_log_archive
+  And the source rows are removed in the same transaction
+  And admins can query the archive explicitly from Sistem → Audit
 ```
 
 ---
@@ -1814,7 +2196,7 @@ Given thresholds in system_settings (income_alert=5000, expense_alert=2000)
 | Auth | US-AUTH-01..04 | Salary | US-SAL-01..02 |
 | Dashboard | US-DASH-01..05 | Performance | US-PERF-01..02 |
 | Layihələr | US-PROJ-01..05 | Leave | US-LEAVE-01..02 |
-| Tapşırıqlar | US-TASK-01..08 | Calendar | US-CAL-01..03 |
+| Tapşırıqlar | US-TASK-01..21 | Calendar | US-CAL-01..03 |
 | Arxiv | US-ARC-01..02 | Elanlar | US-ELAN-01..03 |
 | Müştərilər | US-CRM-01..06 | Equipment | US-EQUIP-01 |
 | Maliyyə | US-FIN-01..08 | OKR | US-OKR-01..03 |
@@ -1822,10 +2204,10 @@ Given thresholds in system_settings (income_alert=5000, expense_alert=2000)
 | MIRAI | US-MIRAI-01..05 | Content | US-CONTENT-01 |
 | Telegram | US-TG-01..03 | | |
 
-**Total:** 56 user stories across 19 module groups. Each story is QA-testable; cross-references exist to §5 REQ IDs.
+**Total:** 69 user stories across 19 module groups (Tapşırıqlar expanded from 8 → 21 in v3.1). Each story is QA-testable; cross-references exist to §5 REQ IDs.
 
 ---
 
-*Last updated: 2026-05-03*
+*Last updated: 2026-05-04 (v3.1 Tapşırıqlar refactor)*
 *Owner: Talifa İsgəndərli*
 *Next review: end of Part 1 sprint*
