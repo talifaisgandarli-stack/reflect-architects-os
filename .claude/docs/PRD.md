@@ -1,5 +1,5 @@
 # Reflect Architects OS — Product Requirements Document
-**Version:** 3.1 (Tapşırıqlar refactor — task_kind hub, 8-status with Portfolio, dependencies, blame-exclusion)
+**Version:** 3.2 (Closeout/awards customisation, MIRAI HR persona + tone, Smart Reminder, outsource lazy executor)
 **Date:** 2026-05-04
 **Product Owner:** Talifa İsgəndərli
 **Status:** Pre-PMF / Active Development
@@ -129,7 +129,7 @@ Telegram:   Bot API (one Reflect bot, per-user chat_id linking)
 - `incomes` (id, project_id, client_id, amount, payment_method, occurred_at, invoice_number, note, created_by)
 - `expenses` (id, project_id, category, amount, vendor, occurred_at, note, created_by, recurring_rule_id)
 - `recurring_expenses` (id, label, amount, period, next_run_at)
-- `outsource_items` (id, project_id, work_title, contact_person, contact_company, amount, paid_at, payment_method, responsible_user_id, deadline, status)
+- `outsource_items` (id, project_id, work_title, contact_person NULL, contact_company NULL, amount, paid_at, payment_method, responsible_user_id NULL, deadline, status) — `contact_person`, `contact_company`, `responsible_user_id` are nullable: outsource items are routinely created with title + amount + deadline only, executor and contact filled in later as the engagement is finalized
 - `outsource_user_view` (Postgres view exposing outsource_items WITHOUT amount/paid_at/payment_method to non-admins)
 - `receivables` (id, client_id, project_id, amount, due_at, paid_amount, status)
 - `cash_forecasts` (id, generated_at, horizon_days, projected_balance, confidence_low, confidence_high, generated_by)
@@ -140,7 +140,7 @@ Telegram:   Bot API (one Reflect bot, per-user chat_id linking)
 - `retrospective_surveys` (id, project_id, client_id, share_token, sent_at, responded_at, nps_score, ratings jsonb, comment)
 - `closeout_checklists` (id, project_id, items jsonb, completed_at)
 - `portfolio_workflows` (id, project_id, selected_awards uuid[], website_published_at, press_release_sent, applications jsonb)
-- `system_awards` (id, name, organizer, deadline_month, url, criteria)
+- `system_awards` (id, name, organizer, deadline_month, url, criteria, region, is_custom boolean default false, created_by, created_at)
 
 **Communication**
 - `announcements` (id, title, body, category, cover_url, is_featured, mirai_generated, approved, approved_by, created_by, published_at, read_by jsonb)
@@ -299,9 +299,9 @@ Working-days mode is a v2 toggle; v1 = calendar days.
 
 **REQ-PROJ-03** Project detail tabs: Overview / Tasks / Documents (`project_documents`) / Finance (admin only) / Closeout / History.
 
-**REQ-PROJ-04** Closeout flow: built-in checklist (akt imzalandı, final sənədlər, arxiv, portfel, retrospektiv sorğu). All checked → "Layihəni Tamamla" → `status = closed`, portfolio workflow row created.
+**REQ-PROJ-04** Closeout flow: editable checklist seeded with defaults (akt imzalandı, final sənədlər, arxiv, portfel, retrospektiv sorğu). Each item supports inline rename, delete, and `+ Yeni əlavə et`. Items persisted in `closeout_checklists.items jsonb` as `[{label, checked, is_default, can_delete}]`. All checked → "Layihəni Tamamla" → `status = closed`, portfolio workflow row created. Default items have `is_default=true, can_delete=false` (label still editable); user-added items are fully removable.
 
-**REQ-PROJ-05** Award/portfolio submission: pick from `system_awards` (5 seeded), per-award checklist, deadline indicator with days remaining.
+**REQ-PROJ-05** Award/portfolio submission: pick from `system_awards`. Table seeded with international defaults (Aga Khan Award for Architecture, MIPIM Awards, World Architecture Festival, Dezeen Awards, ArchDaily Building of the Year, Architizer A+Awards, RIBA International Awards) AND admin can add custom awards via "+ Yeni mükafat əlavə et" — adds row with `is_custom=true, region='AZ'` (or chosen region), creator stored. Per-award checklist, deadline indicator with days remaining. Custom awards appear alongside system awards in pick UI; admin may delete custom but not system rows.
 
 **REQ-PROJ-06** **Schema migration safety:** legacy `phase` (singular) consolidated into `phases[]`. Migration runs additive: `phases[]` populated from `phase`, both kept until parity test passes 14 days, then `phase` renamed `_deprecated_phase`.
 
@@ -487,11 +487,21 @@ The universal `activity_log` (§6.1) gains `is_blame_excluded boolean default fa
 
 User toggles in Sistem → Bildirişlər (Module 10.4).
 
-#### 4.14 Activity log archival policy (REQ-TASK-22)
+#### 4.14 MIRAI Smart Reminder — proactive elapsed-vs-estimate (REQ-TASK-23)
+
+Hourly cron checks open tasks where `(now() - start_date)` in days approaches `estimated_duration` (converted to days from `duration_unit`). When elapsed ≥ 80% of estimate AND task is not `Tamamlandı` AND deadline ≤ 48h away, MIRAI sends an in-app + Telegram (if linked) nudge to the assignee:
+
+> *"Aydan, sənin Bilgə Qrup tapşırığın sabah deadline-da. Estimated 2 həftə idi, indi 13 gün keçib. Yetişəcəkmi?"*
+
+**Computation uses calendar-elapsed time only** (`now() - start_date`) — no actual time tracking is collected (per §4.15 / §12.1 timesheet exclusion). The reminder is purely a wall-clock progress check, not a productivity metric.
+
+Per-user rate limit: max 1 Smart Reminder per task per 24h. User can dismiss → 48h silence on that task. Honors `notification_preferences` for the channel.
+
+#### 4.16 Activity log archival policy (REQ-TASK-22)
 
 `activity_log` rows older than 12 months are migrated to `activity_log_archive` (same schema) by a monthly `pg_cron` job. Default queries hit only the live table; archive is queried explicitly from Sistem → Audit (admin only).
 
-#### 4.15 Out-of-scope clarifications
+#### 4.17 Out-of-scope clarifications
 
 Explicitly NOT in v1 (do not implement, do not design):
 - File attachments to tasks
@@ -507,14 +517,14 @@ Explicitly NOT in v1 (do not implement, do not design):
 - Time tracking per task / timesheet at any granularity (gün/həftə estimate only; no actual hour tracking)
 - Calendar embedding of tasks (calendar remains a separate page — Module 8.5)
 
-#### 4.16 RLS
+#### 4.18 RLS
 
 - `tasks` SELECT: project members + admin + (for `task_kind='leave_approval'`) assignee only
 - `task_tags` SELECT: all authenticated; INSERT/UPDATE: admin
 - `task_dependencies` SELECT: same as task SELECT
 - Comments visible to anyone with task SELECT
 
-#### 4.17 Edge cases
+#### 4.19 Edge cases
 
 - Reassign last assignee → must replace, not empty
 - Bakı timezone: all `*_at` stored UTC; UI renders `Asia/Baku`
@@ -578,7 +588,7 @@ Arxiv          —
 **REQ-FIN-04** Negative-amount validation across `incomes`, `expenses`, `outsource_items`: `amount > 0` check at DB and form layers.
 **REQ-FIN-05** Sabit (recurring) xərclər: format normalized — `recurring_expenses` table, period enum (`weekly|monthly|quarterly|yearly`), `pg_cron` materializes monthly entries into `expenses`.
 **REQ-FIN-06** Project P&L view: per-project income, direct expenses, outsource costs, net.
-**REQ-FIN-07** Outsource hybrid workflow: status transitions Sifariş → İcra → Təhvil → Ödənildi. Users can update operational status without seeing amounts.
+**REQ-FIN-07** Outsource hybrid workflow: status transitions Sifariş → İcra → Təhvil → Ödənildi. Users can update operational status without seeing amounts. **Lazy executor assignment:** at row-create time only `work_title` + `project_id` + `amount` + `deadline` are required; `contact_person`, `contact_company`, and `responsible_user_id` may be set to NULL and filled in via inline edit later (the executor is often unknown at the moment outsourcing is decided). Status `İcra` may not be entered until `responsible_user_id` is set; modal blocks the transition with "Cavabdeh şəxs təyin edilməlidir".
 **REQ-FIN-08** Forecast: MIRAI persona "Maliyyə Analitiki" computes `cash_forecasts` row daily (cron) for horizons 30/60/90; UI displays latest with confidence range and disclaimer.
 **REQ-FIN-09** Bakı timezone fix: all date math (month boundaries, due dates) computed in `Asia/Baku` not UTC.
 
@@ -716,16 +726,37 @@ Circular, initials fallback on deterministic gradient. Stack max 3 + "+N".
 - All requests authenticated; `user_id` logged per response (audit)
 
 ### 7.2 Personas
-**Admin (6):** Əməliyyat Direktoru / Layihə Mühəndisi / Hüquqşünas (RAG) / Marketinq Direktoru (CMO) / Maliyyə Analitiki / Strateq.
+**Admin (7):** Əməliyyat Direktoru / Layihə Mühəndisi / Hüquqşünas (RAG) / Marketinq Direktoru (CMO) / Maliyyə Analitiki / Strateq / **İK Direktoru (HR)**.
 **User (1):** Komanda Köməkçisi.
 
 Persona switch starts a new conversation context; history not carried across personas.
+
+**İK Direktoru (HR) responsibilities:**
+- Monthly performance summary per employee (aggregates `activity_log` entries respecting `is_blame_excluded`, surfaces in admin dashboard and Performans page — Module 8.3)
+- Sample monthly summary output:
+  ```
+  🤖 MIRAI HR — Aydan üçün ay yekun analizi:
+  Bu ay 5 tapşırıq deadline-dan keçib, AMMA:
+    ✓ 3-ü "sifarişçi gecikdi" kateqoriyasında (excluded)
+    ✓ 1-i outsource Tek-Strukt-un günahı (excluded)
+    ✗ Yalnız 1-i Aydanın özü ilə bağlı
+  Yenidən hesablanmış score: 92/100 (yüksək)
+  ```
+- Career path nudges (when user near next level criteria — Module 9.2)
+- Birthday / anniversary reminders to admin
+- HR persona has SELECT on `profiles`, `salaries` (admin-context only), `performance_reviews`, `activity_log` — never exposed to non-admin users via persona switch (RLS enforced).
 
 ### 7.3 Privacy Filter (mandatory, DB-level)
 Every MIRAI tool call wraps the user's session JWT and queries via Supabase with that JWT. RLS enforces scope. The application layer additionally:
 - Strips financial figures from any non-admin context
 - Removes other-user PII unless admin
 - Logs `tools_used` per message for audit
+
+**Refusal tone (mandatory voice rule):** when a non-admin asks a financial / salary / budget / outsource-payment question, MIRAI declines with a culturally-warm, lightly-satirical AZ tone — never robotic. Reference template:
+
+> *"Hörmətli istifadəçi, maliyyə məlumatlarımız korporativ məxfilik qaydalarımıza tabedir — Reflect-də belə suallar etik sayılmır 😊 Sahə eksperti kimi memarlıq sualınız varsa, məmnuniyyətlə cavablandırım!"*
+
+The wording may vary across responses (MIRAI rephrases to avoid mechanical repetition) but **must** preserve: politeness, light humor, an offer to help on architectural topics. Never shame the user. Never expose which tool was denied. Auditable via `tools_used` in `mirai_messages`.
 
 ### 7.4 RAG
 - `knowledge_base` (chunk + 1536-d embedding)
@@ -1549,6 +1580,22 @@ Given activity_log has 200,000 rows over 18 months
   And admins can query the archive explicitly from Sistem → Audit
 ```
 
+```
+US-TASK-22  MIRAI Smart Reminder elapsed-vs-estimate (refs REQ-TASK-23)
+AS A team member
+I WANT MIRAI to nudge me when calendar time is running out vs my estimate
+SO THAT I either accelerate or renegotiate the deadline early
+
+Given a task with start_date = 2026-05-01, estimated_duration = 14 days, deadline = 2026-05-15, status != Tamamlandı
+  When the hourly cron runs on 2026-05-13 (12 days elapsed = 86% of estimate, deadline in 48h)
+  Then MIRAI sends an in-app + Telegram (if linked) message:
+    "Aydan, sənin Bilgə Qrup tapşırığın sabah deadline-da. Estimated 2 həftə idi, indi 13 gün keçib. Yetişəcəkmi?"
+  And the message respects notification_preferences (channel + smart_reminder event_kind)
+  And rate limit: max 1 reminder per task per 24h
+  And user dismiss → 48h silence on that task
+  And no actual time tracking is collected (calendar elapsed only — see §4.17)
+```
+
 ---
 
 ### MODULE 5 — Arxiv (refs REQ-ARC-01..03)
@@ -2196,7 +2243,7 @@ Given thresholds in system_settings (income_alert=5000, expense_alert=2000)
 | Auth | US-AUTH-01..04 | Salary | US-SAL-01..02 |
 | Dashboard | US-DASH-01..05 | Performance | US-PERF-01..02 |
 | Layihələr | US-PROJ-01..05 | Leave | US-LEAVE-01..02 |
-| Tapşırıqlar | US-TASK-01..21 | Calendar | US-CAL-01..03 |
+| Tapşırıqlar | US-TASK-01..22 | Calendar | US-CAL-01..03 |
 | Arxiv | US-ARC-01..02 | Elanlar | US-ELAN-01..03 |
 | Müştərilər | US-CRM-01..06 | Equipment | US-EQUIP-01 |
 | Maliyyə | US-FIN-01..08 | OKR | US-OKR-01..03 |
@@ -2204,10 +2251,10 @@ Given thresholds in system_settings (income_alert=5000, expense_alert=2000)
 | MIRAI | US-MIRAI-01..05 | Content | US-CONTENT-01 |
 | Telegram | US-TG-01..03 | | |
 
-**Total:** 69 user stories across 19 module groups (Tapşırıqlar expanded from 8 → 21 in v3.1). Each story is QA-testable; cross-references exist to §5 REQ IDs.
+**Total:** 70 user stories across 19 module groups (Tapşırıqlar expanded to 22 in v3.2 with MIRAI Smart Reminder). Each story is QA-testable; cross-references exist to §5 REQ IDs.
 
 ---
 
-*Last updated: 2026-05-04 (v3.1 Tapşırıqlar refactor)*
+*Last updated: 2026-05-04 (v3.2 — closeout/awards customisation, HR persona, Smart Reminder, outsource lazy executor)*
 *Owner: Talifa İsgəndərli*
 *Next review: end of Part 1 sprint*
