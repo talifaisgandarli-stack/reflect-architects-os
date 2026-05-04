@@ -1,5 +1,5 @@
 # Reflect Architects OS — Design System
-**Version:** 2.4 (aligned to PRD v3.5 — MIRAI master spec: pop-up persistence, suggestion chips, write-approve modal, trigger toasts, file picker, RAG citation, firm budget banner, perf metrics in days)
+**Version:** 2.5 (aligned to PRD v3.6 — audit absorption: dashboard motivation widgets, performance 360 flow + score breakdown, mobile keyboard handling, kanban touch fallback)
 **Date:** 2026-05-04
 **Lead Designer:** Principal Designer II
 **Companion to:** `.claude/docs/PRD.md` (v3.0)
@@ -1103,6 +1103,12 @@ OKR health colors (PRD §5 MOD 9.1): `≥70%` `--color-success`, `40–69%` `--c
 - On close, focus returns to the trigger element
 - Slide-in animation is 250ms; never longer (feels sluggish)
 
+**Mobile keyboard handling (audit E4 fix):**
+- On viewport ≤768px when an input gains focus, the modal/drawer auto-scrolls so the focused input sits in the visible area above the keyboard
+- Implementation: listen for `focusin` events; on focus, `scrollIntoView({ block: 'center', behavior: 'smooth' })` if `visualViewport.height < window.innerHeight × 0.65`
+- Modal max-height adjusts to `min(90vh, visualViewport.height - 32px)` to never bleed under the keyboard
+- Drawer on mobile promotes to bottom-sheet so keyboard pushes content up naturally rather than covering the input
+
 ### 6.12 Toasts
 
 ```css
@@ -1629,16 +1635,22 @@ Row 4:  [Aktivlik axını (Realtime) — col-12 base]
 - **Komanda yükü:** each member = avatar + name + open task count + bar (green 1–5, amber 6–9, red 10+, US-DASH-05)
 - **Yaxınlaşan deadline:** task list ordered by deadline; coloring per §2.5 health rule
 
-#### User variant — single column, focused
+#### User variant — single column, focused (REQ-DASH-02 expanded)
 
 ```
 Row 1:  [Bu gün — col-12 — task list grouped Overdue/Today]
 Row 2:  [Bu həftə — col-8] [Şəxsi OKR — col-4]
-Row 3:  [Yaxınlaşan görüşlər — col-6] [Oxunmamış elanlar — col-6]
+Row 3:  [Layihələrim necə gedir? — col-6] [Karyera yolum — col-6]
+Row 4:  [Performans tendency — col-8] [Yaxınlaşan görüşlər — col-4]
+Row 5:  [Vacib müştərilərim (BD users only) — col-6] [Oxunmamış elanlar — col-6]
 ```
 
 - **Bu gün** widget: tabs `Bu gün / Bu həftə`; rows = task title + project pill + deadline badge + checkbox; ticking removes row with animation + emits `activity_log` (US-DASH-02)
 - **Şəxsi OKR:** ring progress (§6.9) + 1 line current key result; clicking opens OKR page
+- **Layihələrim necə gedir?** (audit D1): card per active project user is assigned to — name + status pill + completion ring + days-to-deadline. NO financial data. Empty: "Hələ aktiv layihəniz yoxdur".
+- **Karyera yolum:** current level chip + next level chip + progress bar of next-level criteria (auto-checked + manual). "Növbəti səviyyəyə: Senior Designer — 2 kriteriya qaldı"
+- **Performans tendency:** small bar chart of last 12 months published score (REQ-PERF-01); only shows months with `published_at IS NOT NULL`; before 2026 the widget reads "Bu il üçün məlumat yoxdur"
+- **Vacib müştərilərim:** rendered ONLY for users whose role enables CRM access (BD Lead level 3); shows count + top 3 active deals owned. Hidden for Designers/Interns
 - Finance widget hidden completely (RLS returns 0 rows; UI conditionally omits — US-DASH-03)
 
 **Empty per widget:** AZ message + CTA. e.g. "Bu gün tapşırıq yoxdur — bu axşam erkən bağlana bilər 🎉".
@@ -1733,6 +1745,9 @@ Sistem awardları:
 - Right: project filter + assignee filter + tag filter (chip multi-select) + priority filter + `Arxivlə` ghost + `Yeni tapşırıq` primary
 
 #### 10.4.1 Kanban — 8 columns (REQ-TASK-01)
+
+**Mobile constraint (audit E3):** drag-drop on touch devices is NOT supported in v1 (PRD §12.1). Mobile users see the same 8 columns horizontally scrollable but cards are non-draggable; status change happens via card menu `⋯` → "Statusu dəyiş" → bottom-sheet status picker. Desktop drag-drop unchanged.
+
 
 ```
 İdeyalar | Başlanmayıb | İcrada | Yoxlamada | Ekspertizada | Tamamlandı | Portfolio | Cancelled
@@ -2532,6 +2547,52 @@ Excluded delays:      3 (sifarişçi)
 
 - Activates from year 2026 (REQ-Komanda 8.3)
 
+**Score breakdown card (REQ-PERF-03):**
+
+```
+Final score: 88/100  🟢
+─────────────────────────────────────
+🤝 360° Survey       (40%)   91 → 36.4
+👤 Manager review    (30%)   85 → 25.5
+🤖 MIRAI HR analiz   (30%)   88 → 26.4
+─────────────────────────────────────
+                      Cəmi:  88.3
+```
+
+**360° survey flow (REQ-PERF-04):**
+
+Admin "360 sorğusu başla" button → modal:
+
+```
+┌──────────────────────────────────────────────┐
+│ 360° Sorğu — Aydan, 2026                     │
+├──────────────────────────────────────────────┤
+│ Reviewer-ləri seç (5–10):                    │
+│ ☑ Turkan H.  (komanda yoldaşı)              │
+│ ☑ Nurlan H.  (junior)                        │
+│ ☑ Talifa İ.  (manager)                       │
+│ ☐ ...                                        │
+│                                              │
+│ ☑ Anonimdir (default)                        │
+│                                              │
+│ [Ləğv et]              [Sorğu göndər]        │
+└──────────────────────────────────────────────┘
+```
+
+Reviewer notification:
+```
+🤝 360° qiymətləndirmə dəvəti
+Aydan üçün rəyiniz lazımdır. 5 dəq çəkir, anonimdir.
+[Sorğunu doldur]
+```
+
+Reviewer form: 4 Likert 1–5 sahə (komanda işi, keyfiyyət, deadline, ünsiyyət) + sərbəst şərh. Submit → `performance_360_invitations.completed_at`.
+
+Admin dashboard panel above publish form (≥3 completion-dan sonra):
+- Aggregated score per category (bar chart)
+- Anonymous comments stripped of identity
+- "Bu data ilə score_360 hesablandı: 91/100"
+
 ### 10.11 Məzuniyyət — US-LEAVE-01..02
 
 **Layout:** split — left: own requests list, right: team calendar overview (mini month view).
@@ -3282,6 +3343,6 @@ Every feature PR must pass this checklist before merge. It complements PRD §11.
 
 ---
 
-*Last updated: 2026-05-04 (v2.4 — MIRAI master: pop-up state persistence diagram, suggestion chips with 5 page templates, tool calls UI (read silent + write preview modal with 60s approval token), 5 trigger-toast templates with emoji map, file picker chip strip with daily-limit greying, knowledge-base citation tooltip with valid_from/valid_until, firm-wide budget banner at 80%/100%, Performans displays days not hours via proxy from finance allocation)*
+*Last updated: 2026-05-04 (v2.5 — audit absorption: §6.11 mobile keyboard handling with visualViewport scroll-into-view; §10.4.1 kanban touch fallback (mobile uses status dropdown, not drag); §10.10 Performans score breakdown card (40-30-30 split) + 360° survey reviewer-pick modal + form + aggregated admin panel; §10.2 user dashboard +5 motivation widgets (project health, career path next-level chip, performance tendency bar, important clients for BD-side users))*
 *Owner: Talifa İsgəndərli*
 *Review cycle: after each module's first implementation; full review at v1.0 release*

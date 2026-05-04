@@ -1,5 +1,5 @@
 # Reflect Architects OS — Product Requirements Document
-**Version:** 3.5 (MIRAI master spec — tool permission matrix, write-approve flow, persona auto-routing, 5 trigger scenarios, quiet hours, validity-aware RAG, knowledge base seed, firm-wide $5 cap, perf metrics via proxy)
+**Version:** 3.6 (Audit absorption — payment plans, recurring mid-year edits, working-day vacation, leave conflict detection, performance 40/30/30 score formula + 360 workflow, career_level FK, KommersiyaTeklifleri unification, status terminology i18n, portfolio post-completion tags, filter month/year independence, expanded out-of-scope)
 **Date:** 2026-05-04
 **Product Owner:** Talifa İsgəndərli
 **Status:** Pre-PMF / Active Development
@@ -103,7 +103,7 @@ Telegram:   Bot API (one Reflect bot, per-user chat_id linking)
 ### 3.2 Database — Core Tables (canonical list)
 
 **Identity & access**
-- `profiles` (id, email, full_name, avatar_url, role_id, is_creator, telegram_chat_id, telegram_linked_at, locale, created_at)
+- `profiles` (id, email, full_name, avatar_url, role_id, is_creator, telegram_chat_id, telegram_linked_at, locale, career_level_id NULL, hired_at, email_bcc_address NULL, address NULL, created_at)
 - `roles` (id, key, level, name, is_admin)
 - `invitations` (id, email, role_id, invited_by, token, expires_at, accepted_at)
 
@@ -281,7 +281,7 @@ SİSTEM                  (admin only)
 **Variants:** admin Dashboard (firm-wide) / user Dashboard (self-focused).
 
 **REQ-DASH-01** Admin sees: active projects health, team workload, this-month cash position, deadlines ≤14d, 50 latest activity entries (Realtime), MIRAI quick-launch.
-**REQ-DASH-02** User sees: own tasks today/this-week, own deadlines, unread announcements, upcoming meetings, personal OKR progress.
+**REQ-DASH-02** User sees: own tasks today/this-week, own deadlines, unread announcements, upcoming meetings, personal OKR progress, **own project health snapshot ("Layihələrim necə gedir?" — count + status pills, no financials)**, **own career path next-level chip ("Növbəti səviyyəyə: Senior Designer — 2 kriteriya qaldı")**, **own performance trend (last 12mo bar — only published years)**, **own important clients chip (BD-side users only — count of pipeline deals owned)**. NEVER firm-wide finance widgets.
 **REQ-DASH-03** Activity feed filter: All / Tasks / Projects / Finance / Clients (client-side).
 **REQ-DASH-04** Task health colors: green ≥14d, amber <14d, red <3d or overdue.
 **REQ-DASH-05** Empty states designed per widget (text only — visual lives in design-system spec).
@@ -311,6 +311,19 @@ Working-days mode is a v2 toggle; v1 = calendar days.
 **REQ-PROJ-04** Closeout flow: editable checklist seeded with defaults (akt imzalandı, final sənədlər, arxiv, portfel, retrospektiv sorğu). Each item supports inline rename, delete, and `+ Yeni əlavə et`. Items persisted in `closeout_checklists.items jsonb` as `[{label, checked, is_default, can_delete}]`. All checked → "Layihəni Tamamla" → `status = closed`, portfolio workflow row created. Default items have `is_default=true, can_delete=false` (label still editable); user-added items are fully removable.
 
 **REQ-PROJ-05** Award/portfolio submission: pick from `system_awards`. Table seeded with international defaults (Aga Khan Award for Architecture, MIPIM Awards, World Architecture Festival, Dezeen Awards, ArchDaily Building of the Year, Architizer A+Awards, RIBA International Awards) AND admin can add custom awards via "+ Yeni mükafat əlavə et" — adds row with `is_custom=true, region='AZ'` (or chosen region), creator stored. Per-award checklist, deadline indicator with days remaining. Custom awards appear alongside system awards in pick UI; admin may delete custom but not system rows.
+
+**Portfolio workflow tags (REQ-PROJ-07):** beyond award submission, the closeout-portfolio drawer surfaces tag chips representing post-completion activities. Each tag spawns a `tasks` row with `task_kind='portfolio'` (PRD §4.4):
+
+| Tag | Effect |
+|---|---|
+| 🏆 `apply_to_award` | Creates portfolio task per selected award (existing flow) |
+| ✍️ `write_article` | Creates task "Bu layihə üçün məqalə yaz" with default 14-day deadline |
+| 🌐 `publish_to_website` | Creates task "Veb sayta əlavə et" — out-of-scope v1 (REQ-PROJ-09) but task is recorded |
+| 📸 `commission_photoshoot` | Creates task "Layihə üçün professional çəkiliş təşkil et" |
+| 📰 `press_release` | Creates task "Press release hazırla" linked to CMO persona for drafting |
+| 🎤 `submit_to_publication` | Creates task "Sənaye nəşrinə təqdim et" |
+
+Multiple tags may be selected; each creates a separate task. Audit D8 fix: previously closeout left no breadcrumbs for these activities → now they enter the universal task hub and surface in dashboards / Telegram reminders.
 
 **REQ-PROJ-06** **Schema migration safety:** legacy `phase` (singular) consolidated into `phases[]`. Migration runs additive: `phases[]` populated from `phase`, both kept until parity test passes 14 days, then `phase` renamed `_deprecated_phase`.
 
@@ -973,7 +986,54 @@ audit_chain {
 
 Stored on the relevant row (e.g. `internal_loans.audit_chain jsonb`, `outsource_items.delivery_audit_chain jsonb`). Canvas signature alone is weak evidence; combined with IP + timestamp + actor email + an email-confirmation token sent to the admin's recorded address, the bundle reaches "satisfactory commercial evidence" threshold under AZ Civil Code Art. 405 (electronic transactions).
 
-#### 7.12 RLS
+#### 7.12 Receivable payment plan (REQ-FIN-20)
+
+Receivables for architecture projects rarely pay in one shot. The `receivable_payment_plans` table tracks expected installments per receivable.
+
+**Default 3-installment plan** auto-generated on receivable creation:
+| # | Label | Default % | Trigger event |
+|---|---|---|---|
+| 1 | Avans | 30% | At contract signing |
+| 2 | Mərhələ ödənişi | 50% | At expertise submission OR mid-project milestone |
+| 3 | Final | 20% | At delivery acceptance |
+
+Admin may override per-project at receivable creation:
+- Increase to 4 / 5 / N installments
+- Adjust each `expected_pct` (must total 100%)
+- Custom labels and dates per row
+
+When a payment is logged, MIRAI auto-matches by `expected_amount ± 5%` and prompts admin: "Bu ödəniş 'Avans' (₼30K) qrafikinə uyğundur. Təsdiq edirsiniz?". Confirm sets `paid_amount`, `paid_at`, `status`.
+
+For overpayments (one installment paid more than expected): excess flows forward to next installment automatically. Underpayment: `status='partial'`, remaining tracked.
+
+#### 7.13 Recurring expense mid-year edits (REQ-FIN-21)
+
+Recurring expenses (rent, subscriptions, salaries) are not static — they change mid-year. The `recurring_expenses` table supports versioning:
+
+- Editing amount or period creates a new row with `effective_from = today`; the prior row's `effective_to = today - 1 day`
+- Already-materialized `expenses` rows from past months are NOT touched (preserves audit trail)
+- Future cron runs use the new amount
+- UI shows the current effective row + history accordion
+
+This makes mid-year salary raises, rent renegotiation, subscription tier changes first-class without rewriting history.
+
+#### 7.14 Filter month/year independence (REQ-FIN-22)
+
+Across all finance pages (Xərclər, Debitor, Income reports, P&L), month and year filters operate **independently**:
+
+- "Bütün il + Yanvar" → returns ALL January rows across ALL years (cross-year January comparison)
+- "2026 + Bütün aylar" → returns all 2026 rows
+- "2026 + Yanvar" → returns only Jan 2026
+
+Implementation note: SQL `WHERE (year_filter IS NULL OR EXTRACT(YEAR FROM date) = year_filter) AND (month_filter IS NULL OR EXTRACT(MONTH FROM date) = month_filter)` — never an `AND` collapse that requires both.
+
+#### 7.15 Invoice template — no payment status (REQ-FIN-23)
+
+Invoices generated from templates (US-FIN-08) are documents only — they do NOT carry a `paid` / `unpaid` status of their own. Payment status lives on the `receivables` row that the invoice references. This avoids the dual-source-of-truth bug (audit B4: receivable.paid vs invoice.paid drift).
+
+UI rule: when displaying an invoice document, show the linked receivable's status as a separate badge ("Ödəniş statusu: Qismən ödənilib"). Never write `status` directly to invoice's `project_documents` row.
+
+#### 7.16 RLS
 
 - `incomes`, `expenses`, `outsource_items`, `receivables`, `cash_forecasts`, `cash_balances`, `cash_snapshots`, `internal_loans`, `project_overhead_allocations`: admin only
 - `outsource_user_view`: returns project, work_title, deadline, status, responsible_user_id ONLY (no money fields) — granted to authenticated
@@ -992,7 +1052,9 @@ List of `profiles`, role, contact, equipment count, current workload.
 #### 8.3 Performans
 - Yearly performance gauges per employee
 - Activates from year 2026 onward
-- `performance_reviews` (id, employee_id, year, score, ratings jsonb, reviewer_id, summary, published_at NULL, published_by NULL)
+- `performance_reviews` (id, employee_id, year, score, ratings jsonb, reviewer_id, summary, score_360 NULL, score_manager NULL, score_mirai_hr NULL, published_at NULL, published_by NULL) — final score weighted: 40% × score_360 + 30% × score_manager + 30% × score_mirai_hr per REQ-PERF-03
+- `performance_360_invitations` (id, review_id, reviewer_user_id NULL, anonymous boolean default true, sent_at, completed_at, scores jsonb, comment) — anonymized 360° feedback collection
+- `receivable_payment_plans` (id, receivable_id, sequence_no, expected_pct, expected_amount, expected_at, paid_at, paid_amount, status enum('pending','partial','paid')) — multi-installment payment tracking per REQ-FIN-20
 
 **Visibility (REQ-PERF-01):**
 - **Admin** sees all reviews (published or draft) in real time across every employee and year
@@ -1016,9 +1078,55 @@ The HR persona aggregates per-employee monthly numbers using the same proxy form
 
 **Explicit non-metric:** hours / saat are NEVER displayed. All time-related numbers are calendar-day units (REQ-TASK-15 / §4.17 timesheet exclusion). The `mirai-spec.md` v1 example showing "340 saat" is superseded — we report active-days using the proxy formula.
 
+**Score formula (REQ-PERF-03):**
+
+```
+final_score = 0.40 × score_360 + 0.30 × score_manager + 0.30 × score_mirai_hr
+```
+
+- `score_360` (40%) — average of completed `performance_360_invitations.scores` for the year (anonymized peer feedback). Null until ≥3 invitations completed
+- `score_manager` (30%) — admin/manager direct rating, captured in publish modal
+- `score_mirai_hr` (30%) — MIRAI HR persona aggregates `activity_log` (blame-exclusion-aware), task completion ratio, deadline adherence, peer mention sentiment. Auto-computed; admin reviews + may override before publish
+
+Each component stored separately on `performance_reviews` for transparency; final score recomputed on save. Score range 0–100.
+
+**360° workflow (REQ-PERF-04):**
+
+1. Admin opens Performans → selects employee + year → clicks "360 sorğusu başla"
+2. Admin selects 5–10 reviewers (peers, cross-functional, manager — not the subject)
+3. System creates `performance_360_invitations` rows; each reviewer receives in-app + email link
+4. Reviewer completes form (anonymous by default; admin can require named) — Likert 1–5 across categories (teamwork, quality, deadline, communication) + free-text comment
+5. After ≥3 completions: `score_360` becomes available; admin sees aggregated dashboard
+6. Admin enters `score_manager` + adds `summary` text → "Yayımla" → final_score computed → published
+
+**Reviewer privacy:** if `anonymous=true`, `reviewer_user_id` is NULL after completion; only counts toward aggregation. Admin sees aggregated numbers + comments stripped of identity. HR persona MIRAI surface respects same anonymization.
+
 #### 8.4 Məzuniyyət
-- `leave_requests` (id, employee_id, kind, starts_at, ends_at, days, status, approver_id, note)
+- `leave_requests` (id, employee_id, kind, starts_at, ends_at, working_days, status, approver_id, note, conflict_warning_acknowledged boolean default false)
+- `holidays` (id, date date, name, region text default 'AZ', is_official boolean default true)
 - Workflow: request → admin approve/deny → calendar event auto-created on approve
+
+**Working-day calculation (REQ-LEAVE-01):**
+`working_days` for a leave request = count of dates in `[starts_at..ends_at]` where `EXTRACT(DOW FROM d) NOT IN (0, 6)` (excludes Saturday, Sunday) AND `d NOT IN (SELECT date FROM holidays WHERE region IN ('AZ', firm_region))`. Computed server-side on save and stored. **Audit A8 fix:** Yan 1 (Şən) → Yan 3 (Bz ertəsi) on a weekend = 1 working day, not 3. Vacation budget computed from `working_days` not raw date diff.
+
+`holidays` table seeded with AZ official holidays (Yeni il 1-2 Yan, Qadınlar Günü 8 Mar, Novruz 20-24 Mar, Qələbə Günü 9 May, Müstəqillik Günü 28 May, Konstitusiya Günü 12 Noy, Milli Dirçəliş Günü 17 Noy, Beynəlxalq Həmrəylik Günü 31 Dek). Admin adds firm-specific holidays (anniversary, religious observance) via Sistem → Ümumi.
+
+**Conflict detection (REQ-LEAVE-02):**
+On submission, system queries existing approved + pending leave requests overlapping the requested dates AND filtered to teammates working on the same active projects (via `tasks.assignee_ids` overlap). If any overlap found:
+
+```
+⚠️ Komanda konflikti aşkar olundu
+Bu tarixdə ortaq layihə istifadəçiləri də məzuniyyətdədir:
+  • Aydan: 2 May → 9 May (Bilgə Qrup, Hacıkənd)
+  • Turkan: 5 May → 12 May (Bilgə Qrup)
+
+Layihə ləng gedə bilər. Davam edirsiniz?
+[Geri qayıt]    [Anladım, davam et]
+```
+
+User must explicitly acknowledge → sets `conflict_warning_acknowledged = true`. Admin sees this flag during approval review with a chip "⚠️ Konflikt qəbul edilib".
+
+No hard block — autonomy + transparency over enforcement.
 
 #### 8.5 Təqvim — see §8 Integrations (Google Calendar parity)
 
@@ -1042,8 +1150,12 @@ The HR persona aggregates per-employee monthly numbers using the same proxy form
 - Health: On Track ≥70%, At Risk 40–69%, Off Track <40%
 
 #### 9.2 Karyera Strukturu
-- `career_levels` (id, name, level_index, requirements jsonb)
+- `career_levels` (id, name, level_index, requirements jsonb, next_level_id NULL)
+- `profiles.career_level_id` FK assigns each employee to a level (REQ-CAREER-01)
+- `requirements jsonb` schema: `[{label, criterion, auto_check_query NULL}]` — `auto_check_query` is an opt-in safe SQL snippet that returns true/false per employee (e.g. count of closed projects ≥ 3)
 - Admin edits; users read + see promotion path from current level → next
+- Default seed: Intern → Junior Designer → Designer → Mid Designer → Senior Designer → Lead Designer → Principal → Partner (8 levels, requirements as jsonb stub)
+- **Phantom feature fix (audit D2):** prior code referenced `profiles.career_level` without DB column. Migration adds `career_level_id` (FK), backfills NULL for existing users, admin assigns retroactively in İşçi Heyəti detail drawer
 
 #### 9.3 Məzmun Planlaması
 - Editorial calendar for marketing/social posts (admin only)
@@ -1519,6 +1631,27 @@ SELECT COUNT(*), SUM(amount) FROM new_view;
 - `HesabFakturalarPage` removed from routes → table preserved
 - Qaynaqlar removed from nav → PDFs migrated to Bilik Bazası, old table preserved
 - Sənəd Arxivi removed from nav → data migrated to `project_documents`, old table renamed `_archived_document_archive_2026`
+- `KommersiyaTeklifleriPage` (separate `proposals` table) removed from nav → data migrated to `project_documents` with `category='price_protocol'` linked to client (audit C6 fix); old table renamed `_archived_proposals_2026`. Pipeline (`PipelinePage`) was reading `clients.status` while proposals were in a separate table — these are now unified: client pipeline stage drives confidence, and the price protocol document under the client's drawer Sənədlər tab is the single source of truth for proposal artefacts. No more dual-write drift.
+- `PipelinePage` route consolidated into `/müştərilər` (3 views — Pipeline / Cədvəl / Detail per PRD §5 MOD 6); old route 301-redirects.
+
+### 10.7 Status terminology — single source (REQ-I18N-01)
+
+Audit E1 fix. All status labels in UI come from `locales/{lang}.json` keyed by `(domain, status)`:
+```json
+{
+  "task.status.İdeyalar": "İdeyalar",
+  "task.status.Başlanmayıb": "Başlanmayıb",
+  "task.status.İcrada": "İcrada",
+  "project.status.active": "İcrada",
+  "project.status.completed": "Tamamlandı",
+  "project.status.on_hold": "Dayandırılıb",
+  "client.stage.Lead": "Lead",
+  "income.label": "Gəlir",
+  "expense.label": "Xərc"
+}
+```
+
+CI lint forbids hardcoded status strings in JSX outside `locales/*.json` reference. "Daxilolma" replaced firm-wide by "Gəlir" — unified with table headers, dashboards, transactions, MIRAI responses (audit E2 fix).
 
 ---
 
@@ -1609,12 +1742,18 @@ SELECT COUNT(*), SUM(amount) FROM new_view;
 - Native mobile app (web responsive only)
 - Time tracking of any kind (no timesheet at task, day, or any other level — `estimated_duration` is gün/həftə only; no actual-time logging)
 - Video calls / screen recording
-- Client login portal (share-token only)
+- Client login portal / public-facing customer portal (share-token only — REQ-CRM-PORTAL deferred)
 - Multi-firm / multi-tenant
 - Per-firm custom domains
 - Stripe firm-billing
 - Native Google Calendar OAuth + Meet API (deferred to v2)
 - Offline mode
+- Mobile touch drag-drop on Kanban (read-only kanban on mobile; status changes via dropdown — audit E3)
+- Real-time conflict detection on simultaneous edits (last-write-wins in v1; v2 collaborative cursors)
+- Portfolio → website auto-publish (`publish_to_website` portfolio tag creates a task only; manual website edit still required)
+- Backup/export download UI (Supabase admin panel only in v1)
+- Keyboard shortcut customization
+- Email-to-task forwarding
 
 ### 12.2 Open questions
 1. **MIRAI budget granularity:** firm-wide vs per-user? *Recommendation: per-user, $5/mo, simplest to communicate.*
@@ -3363,6 +3502,6 @@ Given thresholds in system_settings (income_alert=5000, expense_alert=2000)
 
 ---
 
-*Last updated: 2026-05-04 (v3.5 — MIRAI master: 9-tool permission matrix with write-approve flow, persona auto-routing per page+keyword, 5 trigger-based proactive scenarios, Telegram quiet hours + 3/day cap, knowledge_base validity-aware retrieval + AZ content seed list, file analysis 5MB/3 files with image support, pop-up state persistence, firm-wide $5/month budget cap with Groq fallback, performance metrics via finance proxy formula not timesheet)*
+*Last updated: 2026-05-04 (v3.6 — audit absorption: receivable_payment_plans 3-installment default, recurring expense mid-year versioning, holidays + working-day vacation calc, conflict detection w/ acknowledged warning, performance 40-30-30 weighted score from score_360 + score_manager + score_mirai_hr, performance_360_invitations anonymized, career_level_id FK on profiles + 8-level seed, KommersiyaTeklifleri/PipelinePage unified into Müştərilər, status i18n single source, "Daxilolma"→"Gəlir" firm-wide rename, portfolio post-completion tags spawn task_kind='portfolio' rows, finance filter month/year independence, invoice template no payment status, employee dashboard motivation widgets, expanded out-of-scope list)*
 *Owner: Talifa İsgəndərli*
 *Next review: end of Part 1 sprint*
