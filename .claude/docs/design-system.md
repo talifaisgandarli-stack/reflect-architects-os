@@ -1,6 +1,6 @@
 # Reflect Architects OS — Design System
-**Version:** 2.0 (aligned to PRD v3.0)
-**Date:** 2026-05-03
+**Version:** 2.1 (aligned to PRD v3.2 — Tapşırıqlar refactor, HR persona, satirical tone)
+**Date:** 2026-05-04
 **Lead Designer:** Principal Designer II
 **Companion to:** `.claude/docs/PRD.md` (v3.0)
 **References:** Attio (login + workflow + table), Whenevr (editorial), FUTURE (bento), Time Tracker (widgets), Wallet cards (depth), Rubik palette, Folder card
@@ -170,19 +170,46 @@ All tokens are CSS custom properties on `:root`. Tailwind names (§10) map 1:1 t
 
 ### 2.2 Task Status — single source of truth
 
-The PRD's 7-status model (PRD §5 MODULE 4) renders identically everywhere it appears: kanban column header, task card pill, archive list, dashboard "my tasks" rows.
+The PRD's 8-status model (PRD §5 MODULE 4 / v3.2) renders identically everywhere it appears: kanban column header, task card pill, archive list, dashboard "my tasks" rows.
 
 | Status (AZ) | Semantic key | Text | BG | Border | Dot |
 |---|---|---|---|---|---|
 | İdeyalar | `ideas` | `#A78BFA` | `#FAF5FF` | `#E9D5FF` | `#A78BFA` |
-| başlanmayıb | `queued` | `#94A3B8` | `#F8FAFC` | `#E2E8F0` | `#94A3B8` |
+| Başlanmayıb | `queued` | `#94A3B8` | `#F8FAFC` | `#E2E8F0` | `#94A3B8` |
 | İcrada | `active` | `#3B82F6` | `#EFF6FF` | `#BFDBFE` | `#3B82F6` |
 | Yoxlamada | `review` | `#D97706` | `#FFFBEB` | `#FDE68A` | `#F59E0B` |
 | Ekspertizada | `expert` | `#8B5CF6` | `#F5F3FF` | `#DDD6FE` | `#8B5CF6` |
 | Tamamlandı | `done` | `#22C55E` | `#F0FDF4` | `#BBF7D0` | `#22C55E` |
+| Portfolio | `portfolio` | `#10B981` | `#ECFDF5` | `#A7F3D0` | `#10B981` |
 | Cancelled | `cancel` | `#EF4444` | `#FEF2F2` | `#FECACA` | `#EF4444` |
 
 > Yoxlamada uses `#D97706` for text (WCAG AA) and `#F59E0B` for the dot only.
+> Portfolio reaches only via Tamamlandı + portfolio-candidate flag from closeout (PRD §4.1).
+
+### 2.2.a Task Priority — left-edge tick
+
+`tasks.priority` enum (PRD REQ-TASK-12) renders as a 3px left-edge accent on the task card (§6.2). Used for sort order in Mənim Tapşırıqlarım.
+
+| Priority | Color | Sort weight |
+|---|---|---|
+| urgent | `#EF4444` (danger) | 4 |
+| high | `#F59E0B` (warning-icon) | 3 |
+| medium | `#3B82F6` (info) | 2 |
+| low | `#9CA3AF` (n400) | 1 |
+
+When task is **also** overdue or expertise, priority tick takes precedence on the left edge; the overdue/expertise indicator moves to a top-right corner badge.
+
+### 2.2.b Task Kind — badge icon
+
+`tasks.task_kind` enum (PRD REQ-TASK-11) renders as an emoji badge prefix on task cards in unified views (Mənim Tapşırıqlarım, dashboard deadline widget, search results). Hidden in project-scoped Kanban (always `work` there).
+
+| Kind | Badge | Source surface |
+|---|---|---|
+| `work` | (no badge — default) | manual create |
+| `portfolio` | 🏆 | closeout portfolio flow |
+| `closeout` | 📋 | project closeout checklist |
+| `leave_approval` | ✅ | leave_requests insert |
+| `followup` | 💬 | CRM interaction follow-up |
 
 ### 2.3 Pipeline Stage Color Map (PRD §5 MODULE 6, 8 stages)
 
@@ -1643,48 +1670,374 @@ Dizayn deadline: 8 May  ⚠️ 14 gün qaldı
 ```
 Each step is a horizontal segment on a stepped timeline; banner turns red if `design_deadline` < 14 days.
 
-**Closeout drawer (US-PROJ-03):** right drawer (`--lg` 640px), checklist items with inline checks, "Layihəni Tamamla" button activates only when all checked.
+**Closeout drawer (US-PROJ-03 / REQ-PROJ-04):** right drawer (`--lg` 640px). Each checklist row is editable inline:
+
+```
+☐ [Sifarişçi ilə final təhvil-təslim edilib]    [✏️] [🗑]
+☐ [Müştəri retrospektiv anketi göndərildi]      [✏️] [🗑(disabled)]
+☐ [Portfolio namizədi (Y/N)]                     [✏️] [🗑(disabled)]
+   ○ Bəli → Portfolio workflow açılır
+   ○ Xeyr → keç
+☐ [+ Yeni checkbox əlavə et]
+```
+
+- Default items (`is_default=true`): rename allowed (✏️), delete disabled (`🗑(disabled)` with tooltip "Default item-lər silinə bilməz, yalnız adı dəyişdirilə bilər")
+- Custom items (`is_default=false`): rename + delete both enabled
+- "+ Yeni checkbox əlavə et" appends a row at the bottom; appears in editable state immediately
+- "Layihəni Tamamla" primary button activates only when all rows are checked
+- On portfolio "Bəli" tick → second drawer opens (Portfolio Workflow — see below)
+
+**Portfolio Workflow drawer (REQ-PROJ-05):** opens after closeout's portfolio "Bəli". Two sections:
+
+```
+🏆 PORTFOLIO HAZIRLIĞI
+─────────────────────
+☐ Müştəridən icazə alındı                  [✏️] [🗑]
+☐ Foto/render hazırdır                      [✏️] [🗑]
+☐ Layihə təsviri yazıldı                    [✏️] [🗑]
+☐ Komanda kreditləri qeyd olundu            [✏️] [🗑]
+[+ Yeni əlavə et]
+
+🎖️ AWARD NAMİZƏDLİYİ
+─────────────────────
+Sistem awardları:
+☐ Aga Khan Award for Architecture    Mart  [12 gün qaldı]
+☐ MIPIM Awards                       Yanvar
+☐ World Architecture Festival        Noyabr
+☐ Dezeen Awards                      Aprel
+☐ ArchDaily Building of the Year     Yanvar
+☐ Architizer A+Awards                Mart
+☐ RIBA International Awards          May
+
+Öz awardlarım:
+☐ State Architecture Award (AZ)      Sentyabr  [əlavə etdim] [🗑]
+[+ Yeni mükafat əlavə et]            ← admin-only
+
+📅 Veb sayta əlavə tarixi: [____]
+✏️ Press release yazılacaq? [toggle]
+```
+
+- System awards (`is_custom=false`): silmək olmaz; yalnız tick
+- Custom awards (`is_custom=true`): admin tərəfindən əlavə edilib, silinə bilər
+- "+ Yeni mükafat əlavə et" yalnız admin görür → modal açır: name, organizer, deadline_month picker (1-12), region select, url
+- Award seçildikdə → arxa planda `tasks` row yaradılır (`task_kind='portfolio'`, owner = closeout-u edən şəxs, deadline = next occurrence of `deadline_month`) per PRD REQ-TASK-11; cardın küncündə "🏆 Tapşırıq yaradıldı" toast
 
 **Empty state:** centered MIRAI-inspired gradient blob (small, decorative), `Hələ heç bir layihə yoxdur`, `+ Yeni layihə yarat` primary.
 
-### 10.4 Tapşırıqlar — REQ-TASK-01..09 / US-TASK-01..08
+### 10.4 Tapşırıqlar — REQ-TASK-01..23 / US-TASK-01..22
 
 **Header:**
 - View tabs: `Kanban / Cədvəl / Mənim Tapşırıqlarım` (sliding underline indicator)
-- Right: project filter + assignee filter + `Arxivlə` ghost + `Yeni tapşırıq` primary
+- Right: project filter + assignee filter + tag filter (chip multi-select) + priority filter + `Arxivlə` ghost + `Yeni tapşırıq` primary
 
-**Kanban — 7 columns (REQ-TASK-01):**
+#### 10.4.1 Kanban — 8 columns (REQ-TASK-01)
 
 ```
-İdeyalar | başlanmayıb | İcrada | Yoxlamada | Ekspertizada | Tamamlandı | Cancelled
+İdeyalar | Başlanmayıb | İcrada | Yoxlamada | Ekspertizada | Tamamlandı | Portfolio | Cancelled
 ```
 
 - Each column: `min-width: 280px`, horizontal scroll if overflow
-- Column header: status dot + label (Rubik 500 13px) + task count badge
-- Column body: task cards (§6.2) + dashed `+ Əlavə et` button at bottom for quick create
+- Column header: status dot (§2.2) + label (Rubik 500 13px) + task count badge
+- Column body: task cards (§6.2 + §10.4.2 below) + dashed `+ Əlavə et` button at bottom for quick create
 - Drag-over highlight: `--color-brand-light` bg + 2px dashed `--color-brand` border on whole column (§7.5)
 - Realtime echo: cards moved by other users animate cross-column (§7.5)
+- **Portfolio column:** only populated by tasks transitioned from Tamamlandı during closeout's portfolio flow (PRD REQ-TASK-25). Quick-create `+` is disabled in this column with tooltip "Portfolio tapşırıqları layihə bağlanışından avtomatik yaranır"
+- **Cancelled column:** quick-create disabled; cards display with `--color-n400` opacity 0.55 (§6.2 `task-card--cancelled`)
 
-**Quick create inline (US-TASK-01):**
-- Click `+` in column → input appears in card slot
+#### 10.4.2 Task Card — extended with priority + kind + tags + dependency
+
+```
+┌──────────────────────────────────┐  border-radius: 12px
+│┃ 🏆 [Project pill]          [⋯] │  ← left-edge 3px priority tick
+│┃                                 │  ← kind emoji prefix (if not 'work')
+│┃ Task title — Rubik 600 15px     │
+│┃ ↳ 2 blocking · 3/8 ☐            │  dependency badge + subtask counter
+│┃ [tag] [tag] [+1]                │  tag chips, max 3 + overflow
+│┃ [Bugün 17:00]   [Avatar stack]  │  time-of-day deadline if set
+└──────────────────────────────────┘
+```
+
+Priority left-edge tick:
+```css
+.task-card { position: relative; }
+.task-card::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 12px; bottom: 12px;
+  width: 3px;
+  border-radius: 3px;
+  background: var(--task-priority-color, transparent);
+}
+.task-card[data-priority="urgent"] { --task-priority-color: var(--color-danger); }
+.task-card[data-priority="high"]   { --task-priority-color: var(--color-warning-icon); }
+.task-card[data-priority="medium"] { --task-priority-color: var(--color-info); }
+.task-card[data-priority="low"]    { --task-priority-color: var(--color-n400); }
+```
+
+When the card is also `--overdue` or `--expertise`, the existing `border-left: 3px solid` (§6.2) is removed in favor of the `::before` priority tick; the overdue/expertise indicator moves to a top-right corner badge (`⚠️` or `E`).
+
+Tag chips inside card:
+```css
+.task-card__tags {
+  display: flex; gap: 4px; margin-top: 8px; flex-wrap: nowrap;
+}
+.task-card__tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 6px;
+  background: var(--tag-bg, var(--color-n100));
+  color: var(--tag-color, var(--color-n600));
+  border-radius: var(--radius-xs);
+  font-size: var(--text-2xs); font-weight: 500;
+  max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+```
+
+Time-of-day deadline rendering:
+- Date only → `15 May` (existing health-color)
+- Datetime today → `Bugün 17:00` (with health-amber if T-2h, red if T-30m)
+- Datetime tomorrow → `Sabah 09:30`
+- Datetime this week → `Cüm 14:00`
+- Datetime later → `15 May 17:00`
+
+#### 10.4.3 Quick create inline (US-TASK-01)
+
+- Click `+ Əlavə et` in column → input appears in card slot
 - Title only, Enter to commit, Esc to cancel
+- Defaults applied: priority=`medium`, task_kind=`work`, no assignee (creator implicit)
 - Created task lands in column with `card-enter` animation
 
-**Full create modal:**
-- Fields: title, assignees (multi-select, REQ-TASK-02), project, start_date, deadline, estimated_duration + duration_unit, risk_buffer_pct slider, is_expertise_subtask toggle, parent_task_id (search picker)
-- Workload preview: `workload = estimated_duration × (1 + risk_buffer/100)` shown live as user adjusts (REQ-TASK-06)
-- If `is_expertise_subtask = true`, suggested children appear as checklist (US-TASK-08)
+#### 10.4.4 Full create modal — extended
 
-**Cancel dialog (US-TASK-03):** centered modal width 400px, radio list of reasons, "Digər" reveals text input, `Ləğv et` danger button.
+```
+┌─────────────────────────────────────────────────────┐
+│  Yeni tapşırıq                                  [✕] │
+├─────────────────────────────────────────────────────┤
+│  Başlıq: [_____________________________________]    │
+│  Açıqlama: [textarea — plain text, not rich]        │
+│                                                      │
+│  Layihə: [picker]    Priority: [⚪ Aşağı  ⚪ Orta   │
+│                              ⦿ Yüksək  ⚪ Təcili]  │
+│  Cavabdehlər: [chip multi-select with avatars]      │
+│  Tag-lar: [chip picker — yeni yarat OR mövcuddan]   │
+│                                                      │
+│  ☐ Ekspertiza subtask-ı (auto 5 child)               │
+│  ☐ Asılıdır: [task search picker — finish_to_start]  │
+│                                                      │
+│  Başlama: [📅 date]   Deadline: [📅 date 🕐 time]   │
+│                                                      │
+│  Estimated: [4] [həftə ▼]   Risk buffer: [10%] ━━○━ │
+│  Workload: 4.4 həftə  ✨ MIRAI hesablamasıdır        │
+│                                                      │
+│  Parent task: [search picker — opsional]            │
+│                                                      │
+│  [Ləğv et]                          [Saxla — primary]│
+└─────────────────────────────────────────────────────┘
+```
 
-**Subtask blocker modal (US-TASK-04):** centered, lists open subtasks with inline checkboxes; `Hamısını tamamla` button atomically closes all then completes parent.
+- Workload live computes per REQ-TASK-06
+- Time picker default `18:00 Asia/Baku` if user picks date but skips time (REQ-TASK-13)
+- If project `requires_expertise = true` AND ekspertiza toggle on → "Auto Planner backward dates" panel appears (see 10.4.5)
+- If parent_task selected → `task_level` increments automatically; no UI limit on depth
+- Description plain text only — no formatting toolbar (PRD §4.17)
 
-**Mənim Tapşırıqlarım view (US-TASK-06):**
-- Filtered to `assignee_ids contains auth.uid()`
-- Grouped sections: `Gecikmiş` (red header) / `Bu gün` / `Bu həftə` / `Sonra`
+#### 10.4.5 Auto Planner panel (REQ-TASK-15)
+
+When the create modal detects `requires_expertise = true` and Ekspertiza toggle on, a collapsible panel above the date inputs renders:
+
+```
+✨ MIRAI Auto Planner — Geri hesablama
+─────────────────────────────────────
+Layihə deadline: 15 Avq 2026
+   ↓  −10 gün ödəniş bufferi
+Ekspertiza son təsdiq: 5 Avq
+   ↓  −30 gün ekspertiza gözləntisi
+   ↓  −10 gün irad düzəltmə
+Ekspertizaya təhvil: 12 İyun
+   ↓  −3 gün çap hazırlığı
+Dizayn deadline: 9 İyun  ⚠️ 14 gündən az qaldı
+
+[Tarixləri qəbul et]    [Manual təyin edirəm]
+```
+
+- "Tarixləri qəbul et" prefills `start_date` + `deadline` from computation
+- Override anywhere → re-renders chain showing impact
+
+#### 10.4.6 Expertise auto-subtasks toggle (REQ-TASK-09)
+
+When `is_expertise_subtask = true` in the modal:
+
+```
+Ekspertiza zəncirini avtomatik yarat:
+  ☑ Ekspertiza üçün çap sənədlərinin hazırlanması (3 gün)
+  ☑ Ekspertizaya göndərmək (1 gün)
+  ☑ Ekspertiza cavabı gözləmə (30 gün)
+  ☑ İrad düzəltmə buffer (10 gün)
+  ☑ Son təsdiq alınması
+  ────────────────────────────────────
+  Hamısını: ☐ uncheck → manual yaradacam
+```
+
+On save, 5 child subtasks auto-inserted with backward-planned dates. Each child marked with purple "E" badge (`task-card--expertise`).
+
+#### 10.4.7 Task dependency (REQ-TASK-16)
+
+In create modal: "Asılıdır" picker → search existing tasks → only `finish_to_start` in v1.
+
+On Kanban card: dependency badge `↳ 2 blocking` (when other tasks depend on this) or `↳ Asılıdır: A` (when this task waits on A).
+
+Drag attempting to move dependent task to `İcrada` while predecessor not `Tamamlandı` → blocking modal:
+
+```
+┌─────────────────────────────────────────┐
+│  Bu tapşırıq başlaya bilməz             │
+│                                          │
+│  Aşağıdakı tapşırıqlar bitməyib:         │
+│   • A — Konstruksiya hesablaması         │
+│     status: İcrada · deadline 5 İyun     │
+│                                          │
+│  [A-ya keç]                  [Bağla]     │
+└─────────────────────────────────────────┘
+```
+
+#### 10.4.8 Cancel dialog (US-TASK-03)
+
+Centered modal width 400px, radio list of reasons, "Digər" reveals text input, `Ləğv et` danger button.
+
+**Cancel revert (US-TASK-09):** Cancelled column cards have inline `↩ Ləğvi geri qaytar` button (admin or assignee only). Click → confirms → status restores to prior value from history; toast "Tapşırıq bərpa olundu — {old status}".
+
+#### 10.4.9 Delete (US-TASK-10)
+
+Card `⋯` menu has `🗑 Sil` (admin or creator only). Confirms via dialog:
+
+```
+Bu tapşırığı silmək istədiyinizdən əminsiniz?
+3 alt-tapşırıq da birlikdə silinəcək.
+[Bağla] [Sil — danger]
+```
+
+Subtask delete: same pattern, only that one row. Each deletion (including each cascaded child) emits its own activity_log entry — visible in the parent task's Activity tab as separate lines.
+
+Soft-deleted (≤90 days): admin Arxiv-də "Silinmişlər" filter ilə görür və bərpa edə bilər.
+
+#### 10.4.10 Subtask hierarchy
+
+Subtask tree renders inline within task detail drawer:
+
+```
+📋 Tam işçi layihənin hazırlanması       [⋯]
+    Status: İcrada     Deadline: Bugün 17:00
+    
+    🔁 Subtask-lar (5/8 tamamlandı)         [+ Subtask əlavə et]
+    ──────────────────────────────────────
+    ☑ Plan layihəsinin hazırlanması · Aydan
+    ☑ Elevation planın hazırlanması · Aydan
+    ☐ Tirlər və konstruksiya · Turkan · 12 May
+        🔁 Sub-subtask-lar (1/3)             [+ əlavə et]
+        ──────────────────────────────
+        ☑ Hesablama
+        ☐ Çertyoj
+        ☐ Yoxlama
+    ☐ Detallar
+    ☐ Ekspertiza üçün hazırlıq · Ekspertiza zənciri (5 child) ▸
+```
+
+- No depth limit (PRD §4.3) → indented 16px per level
+- Tag chips on subtasks too (REQ-TASK-14) — same chip system
+- Subtask blocker modal (US-TASK-04) when parent dragged to Tamamlandı with open children: lists ALL descendants (depth-first), `Hamısını tamamla` shortcut
+
+#### 10.4.11 Mənim Tapşırıqlarım view (US-TASK-06, US-TASK-12)
+
+- Filtered to `assignee_ids contains auth.uid()` AND not deleted/archived
+- **Sort:** priority (urgent → low) THEN deadline ASC (REQ-TASK-12)
+- Grouped sections (collapsible):
+  - `Gecikmiş` (red header)
+  - `Bu gün`
+  - `Bu həftə`
+  - `Sonra`
+- Each row shows kind emoji prefix (10.4.2), priority tick, title, project pill, deadline (with time-of-day if set), tag chips
 - Inline status update: checkbox for `Tamamlandı`, dropdown for others
+- **Cross-module rows surface here** (PRD REQ-TASK-11): portfolio submission tasks (🏆), leave approval tasks for managers (✅), closeout chores (📋), CRM follow-ups (💬)
 
-**Empty state (Kanban):** "Hələ heç bir tapşırıq yoxdur — Cmd+N ilə yarat" + primary CTA.
+#### 10.4.12 Smart Reminder UI (REQ-TASK-23)
+
+Smart Reminder is a notification, not a page surface. UI touches:
+
+- In-app toast on receipt:
+  ```
+  🤖 Aydan, sənin Bilgə Qrup tapşırığın sabah deadline-da.
+     Estimated 2 həftə idi, indi 13 gün keçib. Yetişəcəkmi?
+  [Tapşırığa keç]   [48 saat susdur]   [Bağla]
+  ```
+- Telegram parity (same wording)
+- "48 saat susdur" → user opt-out for that task only, 48h
+- Per-event toggle in Sistem → Bildirişlər → "Smart Reminder" matrix row
+
+#### 10.4.13 Daily 09:00 / 18:00 notification UI (REQ-TASK-21)
+
+Two scheduled notifications. UI touches:
+
+**09:00 Günün özeti** in-app card (also Telegram):
+```
+🌅 Sabahınız xeyir, Aydan!
+
+📋 Bu gün tapşırıqlarınız (3):
+   • 🏆 Aga Khan application (deadline: bu gün!)
+   • Bilgə Qrup — Eskiz təqdimatı (deadline: bu gün!)
+   • Hacıkənd — Konsept icmal (deadline: cüm)
+
+📅 Görüşləriniz (1):
+   • 14:00 — Talifa ilə həftəlik review
+
+✨ "Memarlıq icra olunmuş ideyaların qalıb gedən izidir."
+   — Frank Lloyd Wright
+
+[Bütün tapşırıqlara bax]
+```
+
+**18:00 Gün sonu** in-app card (also Telegram):
+```
+🌙 Yaxşı işləmisiniz, Aydan!
+
+Bugünkü nəticələriniz:
+   ✅ 2 tapşırıq tamamlandı
+   ✅ 4 subtask qapandı
+   💬 8 şərh yazdınız
+
+✨ "Sadəlik mürəkkəbliyin ən yüksək formasıdır."
+   — Leonardo da Vinci
+```
+
+Both honor `user_notification_settings.morning_summary` / `.evening_motivation` toggles in Sistem → Bildirişlər.
+
+#### 10.4.14 Empty states
+
+- Kanban: "Hələ heç bir tapşırıq yoxdur — Cmd+N ilə yarat" + primary CTA
+- Mənim Tapşırıqlarım: "Bu gün tapşırıq yoxdur — bu axşam erkən bağlana bilər 🎉"
+- Filter qaytarıldıqda boş: "Filterə uyğun tapşırıq tapılmadı — filteri sıfırla"
+
+#### 10.4.15 Activity tab (within task detail drawer)
+
+Renders `activity_log` rows for the task in reverse chron, including subtask deletions cascaded from parent (US-TASK-10):
+
+```
+📜 AKTİVLİK
+─────────────────────────────────────────────
+🟢 03 May 14:30 — Talifa: status "Başlanmayıb" → "İcrada"
+💬 03 May 14:25 — Aydan: "@turkan klientdən cavab gözlədik"
+✏️ 02 May 18:00 — Talifa: deadline 12 May → 15 May
+👤 02 May 09:15 — Talifa: assignee Aydan əlavə etdi
+🗑 02 May 08:30 — Talifa: subtask "Köhnə eskiz" silindi
+✅ 01 May 09:00 — Aydan: subtask "Mass plan" tamamlandı
+🆕 28 Apr 14:00 — Talifa: tapşırıq yaratdı
+```
+
+Admin sees inline `🚫 Performansa təsir göstərməsin` button on every entry → toggles `is_blame_excluded` (REQ-TASK-19). MIRAI-detected blame keyword entries show a yellow banner row above:
+
+```
+🤖 MIRAI: Bu komment-də "sifarişçi gecikdirdi" qeyd olunub.
+   Bunun performansa təsir göstərməməsini tövsiyə edirəm.
+   [Təsdiq et]   [Rədd et]
+```
 
 ### 10.5 Arxiv — REQ-ARC-01..03 / US-ARC-01..02
 
@@ -1748,11 +2101,29 @@ Single page, 6 tabs. Sticky `Cash Cockpit` summary above tabs.
 - Project rows below, sortable by net descending
 - "Excel ixracı" button (right) → `.xlsx` download
 
-#### 10.7.3 Outsource (US-FIN-04)
+#### 10.7.3 Outsource (US-FIN-04, REQ-FIN-07)
 - Table: Layihə / İş növü / Məsul / Deadline / Status (always visible)
 - Admin-only columns: Məbləğ / Ödəniş tarixi / Metod
 - Non-admins: those columns render as `cell--masked` (—) — see §6.8
-- Status workflow indicator (REQ-FIN-07): Sifariş → İcra → Təhvil → Ödənildi (4-dot stepper inline)
+- Status workflow indicator: Sifariş → İcra → Təhvil → Ödənildi (4-dot stepper inline)
+
+**Lazy executor assignment** (PRD REQ-FIN-07): outsource items routinely have unknown executor at create time. Required at create: `work_title`, `project_id`, `amount`, `deadline`. Optional (NULL allowed): `contact_person`, `contact_company`, `responsible_user_id`.
+
+In the table, empty `Məsul` cell renders as muted placeholder:
+```
+[+ Cavabdeh təyin et]    ← inline picker, italic --color-n400
+```
+
+Inline edit on click → user picker → save → row updates without modal.
+
+**Status gating:** transition to `İcra` is blocked if `responsible_user_id IS NULL`. The status dropdown shows `İcra` disabled with tooltip "Cavabdeh şəxs təyin edilməlidir". Admin attempting drag/select gets toast:
+
+```
+⚠️ Bu outsource üçün cavabdeh şəxs təyin edilməlidir.
+   "Sifariş" mərhələsində qaldı.
+```
+
+Other status transitions (Sifariş → Sifariş, Sifariş → Təhvil-skip, Cancelled) remain available.
 
 #### 10.7.4 Xərclər
 - Tabs within: `Birdəfəlik / Sabit (təkrar)`
@@ -1947,10 +2318,27 @@ Right:   orange/white   → "Artistic Intelligence" label
 Optional geometric overlay: SVG lines connecting dots at blob centers (1px stroke `--color-n900`, dot r=3) — adds the "constellation" feel.
 
 **Persona selector:**
-- Admin: 6 pill buttons in horizontally scrollable row — `Əməliyyat Direktoru / Layihə Mühəndisi / Hüquqşünas / CMO / Maliyyə Analitiki / Strateq`
+- Admin: 7 pill buttons in horizontally scrollable row — `Əməliyyat Direktoru / Layihə Mühəndisi / Hüquqşünas / CMO / Maliyyə Analitiki / Strateq / İK Direktoru`
+- Each pill carries an emoji prefix for fast recognition: 🎯 Əməliyyat / 🏗️ Layihə / ⚖️ Hüquqşünas / 📣 CMO / 💰 Maliyyə / 🧭 Strateq / 👥 İK
 - User: 1 pill — `Komanda Köməkçisi`
 - Active persona: `--color-brand` bg + white text; inactive: `--color-n100` bg
 - Switching persona starts a new conversation (PRD §7.2)
+
+**İK Direktoru (HR) persona — special surfaces:**
+- Monthly performance summary card (auto-rendered on Performans page top, admin-only) per Module 8.3
+- Sample card layout:
+  ```
+  🤖 MIRAI HR — Aydan üçün Aprel analizi
+  ─────────────────────────────────────
+  Bu ay 5 tapşırıq deadline-dan keçib:
+    ✓ 3 sifarişçi gecikdi (excluded)
+    ✓ 1 outsource Tek-Strukt günahı (excluded)
+    ✗ 1 Aydanın özü ilə bağlı
+  
+  📊 Yenidən hesablanmış score: 92/100
+  [Detallara bax]
+  ```
+- HR persona NEVER appears in user view (RLS-enforced)
 
 **Chat interface:**
 - Positioned bottom half of viewport
@@ -1967,9 +2355,30 @@ Optional geometric overlay: SVG lines connecting dots at blob centers (1px strok
 - 100% used: chat disabled, full overlay "Bu ay MIRAI limitinə çatdınız. Növbəti ay 1 yenidən aktiv olacaq."
 - Creator exempt (no banner shown if `is_creator`)
 
-**Privacy denial state (US-MIRAI-03):**
-- Tool denial in `tools_used` log
-- Response bubble: standard MIRAI bubble with body "Bu məlumat yalnız adminlər üçün açıqdır."
+**Privacy denial state — satirik tone (US-MIRAI-03, PRD §7.3):**
+
+When a non-admin asks a finance/salary/budget/outsource-payment question, MIRAI responds with a culturally-warm, lightly-satirical AZ refusal (never robotic). Reference template:
+
+```
+┌─ MIRAI ─────────────────────────────────────────┐
+│ 🎯 Əməliyyat Direktoru                           │
+│                                                   │
+│ Hörmətli istifadəçi, maliyyə məlumatlarımız     │
+│ korporativ məxfilik qaydalarımıza tabedir —     │
+│ Reflect-də belə suallar etik sayılmır 😊        │
+│                                                   │
+│ Sahə eksperti kimi memarlıq sualınız varsa,      │
+│ məmnuniyyətlə cavablandırım!                     │
+└──────────────────────────────────────────────────┘
+```
+
+Visual rules:
+- Use the standard MIRAI bubble — no special "warning" styling (denial should feel conversational, not punitive)
+- The 😊 emoji is **part of the brand voice** — keep it; never strip
+- Tool denial logged silently to `tools_used` (`mirai_messages.tools_used jsonb`); never expose which tool was denied to the user
+- MIRAI rephrases per response (avoid mechanical repetition), but always preserves: politeness + light humor + offer to help on architectural topics
+- Never shame the user; never use words like "icazəniz yoxdur" / "qadağandır" / "səhvdir"
+- Refusal renders WITHOUT the persona-thinking blob acceleration (§7.6) — short, warm, immediate
 
 ### 10.20 Telegram (Profil → Telegram tab) — US-TG-01..03
 
@@ -2293,6 +2702,6 @@ Every feature PR must pass this checklist before merge. It complements PRD §11.
 
 ---
 
-*Last updated: 2026-05-03*
+*Last updated: 2026-05-04 (v2.1 — Tapşırıqlar refactor, HR persona, satirical refusal tone, lazy outsource executor, editable closeout + custom awards)*
 *Owner: Talifa İsgəndərli*
 *Review cycle: after each module's first implementation; full review at v1.0 release*
