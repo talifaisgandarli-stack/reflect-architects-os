@@ -1,5 +1,5 @@
 # Reflect Architects OS — Design System
-**Version:** 2.3 (aligned to PRD v3.4 — Müştərilər lifecycle, transition gating, BCC capture, letter composer, 2 user personas, mode toggle, file upload)
+**Version:** 2.4 (aligned to PRD v3.5 — MIRAI master spec: pop-up persistence, suggestion chips, write-approve modal, trigger toasts, file picker, RAG citation, firm budget banner, perf metrics in days)
 **Date:** 2026-05-04
 **Lead Designer:** Principal Designer II
 **Companion to:** `.claude/docs/PRD.md` (v3.0)
@@ -2508,6 +2508,28 @@ Click → opens employee detail drawer (Profil, Kompensasiya — admin only, Per
 - "Yayımla" button on existing draft rows → confirms → `published_at = now()`, in-app + Telegram notification "{year} performans nəticəniz hazırdır" fires to employee.
 - **Unpublish flow:** admin opens published row → `⋯` menu → "Yayımı geri al" → confirm dialog → `published_at = NULL`; logged in `audit_log`. UI strongly discourages this with copy: "İşçi bu yekunu artıq görüb. Geri almaq görmə tarixçəsini silmir."
 - **HR persona summary preview** (PRD §7.2): admin viewing a draft sees an inline "🤖 MIRAI HR önizləməsi" card above the form fields → blame-exclusion-aware aggregation visible to admin even before publish (see §10.19 İK persona).
+
+**Metrics displayed (proxy from REQ-FIN-13, NO timesheet — REQ-PERF-02):**
+
+```
+Aydan Məmmədova — Aprel 2026
+─────────────────────────────────────
+Aktiv iş günü:        18 gün
+Tamamlanan tapşırıq:  23/26 (88%)  🟢
+Orta tamamlanma:      2.3 gün
+Bloklanmış:           2
+Excluded delays:      3 (sifarişçi)
+─────────────────────────────────────
+🤖 MIRAI HR analizi: yüksək performans —
+   sifarişçi kateqoriyasında flag-lər istisna
+   edildikdə score 92/100
+```
+
+- **NEVER show hours / saat** — only calendar days (per PRD §4.17 timesheet exclusion)
+- "Aktiv iş günü" = `Σ project_active_user_days(P, M)` for the user (single source of truth with finance overhead allocation REQ-FIN-13)
+- Color-coded completion ratio: 🟢 ≥85% / 🟡 70–84% / 🔴 <70%
+- Excluded delays count makes the blame-exclusion (REQ-TASK-19) visible to admin without judging — answers "delay var, amma niyə?"
+
 - Activates from year 2026 (REQ-Komanda 8.3)
 
 ### 10.11 Məzuniyyət — US-LEAVE-01..02
@@ -2669,7 +2691,7 @@ Empty rows show `[+ Şablon yarat]` CTA inline.
 
 User toggles each cell. Defaults: in-app=ON for all; Telegram=ON for deadline/mention/finance_alert/morning_summary; Email=OFF except `performance_published`.
 
-### 10.19 MIRAI — REQ-MIRAI-* / US-MIRAI-01..05 (PRD §7)
+### 10.19 MIRAI — REQ-MIRAI-* / US-MIRAI-01..13 (PRD §7 v3.5)
 
 **Canvas:** `--color-canvas-mirai` (`#EBEBEB`) — slightly darker than app canvas to create focus isolation.
 
@@ -2768,6 +2790,175 @@ Visual rules:
 - MIRAI rephrases per response (avoid mechanical repetition), but always preserves: politeness + light humor + offer to help on architectural topics
 - Never shame the user; never use words like "icazəniz yoxdur" / "qadağandır" / "səhvdir"
 - Refusal renders WITHOUT the persona-thinking blob acceleration (§7.6) — short, warm, immediate
+
+#### 10.19.1 Pop-up state + auto-routing (US-MIRAI-08, US-MIRAI-12)
+
+The pop-up is global (Zustand store `useMiraiStore`), persists across page navigation. Behaviour:
+
+- **First open on a page:** auto-routes to suggested persona based on `(page_context, last query keywords)` per PRD §7.7.1. Suggested pill pulses once subtly to indicate auto-selection
+- **Manual persona switch:** sticks for the rest of this conversation; new conversation reset re-runs routing
+- **Navigation while open:** persona + history preserved; auto-routing does NOT re-run mid-conversation
+- **Close + reopen:** auto-routing recomputes for current page; "Keçmiş" tab in pop-up header shows last 10 conversations grouped by persona
+
+```
+┌─ MIRAI (sağ-aşağı 56px FAB) ──────┐
+│  🤖  • [unread badge if N>0]       │
+└────────────────────────────────────┘
+        ↓ click
+┌─ Pop-up 400×500 ───────────────────┐
+│ 🤖 MIRAI       [Keçmiş] [⤢] [✕]   │
+│ ─────────────────────────────────── │
+│ [persona pill row, scrollable]      │
+│ [active persona pulses if routed]   │
+│ ─────────────────────────────────── │
+│ [conversation history]              │
+│ ─────────────────────────────────── │
+│ [3 suggestion chips]                │
+│ [📎] [Sual yaz...        ] [→]     │
+└────────────────────────────────────┘
+```
+
+Mobile: bottom-sheet promotion at ≤768px breakpoint. Genişlət (⤢) → 800×600 right-side panel.
+
+#### 10.19.2 Suggestion chips (US-MIRAI-08)
+
+Below the input, 3 chips render based on active page (PRD §7.7.2):
+
+```css
+.mirai-chip {
+  padding: 6px 12px;
+  background: var(--color-n100);
+  border: 1px solid var(--color-n200);
+  border-radius: var(--radius-full);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: all 120ms ease;
+}
+.mirai-chip:hover {
+  background: var(--color-brand-light);
+  border-color: var(--color-brand-border);
+  color: var(--color-brand);
+}
+```
+
+Click → text inserts into input; user submits or edits.
+
+#### 10.19.3 Tool calls UI — preview vs result (US-MIRAI-06)
+
+Read tools execute silently; result rendered as MIRAI bubble. Top of bubble shows collapsed accordion: "🔧 Alət: query_financials" — admin click reveals raw query + rows for transparency.
+
+Read tool denial:
+```
+┌─ MIRAI ──────────────────────────────────┐
+│ 🎯 Əməliyyat Direktoru                    │
+│                                            │
+│ [Satirik AZ refusal tone — §10.19 prior]  │
+└────────────────────────────────────────────┘
+```
+The denied tool name is logged to `tools_used.denied=[query_financials]` but NEVER shown to user.
+
+#### 10.19.4 Write tool approve flow (US-MIRAI-07)
+
+Write tools open a preview modal BEFORE execution. Pattern for `send_telegram`:
+
+```
+┌──────────────────────────────────────────────────────┐
+│  📤 Telegram göndərilsin?                       [✕]  │
+├──────────────────────────────────────────────────────┤
+│  Alıcı: 👤 Aydan Məmmədova                            │
+│                                                       │
+│  Mesaj:                                               │
+│  ┌────────────────────────────────────────────────┐  │
+│  │ Sabah saat 14:00-da ofisdə toplantımız var.   │  │
+│  │ Nəriman Towers layihəsinin son nəticələrini    │  │
+│  │ müzakirə edəcəyik.                             │  │
+│  └────────────────────────────────────────────────┘  │
+│                                                       │
+│  ⏱ Approval token 60 saniyəyə qədər keçərlidir       │
+│                                                       │
+│  [Ləğv et]                       [Göndər — primary]  │
+└──────────────────────────────────────────────────────┘
+```
+
+- Approval token (60s TTL) generated when modal renders
+- Click "Göndər" → token consumed, action commits
+- TTL expiry → `Göndər` button disabled, "Yenidən təklif tələb et" appears
+- Pattern identical for `create_task` (preview = inline editable task form) and `draft_email` (preview = drawer with subject + body, "Email müştəri panelinə apar" / "Mətn kopyala" actions, no send)
+
+#### 10.19.5 Trigger-based notifications surface (US-MIRAI-09)
+
+Trigger notifications arrive via Telegram (per PRD §7.6.2 cron) AND surface as in-app toast (`§6.12`):
+
+```
+┌─ Toast (top-right, 380px) ──────────────────────┐
+│ 🚨 Cash balansı kritik                          │
+│ Min. 3 ay runway tələbinin 80%-dən aşağıdır.    │
+│ Cari: ₼125K, tələb: ₼210K                       │
+│ [Maliyyə Mərkəzinə keç]              [Bağla]    │
+└──────────────────────────────────────────────────┘
+```
+
+Trigger emoji map for visual recognition:
+- 🚨 `cash_low` (danger color)
+- ⏰ `deadline_7d` (warning color)
+- ⏸️ `task_blocked_3d` (warning color)
+- 💬 `client_silent_5d` (info color)
+- 💰 `outsource_payment_2d` (warning color)
+
+#### 10.19.6 File upload UI (US-MIRAI-11)
+
+`📎` button beside send. Click → file picker (multi-select up to 3, accept `.pdf,.docx,.jpg,.jpeg,.png`).
+
+Uploaded files render as chips above input:
+```
+[📄 müqavilə.pdf · 2.1 MB · ✕]   [🖼 render.jpg · 1.4 MB · ✕]
+```
+
+Per-chip ✕ removes; "Maksimum 3 fayl" toast if user picks 4th. Per-file >5 MB → toast "Fayl ölçüsü 5 MB-dan böyükdür".
+
+Submit with files → loading bubble: "🤖 Bu sual 30 saniyəyə qədər çəkə bilər — sənədləri oxuyur..." with progress spinner. Disable input until response arrives.
+
+Daily limit (5 analyses) reached → on attempt: toast "Gündəlik fayl analizi limitiniz dolub. Sabah yenidən cəhd edin." — `📎` button greys out until midnight Asia/Baku.
+
+#### 10.19.7 Firm-wide budget banner (US-MIRAI-13)
+
+Banner above pop-up persona selector when applicable:
+
+**80% (≥$4 spent):**
+```
+⚠️ MIRAI 80% limitinə çatdı (₼6.97 / ₼8.50). Diqqətli istifadə edin.
+```
+Yellow background (`--color-warning-bg`), warning icon.
+
+**100% (Groq fallback active):**
+```
+🔄 Pulsuz model rejimi — Groq llama-3.3
+   Keyfiyyət bir az aşağı ola bilər. Ay sonu primary model qayıdacaq.
+```
+Brand-light background, info-style.
+
+Banner dismissible per-session by user; recurs on next pop-up open until threshold drops or month resets.
+
+#### 10.19.8 Knowledge base chunks UI (US-MIRAI-10)
+
+When a response cites RAG chunks, citations render as inline `pill--ai` size sm:
+
+```
+"...AZ-də ekspertiza prosesi 30 günə qədər çəkə bilər
+[🤖 AZDNT 2.08.01-89, Maddə 4.2.1]. Lakin 2024 dəyişikliyi
+ilə yeni binalar üçün..."
+```
+
+Hover the citation pill → tooltip shows source name + valid_from + valid_until (NULL = "qüvvədədir"):
+```
+┌──────────────────────────────────────┐
+│ Mənbə: AZDNT 2.08.01-89              │
+│ Maddə 4.2.1                          │
+│ Qüvvədə: 2018-03-01 → indi           │
+└──────────────────────────────────────┘
+```
+
+Superseded chunks NEVER appear in citations (RAG filter `valid_until IS NULL OR valid_until > now()`).
 
 ### 10.20 Telegram (Profil → Telegram tab) — US-TG-01..03
 
@@ -3091,6 +3282,6 @@ Every feature PR must pass this checklist before merge. It complements PRD §11.
 
 ---
 
-*Last updated: 2026-05-04 (v2.3 — Müştərilər lifecycle: pipeline 8 stages with Bitib (no Portfolio), transition gating modal per stage with skip/override flow, expanded drawer with Statistika header + Kommunikasiya tab + lifetime value, document viewer log, rəsmi məktub composer, BCC email capture inbox, workload + Net Income proposal flow, auto-archive cron; Şablon Mərkəzi seeded defaults; user 2-persona MIRAI with mode toggle + file upload)*
+*Last updated: 2026-05-04 (v2.4 — MIRAI master: pop-up state persistence diagram, suggestion chips with 5 page templates, tool calls UI (read silent + write preview modal with 60s approval token), 5 trigger-toast templates with emoji map, file picker chip strip with daily-limit greying, knowledge-base citation tooltip with valid_from/valid_until, firm-wide budget banner at 80%/100%, Performans displays days not hours via proxy from finance allocation)*
 *Owner: Talifa İsgəndərli*
 *Review cycle: after each module's first implementation; full review at v1.0 release*
